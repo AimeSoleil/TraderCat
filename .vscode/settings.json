@@ -1,0 +1,9 @@
+{
+    "python-envs.defaultEnvManager": "ms-python.python:pyenv",
+    "python-envs.pythonProjects": [],
+    "python-envs.defaultPackageManager": "ms-python.python:pip",
+    "cSpell.words": [
+        "lookback",
+        "openbb"
+    ]
+}
