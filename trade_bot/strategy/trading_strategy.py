@@ -4,7 +4,7 @@ from trade_bot.strategy.signal_model import SignalModel
 
 class TradingStrategy(ABC):
     @abstractmethod
-    def generate_signal(self, data: dict) -> SignalModel:
+    def generate_signal(self, symbol: str, data: dict) -> SignalModel:
         """
         Returns a dict: { "strategy": name, "signal": 'buy'|'sell'|'hold', "details": {...} }
         """

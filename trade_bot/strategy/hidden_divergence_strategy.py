@@ -53,14 +53,19 @@ class HiddenDivergenceStrategy(TradingStrategy):
                 swing_lows.append(i)
         return swing_highs, swing_lows
 
-    def generate_signal(self, data: dict) -> SignalModel:
+    def generate_signal(self, symbol: str, data: dict) -> SignalModel:
         details = {}
         signal = "hold"
         reasons = []
 
         if len(data) < max(self.ema_period, 3):
             details["reason"] = "Insufficient data for swing point and trend analysis"
-            return SignalModel(strategy=self.get_name(), signal=signal, details=details)
+            return SignalModel(
+                symbol=symbol,
+                strategy=self.get_name(), 
+                signal=signal, 
+                details=details
+            )
 
         # Indicators
         rsi = self.provider.get_indicator("rsi", data, {"length": self.rsi_period})
@@ -94,8 +99,14 @@ class HiddenDivergenceStrategy(TradingStrategy):
             last_swing_index = swing_highs[-1]
 
         if last_swing_index is None or last_swing_index >= len(data) - 1:
-            details["reason"] = "No valid swing point for divergence comparison"
-            return SignalModel(strategy=self.get_name(), signal=signal, details=details)
+            reason_str = "No valid swing point for divergence comparison"
+            return SignalModel(
+                symbol = self.symbol,
+                strategy=self.get_name(), 
+                signal=signal, 
+                reason=reason_str,
+                details=details
+            )
 
         # Compare price and indicators at swing point vs current
         swing_price = data[last_swing_index].close
@@ -112,6 +123,13 @@ class HiddenDivergenceStrategy(TradingStrategy):
         swing_kdj_k = kdj[last_swing_index].STOCHk_14_3_3 if kdj else None
         swing_kdj_d = kdj[last_swing_index].STOCHd_14_3_3 if kdj else None
         swing_kdj_j = 3 * swing_kdj_k - 2 * swing_kdj_d if swing_kdj_k and swing_kdj_d else None
+
+        details['current_rsi'] = current_rsi
+        details['swing_rsi'] = swing_rsi
+        details['current_macd'] = current_macd
+        details['swing_macd'] = swing_macd
+        details['current_kdj_j'] = current_kdj_j
+        details['swing_kdj_j'] = swing_kdj_j
 
         # Hidden divergence logic
         if trend == "uptrend" and current_price > swing_price:
@@ -134,10 +152,12 @@ class HiddenDivergenceStrategy(TradingStrategy):
             if len(reasons) >= 2:
                 signal = "buy"
 
-        details["reason"] = "; ".join(reasons) if reasons else "No hidden divergence detected"
+        reason_str = "; ".join(reasons) if reasons else "No hidden divergence detected"
 
         return SignalModel(
+            symbol=symbol,
             strategy=self.get_name(),
             signal=signal,
+            reason=reason_str,
             details=details
         )
