@@ -32,6 +32,10 @@ TraderCat/
    pip install ".[dev]"
    ```
 
+4. **（可选）设置Discord通知**
+   在运行前，请先设置环境变量 DISCORD_WEBHOOK_URL，例如：`export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/your_webhook_url"`
+   你可以将这行命令加入到 ~/.bashrc、~/.zshrc 等 shell 配置文件中，或在运行命令前手动设置。
+
 ## 命令行用法
 
 ### 直接运行
@@ -58,6 +62,14 @@ tradercat -m schedule -f symbols.txt
 - 直接用 `-s` 参数输入
 - 或用 `-f` 指定 txt/yaml 文件（如 `symbols.txt` 每行一个，或 `symbols.yaml` 结构为 `symbols: [AAPL, MSFT, ...]`）
 
+## 通知配置
+本项目支持通过 Discord Webhook 发送通知。请确保你已在 Discord 创建 webhook，并将其 URL 通过环境变量 DISCORD_WEBHOOK_URL 提供给程序。
+
+```bash
+export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/your_webhook_url"
+tradercat -m once -s "AAPL,MSFT"
+```
+
 ## 其他说明
 
 - 支持多种通知方式（如 Discord、Slack、Telegram 等），请在 `trade_bot/notification/` 下配置相关参数。
@@ -66,4 +78,4 @@ tradercat -m schedule -f symbols.txt
 
 ---
 
-如有问题欢迎提 Issue 或 PR！
+如有问题欢迎提 Issue 或 PR
