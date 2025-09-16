@@ -4,7 +4,7 @@
 
 ## 目录结构
 
-```
+```bash
 TraderCat/
 ├── main.py
 ├── trade_bot/
@@ -63,6 +63,7 @@ tradercat -m schedule -f symbols.txt
 - 或用 `-f` 指定 txt/yaml 文件（如 `symbols.txt` 每行一个，或 `symbols.yaml` 结构为 `symbols: [AAPL, MSFT, ...]`）
 
 ## 通知配置
+
 本项目支持通过 Discord Webhook 发送通知。请确保你已在 Discord 创建 webhook，并将其 URL 通过环境变量 DISCORD_WEBHOOK_URL 提供给程序。
 
 ```bash
