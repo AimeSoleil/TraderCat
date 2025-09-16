@@ -1,5 +1,6 @@
 import asyncio
 import argparse
+from datetime import date
 import yaml
 import os
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -51,14 +52,15 @@ async def run_all_bots(symbols, executor, discord_notifier):
         print("No signals generated. Skipping notification.")
         return
     
-    summary_message = "Daily Trade Signals Summary:\n"
+    today_str = date.today().strftime("%Y-%m-%d")
+    summary_message = f"** :money_with_wings: Daily [{today_str}] Trade Signals Summary: **\n"
     for entry in all_signals:
         symbol = entry["symbol"]
         signals = entry["signals"]
         for signal in signals:
-            summary_message += f"Symbol: {symbol}, Strategy: {signal.strategy}, Signal: {signal.signal}, Reason: {signal.reason}\n"
+            summary_message += f"* *Symbol: {symbol}, Strategy: {signal.strategy}, Signal: {signal.signal}, Reason: {signal.reason}*\n"
     print(f"Summary Message:\n{summary_message}")
-    print("🔔🔔🔔 Sending summary notification to Discord...")
+    print("🔔 Sending summary notification to Discord...")
     try:
         await discord_notifier.send(summary_message)
     except Exception as e:
