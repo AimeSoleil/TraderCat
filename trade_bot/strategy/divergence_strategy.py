@@ -1,5 +1,4 @@
 from trade_bot.strategy.trading_strategy import TradingStrategy
-from trade_bot.data.openbb_provider import OpenBBProvider
 from trade_bot.strategy.signal_model import SignalModel
 
 class DivergenceStrategy(TradingStrategy):
@@ -12,9 +11,10 @@ class DivergenceStrategy(TradingStrategy):
         macd_signal=9,
         kdj_fast_k_period=14,
         kdj_slow_d_period=3,
-        kdj_slow_k_period=3
+        kdj_slow_k_period=3,
+        data_provider=None
     ):
-        self.provider = OpenBBProvider()
+        self.provider = data_provider
         self.bb_period = bb_period
         self.rsi_period = rsi_period
         self.macd_fast = macd_fast
@@ -43,6 +43,16 @@ class DivergenceStrategy(TradingStrategy):
             )
 
         # Fetch indicators
+        if not self.provider:
+            reason_str = "Data provider not set"
+            return SignalModel(
+                symbol=symbol,
+                strategy=self.get_name(), 
+                signal=signal,
+                reason=reason_str,
+                details=details
+            )
+        
         bb = self.provider.get_indicator("bbands", data, {"length": self.bb_period})
         rsi = self.provider.get_indicator("rsi", data, {"length": self.rsi_period})
         macd = self.provider.get_indicator("macd", data, {

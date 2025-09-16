@@ -14,9 +14,10 @@ class HiddenDivergenceStrategy(TradingStrategy):
         macd_signal=9,
         kdj_fast_k_period=14,
         kdj_slow_d_period=3,
-        kdj_slow_k_period=3
+        kdj_slow_k_period=3,
+        data_provider=None
     ):
-        self.provider = OpenBBProvider()
+        self.provider = data_provider
         self.ema_period = ema_period
         self.swing_window = swing_window
         self.rsi_period = rsi_period
@@ -68,6 +69,16 @@ class HiddenDivergenceStrategy(TradingStrategy):
             )
 
         # Indicators
+        if not self.provider:
+            reason_str = "Data provider not set"
+            return SignalModel(
+                symbol=symbol,
+                strategy=self.get_name(), 
+                signal=signal,
+                reason=reason_str,
+                details=details
+            )
+        
         rsi = self.provider.get_indicator("rsi", data, {"length": self.rsi_period})
         macd = self.provider.get_indicator("macd", data, {
             "fast": self.macd_fast,

@@ -1,7 +1,8 @@
 import aiohttp
 from trade_bot.notification.base import Notifier
 
-DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1412999975872368843/VOv5UsUszt6BzzyeK62dFDhlX25CHH3f4rCTYzoREzFI125WqGq_t0XxAhDUsu0YCKHa'
+# Replace with your actual Discord webhook URL
+DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/YOUR_WEBHOOK_URL'
 
 class DiscordNotifier(Notifier):
     def __init__(self, webhook_url: str = DISCORD_WEBHOOK_URL):
