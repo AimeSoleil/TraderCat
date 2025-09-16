@@ -1,5 +1,7 @@
 import asyncio
 import argparse
+import yaml
+import os
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
@@ -11,24 +13,22 @@ from trade_bot.strategy.hidden_divergence_strategy import HiddenDivergenceStrate
 from trade_bot.execution.trade_execution import TradeExecutor
 from trade_bot.bot import TradeBot
 
-# Top 20 S&P 500 Companies
-SP_500_SYMBOLS = ['NVDA', 'MSFT', 'AAPL', 'GOOG', 'AMZN', 'META', 'AVGO', 'TSLA', 'BRK.B', 'JPM', 'WMT', 'V', 'ORCL', 'LLY', 'NFLX', 'MA', 'XOM', 'JNJ', 'COST', 'PG']
-# Top 20 Nasdaq-100 Companies
-NASDAQ_100_SYMBOLS = ['NVDA', 'MSFT', 'AAPL', 'AMZN', 'GOOG', 'GOOGL', 'META', 'AVGO', 'TSLA', 'NFLX', 'COST', 'ASML', 'TMUS', 'CSCO', 'LIN', 'AMD', 'AZN', 'INTU', 'TXN', 'ISRG']
-# Top 20 Dow Jones Companies
-DOW_JONES_SYMBOLS = ['NVDA', 'MSFT', 'AAPL', 'AMZN', 'JPM', 'WMT', 'V', 'JNJ', 'HD', 'PG', 'UNH', 'CVX', 'KO', 'CSCO', 'IBM', 'CRM', 'GS', 'AXP', 'MCD', 'MRK']
+DEFAULT_SYMBOLS = []
 
-# SYMBOLS = list(set(SP_500_SYMBOLS + NASDAQ_100_SYMBOLS + DOW_JONES_SYMBOLS))
-SYMBOLS = ['NVDA', 'MSFT']
-print(f"Total unique symbols to trade: {len(SYMBOLS)}")
+def parse_symbols(symbols_str):
+    return [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
 
-strategies = [ DivergenceStrategy(), HiddenDivergenceStrategy() ]
+def load_symbols_from_file(filepath):
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext in [".yaml", ".yml"]:
+        with open(filepath, "r") as f:
+            data = yaml.safe_load(f)
+            return [s.strip().upper() for s in data.get("symbols", [])]
+    else:
+        with open(filepath, "r") as f:
+            return [line.strip().upper() for line in f if line.strip()]
 
-provider = OpenBBProvider()
-executor = TradeExecutor()
-discord_notifier = DiscordNotifier()
-
-async def run_all_bots():
+async def run_all_bots(symbols, provider, executor, discord_notifier, strategies):
     all_signals = []
     bots = [
         TradeBot(
@@ -37,7 +37,7 @@ async def run_all_bots():
             executor=executor,
             symbol=symbol
         )
-        for symbol in SYMBOLS
+        for symbol in symbols
     ]
     for bot in bots:
         try:
@@ -52,11 +52,9 @@ async def run_all_bots():
             print(f"Error running bot for symbol {bot.symbol}: {e}")
         await asyncio.sleep(5)
 
-    # 这里 all_signals 就是所有 bot 的信号列表
     print("✅ All signals collected:")
     print(all_signals)
 
-    # Send a summary notification
     summary_message = "Daily Trade Signals Summary:\n"
     for entry in all_signals:
         symbol = entry["symbol"]
@@ -70,9 +68,12 @@ async def run_all_bots():
     except Exception as e:
         print(f"Error sending summary notification to Discord: {e}")
 
-async def schedule_main():
+async def schedule_main(symbols, provider, executor, discord_notifier, strategies):
     scheduler = AsyncIOScheduler(timezone=pytz.timezone('US/Eastern'))
-    scheduler.add_job(lambda: asyncio.create_task(run_all_bots()), CronTrigger(hour=16, minute=0))
+    scheduler.add_job(
+        lambda: asyncio.create_task(run_all_bots(symbols, provider, executor, discord_notifier, strategies)),
+        CronTrigger(hour=16, minute=0)
+    )
     scheduler.start()
     print("Scheduler started. Bots will run every day at 4pm US/Eastern.")
     try:
@@ -81,21 +82,52 @@ async def schedule_main():
     except (KeyboardInterrupt, SystemExit):
         pass
 
-
 def main():
     parser = argparse.ArgumentParser(description="TraderCat Bot Runner")
     parser.add_argument(
-        "--mode",
+        "-m", "--mode",
         choices=["once", "schedule"],
         default="once",
         help="Run once or schedule every day at 4pm US/Eastern"
     )
+    parser.add_argument(
+        "-s", "--symbols",
+        type=str,
+        default=None,
+        help="Comma separated list of symbols to trade, e.g. 'AAPL,MSFT,GOOG'"
+    )
+    parser.add_argument(
+        "-f", "--symbols-file",
+        type=str,
+        default=None,
+        help="Path to a file (txt or yaml) containing symbols"
+    )
     args = parser.parse_args()
 
-    if args.mode == "once":
-        asyncio.run(run_all_bots())
+    # 选择symbols来源
+    if args.symbols:
+        symbols = parse_symbols(args.symbols)
+    elif args.symbols_file:
+        symbols = load_symbols_from_file(args.symbols_file)
     else:
-        asyncio.run(schedule_main())
+        symbols = DEFAULT_SYMBOLS
+
+    symbols = list(set(symbols)) # remove duplication
+    if not symbols:
+        print("No symbols provided. Exiting.")
+        return
+    print(f"Total unique symbols to trade: {len(symbols)}")
+
+    # 实例化重型对象
+    provider = OpenBBProvider()
+    executor = TradeExecutor()
+    discord_notifier = DiscordNotifier()
+    strategies = [DivergenceStrategy(), HiddenDivergenceStrategy()]
+
+    if args.mode == "once":
+        asyncio.run(run_all_bots(symbols, provider, executor, discord_notifier, strategies))
+    else:
+        asyncio.run(schedule_main(symbols, provider, executor, discord_notifier, strategies))
 
 if __name__ == "__main__":
     main()

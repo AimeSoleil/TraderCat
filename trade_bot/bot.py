@@ -18,17 +18,6 @@ class TradeBot:
         self.executor.execute_trade(final_signal_list, self.symbol)
 
         yield final_signal_list
-        
-        # today_str = date.today().strftime("%Y-%m-%d")
-        # new_data = [signal.model_dump() for signal in final_signal_list]
-        # print(f'Signal for symbol: {self.symbol}', json.dumps(new_data, indent=4))
-        # for row in new_data:
-        #     if isinstance(row["details"], dict):
-        #         row["details"] = " ".join([f"{k}:{v}\n" for k, v in row["details"].items()])
-
-        # markdown_table_message = tabulate(new_data, headers="keys", tablefmt="mixed_grid", maxcolwidths=30)
-        # message = f""":bangbang: :bell: ** [{today_str}] `{self.symbol}` Trade signals** :rocket: :rocket: :rocket:\n```{markdown_table_message}``` \n"""
-        # await self.send_notification(message)
 
     def aggregate_signals(self, signals: list[SignalModel]) -> list[SignalModel]:
         # Reserve logic for future improvements

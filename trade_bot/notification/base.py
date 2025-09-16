@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-import asyncio
 
 class Notifier(ABC):
     @abstractmethod
