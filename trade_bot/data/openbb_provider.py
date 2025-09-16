@@ -2,7 +2,7 @@ from openbb import obb
 from trade_bot.data.market_data_provider import MarketDataProvider
 
 # Set your Tiingo API key
-# obb.user.credentials.tiingo_token = "89b5edcdaafcfe5c36ecf4b637b90b6312cb0a5d"
+# obb.user.credentials.tiingo_token = "your_tiingo_api_token"
 
 class OpenBBProvider(MarketDataProvider):
     def get_price_data(self, symbol: str, interval: str, lookback: int):
