@@ -66,14 +66,14 @@ async def run_all_bots(symbols, executor, discord_notifier):
     except Exception as e:
         print(f"Error sending summary notification to Discord: {e}")
 
-async def schedule_main(symbols, executor, discord_notifier):
+async def schedule_main(symbols, executor, discord_notifier, schedule_hour=16, schedule_minute=0):
     scheduler = AsyncIOScheduler(timezone=pytz.timezone('US/Eastern'))
     scheduler.add_job(
         lambda: asyncio.create_task(run_all_bots(symbols, executor, discord_notifier)),
-        CronTrigger(hour=16, minute=0)
+        CronTrigger(hour=schedule_hour, minute=schedule_minute)
     )
+    print(f"Scheduler started. Bots will run every day at {schedule_hour:02d}:{schedule_minute:02d} US/Eastern.")
     scheduler.start()
-    print("Scheduler started. Bots will run every day at 4pm US/Eastern.")
     try:
         while True:
             await asyncio.sleep(3600)
@@ -86,7 +86,7 @@ def main():
         "-m", "--mode",
         choices=["once", "schedule"],
         default="once",
-        help="Run once or schedule every day at 4pm US/Eastern"
+        help="Run once or schedule every day at a specified time (default: 4pm US/Eastern)"
     )
     parser.add_argument(
         "-s", "--symbols",
@@ -99,6 +99,18 @@ def main():
         type=str,
         default=None,
         help="Path to a file (txt or yaml) containing symbols"
+    )
+    parser.add_argument(
+        "-H", "--schedule-hour",
+        type=int,
+        default=16,
+        help="Hour (0-23) for scheduled run in US/Eastern timezone (default: 16)"
+    )
+    parser.add_argument(
+        "-M", "--schedule-minute",
+        type=int,
+        default=0,
+        help="Minute (0-59) for scheduled run in US/Eastern timezone (default: 0)"
     )
     args = parser.parse_args()
 
@@ -122,7 +134,11 @@ def main():
     if args.mode == "once":
         asyncio.run(run_all_bots(symbols, executor, discord_notifier))
     else:
-        asyncio.run(schedule_main(symbols, executor, discord_notifier))
+        asyncio.run(schedule_main(
+            symbols, executor, discord_notifier,
+            schedule_hour=args.schedule_hour,
+            schedule_minute=args.schedule_minute
+        ))
 
 if __name__ == "__main__":
     main()
