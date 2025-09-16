@@ -18,13 +18,11 @@ NASDAQ_100_SYMBOLS = ['NVDA', 'MSFT', 'AAPL', 'AMZN', 'GOOG', 'GOOGL', 'META', '
 # Top 20 Dow Jones Companies
 DOW_JONES_SYMBOLS = ['NVDA', 'MSFT', 'AAPL', 'AMZN', 'JPM', 'WMT', 'V', 'JNJ', 'HD', 'PG', 'UNH', 'CVX', 'KO', 'CSCO', 'IBM', 'CRM', 'GS', 'AXP', 'MCD', 'MRK']
 
-SYMBOLS = list(set(SP_500_SYMBOLS + NASDAQ_100_SYMBOLS + DOW_JONES_SYMBOLS))
+# SYMBOLS = list(set(SP_500_SYMBOLS + NASDAQ_100_SYMBOLS + DOW_JONES_SYMBOLS))
+SYMBOLS = ['NVDA', 'MSFT']
 print(f"Total unique symbols to trade: {len(SYMBOLS)}")
 
-strategies = [
-    DivergenceStrategy(),
-    HiddenDivergenceStrategy()
-]
+strategies = [ DivergenceStrategy(), HiddenDivergenceStrategy() ]
 
 provider = OpenBBProvider()
 executor = TradeExecutor()
@@ -37,7 +35,6 @@ async def run_all_bots():
             data_provider=provider,
             strategies=strategies,
             executor=executor,
-            notifiers=[discord_notifier],
             symbol=symbol
         )
         for symbol in SYMBOLS
