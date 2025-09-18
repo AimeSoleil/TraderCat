@@ -22,6 +22,9 @@ TraderCat/
 
    ```bash
    pip install .
+   # if need to generate requirements.txt, 
+   pip install .  # Installs main dependencies
+   pip freeze | grep -v "tradercat" > requirements.txt
    ```
 
    > After installation, the `tradercat` command will be automatically added to your PATH (such as `~/.local/bin/` or your virtual environment's `bin/` directory).
