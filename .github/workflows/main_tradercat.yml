@@ -42,3 +42,4 @@ jobs:
           app-name: "TraderCat"
           slot-name: "Production"
           package: "." # Root of your function app
+          remote-build: true
