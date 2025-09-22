@@ -4,5 +4,6 @@
         "logLevel": {
             "Function": "Information"
         }
-    }
+    },
+    "functionTimeout": "00:15:00"
 }
