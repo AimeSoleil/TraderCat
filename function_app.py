@@ -21,20 +21,20 @@ def run_trade_bot(mytimer: TimerRequest) -> None:
     """
     logging.info(f"Function triggered at: {datetime.datetime.now(datetime.UTC).isoformat()} UTC")
 
-    # try:
-    #     result = subprocess.run(
-    #         ["python", "trade_bot/main.py", "-f", "sample_symbols.yml", "-m", "once"],
-    #         check=True,
-    #         capture_output=True,
-    #         text=True
-    #     )
-    #     logging.info(f"Trade bot output:\n{result.stdout}")
-    #     if result.stderr:
-    #         logging.warning(f"Trade bot error output:\n{result.stderr}")
-    # except subprocess.CalledProcessError as e:
-    #     logging.error(f"Trade bot failed with return code {e.returncode}")
-    #     logging.error(f"Error output:\n{e.stderr}")
-    symbols = ["AAPL", "MSFT", "GOOG"]
-    discord_notifier = DiscordNotifier()
-    executor = TradeExecutor()  # Example symbols, replace with your logic to load symbols
-    asyncio.run(run_all_bots(symbols, executor, discord_notifier))
+    try:
+        result = subprocess.run(
+            ["python", "trade_bot/main.py", "-f", "sample_symbols.yml", "-m", "once"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        logging.info(f"Trade bot output:\n{result.stdout}")
+        if result.stderr:
+            logging.warning(f"Trade bot error output:\n{result.stderr}")
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Trade bot failed with return code {e.returncode}")
+        logging.error(f"Error output:\n{e.stderr}")
+    # symbols = ["AAPL", "MSFT", "GOOG"]
+    # discord_notifier = DiscordNotifier()
+    # executor = TradeExecutor()  # Example symbols, replace with your logic to load symbols
+    # asyncio.run(run_all_bots(symbols, executor, discord_notifier))
