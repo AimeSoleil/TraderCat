@@ -63,7 +63,6 @@ coverage.xml
 typings/
 
 # VS Code
-.vscode/
 
 # Mac OS
 .DS_Store
@@ -84,3 +83,7 @@ typings/
 
 # Ignore test output
 test-output/
+
+# Azure functions local settings
+local.settings.json
+.python_packages

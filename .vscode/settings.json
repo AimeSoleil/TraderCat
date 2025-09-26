@@ -1,0 +1,18 @@
+{
+    "python-envs.defaultEnvManager": "ms-python.python:pyenv",
+    "python-envs.pythonProjects": [],
+    "python-envs.defaultPackageManager": "ms-python.python:pip",
+    "cSpell.words": [
+        "lookback",
+        "openbb",
+        "pyproject",
+        "tradercat"
+    ],
+    "azureFunctions.deploySubpath": ".",
+    "azureFunctions.scmDoBuildDuringDeployment": true,
+    "azureFunctions.pythonVenv": ".venv",
+    "azureFunctions.projectLanguage": "Python",
+    "azureFunctions.projectRuntime": "~4",
+    "debug.internalConsoleOptions": "neverOpen",
+    "azureFunctions.projectLanguageModel": 2
+}
