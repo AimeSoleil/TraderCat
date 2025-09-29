@@ -11,7 +11,7 @@ class DivergenceStrategy(TradingStrategy):
     - KDJ (K, D, J) with periods of 14, 3, 3 for more stable signals.
     - MACD (Moving Average Convergence Divergence) with standard windows of 12, 26, and 9.
     - RSI (Relative Strength Index) with a standard window of 14, using thresholds of 
-      70 for overbought and 30 for oversold conditions.
+    70 for overbought and 30 for oversold conditions.
 
     The strategy aims for hold periods of 1 to 3 days, exiting on opposite signals 
     or key support/resistance levels. It avoids trading in low volume or sideways markets. 
@@ -80,7 +80,7 @@ class DivergenceStrategy(TradingStrategy):
 
         Returns:
             SignalModel: An object containing the trading signal, reasons for the signal,
-                          and additional details.
+                        and additional details.
         """
         print(f'Strategy[{self.get_name()}] generating signal for {symbol}...')
         details = {}

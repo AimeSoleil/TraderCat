@@ -8,9 +8,10 @@ version = "0.1.0"
 description = "A multi-symbol, multi-strategy trading bot"
 authors = [{ name = "AimeSoleil", email = "jeaimesoleil@gmail.com" }]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"
 dependencies = [
     "openbb==4.3.5",
+    "openbb-technical==1.4.4",
     "pydantic>=2.11.7,<3.0.0",
     "pyyaml>=6.0.2,<7.0.0",
     "aiohttp>=3.12.15,<4.0.0",

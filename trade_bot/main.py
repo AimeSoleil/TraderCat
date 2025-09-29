@@ -11,7 +11,8 @@ from trade_bot.notification.discord import DiscordNotifier
 from trade_bot.execution.trade_execution import TradeExecutor
 from trade_bot.bot import TradeBot
 
-DEFAULT_SYMBOLS = []
+DEFAULT_SYMBOLS_STR = os.environ.get("ENV_SYMBOLS") # e.g. "AAPL,MSFT,GOOG"
+print(f"Default symbols from ENV_SYMBOLS: {DEFAULT_SYMBOLS_STR}")
 
 def parse_symbols(symbols_str):
     return [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
@@ -80,7 +81,7 @@ async def schedule_main(symbols, executor, discord_notifier, schedule_hour=16, s
     except (KeyboardInterrupt, SystemExit):
         pass
 
-def main():
+def main(args=None):
     parser = argparse.ArgumentParser(description="TraderCat Bot Runner")
     parser.add_argument(
         "-m", "--mode",
@@ -112,7 +113,11 @@ def main():
         default=0,
         help="Minute (0-59) for scheduled run in US/Eastern timezone (default: 0)"
     )
-    args = parser.parse_args()
+
+    if args is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(args)
 
     # 选择symbols来源
     if args.symbols:
@@ -120,7 +125,7 @@ def main():
     elif args.symbols_file:
         symbols = load_symbols_from_file(args.symbols_file)
     else:
-        symbols = DEFAULT_SYMBOLS
+        symbols = DEFAULT_SYMBOLS_STR and parse_symbols(DEFAULT_SYMBOLS_STR) or []
 
     symbols = list(set(symbols)) # remove duplication
     if not symbols:

@@ -87,3 +87,6 @@ test-output/
 # Azure functions local settings
 local.settings.json
 .python_packages
+__blobstorage__
+__azurite_db_*
+AzuriteConfig

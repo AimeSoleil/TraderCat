@@ -1,3 +1,4 @@
+from httpx import get
 from openbb import obb
 from trade_bot.data.market_data_provider import MarketDataProvider
 

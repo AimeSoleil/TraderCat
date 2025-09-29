@@ -17,8 +17,8 @@ TraderCat/
 ## Environment Setup
 
 1. **Install Python 3.10+**
-
-2. **Install main dependencies and CLI tool (recommended via pyproject.toml)**
+2. **Install Poetry**
+3. **Install main dependencies and CLI tool (recommended via pyproject.toml)**
 
    ```bash
    pip install .
@@ -29,13 +29,13 @@ TraderCat/
 
    > After installation, the `tradercat` command will be automatically added to your PATH (such as `~/.local/bin/` or your virtual environment's `bin/` directory).
 
-3. **(Optional) Install development dependencies**
+4. **(Optional) Install development dependencies**
 
    ```bash
    pip install ".[dev]"
    ```
 
-4. **(Optional) Set up Discord notifications**  
+5. **(Optional) Set up Discord notifications**  
    Before running, set the environment variable `DISCORD_WEBHOOK_URL`, for example:  
    `export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/your_webhook_url"`  
    You can add this line to your `~/.bashrc`, `~/.zshrc`, or set it manually before running the command.
@@ -53,6 +53,7 @@ Parameter description:
 - `-m` or `--mode`: `once` (run once) or `schedule` (run every day at 16:00 US Eastern Time)
 - `-s` or `--symbols`: Comma-separated list of stock symbols, e.g. `"AAPL,MSFT,GOOG"`
 - `-f` or `--symbols-file`: External config file (txt/yaml), one symbol per line or a yaml file with a `symbols` list
+- except for `-s` or `-f` to specify symbols, you can also use environment variables `ENV_SYMBOLS` to input symbols string with comma separator
 
 ### Examples
 
@@ -73,6 +74,17 @@ This project supports sending notifications via Discord Webhook. Please make sur
 ```bash
 export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/your_webhook_url"
 tradercat -m once -s "AAPL,MSFT"
+```
+
+## Local run with azure function
+
+> when using azure function, you might need to generate requirements.txt
+> try `poetry self update && poetry self add poetry-plugin-export`
+> then, export: `python -m poetry export -f requirements.txt --output requirements.txt --without-hashes`
+
+```bash
+npm install -g azurite
+func start
 ```
 
 ## Other Notes
