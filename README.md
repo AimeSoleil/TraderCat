@@ -18,7 +18,8 @@ TraderCat/
 
 1. **Install Python 3.10+**
 2. **Install Poetry**
-3. **Install main dependencies and CLI tool (recommended via pyproject.toml)**
+3. **Optional - setup virtualenv `python -m venv .venv`**
+4. **Install main dependencies and CLI tool (recommended via pyproject.toml)**
 
    ```bash
    pip install .
@@ -29,13 +30,13 @@ TraderCat/
 
    > After installation, the `tradercat` command will be automatically added to your PATH (such as `~/.local/bin/` or your virtual environment's `bin/` directory).
 
-4. **(Optional) Install development dependencies**
+5. **(Optional) Install development dependencies**
 
    ```bash
    pip install ".[dev]"
    ```
 
-5. **(Optional) Set up Discord notifications**  
+6. **(Optional) Set up Discord notifications**  
    Before running, set the environment variable `DISCORD_WEBHOOK_URL`, for example:  
    `export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/your_webhook_url"`  
    You can add this line to your `~/.bashrc`, `~/.zshrc`, or set it manually before running the command.
@@ -84,6 +85,7 @@ tradercat -m once -s "AAPL,MSFT"
 
 ```bash
 npm install -g azurite
+azurite > /dev/null 2>&1 &
 func start
 ```
 
