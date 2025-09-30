@@ -81,6 +81,9 @@ typings/
 *.secret.yaml
 *.secret.yml
 
+# Output files
+*.csv
+
 # Ignore test output
 test-output/
 

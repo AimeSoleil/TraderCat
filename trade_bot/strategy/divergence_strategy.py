@@ -190,6 +190,27 @@ class DivergenceStrategy(TradingStrategy):
         if not reasons:
             signal = "hold"
 
+        details = {
+            "previous_close": previous_close,
+            "current_close": current_close,
+            "previous_volume": previous_volume,
+            "current_volume": current_volume,
+            "previous_rsi": previous_rsi,
+            "current_rsi": current_rsi,
+            "previous_macd": previous_macd,
+            "current_macd": current_macd,
+            "previous_macd_signal": previous_macd_signal,
+            "current_macd_signal": current_macd_signal,
+            "previous_kdj_k": previous_kdj_k,
+            "previous_kdj_d": previous_kdj_d,
+            "current_kdj_k": current_kdj_k,
+            "current_kdj_d": current_kdj_d,
+            "macd_bullish_cross": macd_bullish_cross,
+            "macd_bearish_cross": macd_bearish_cross,
+            "kdj_bullish_cross": kdj_bullish_cross,
+            "kdj_bearish_cross": kdj_bearish_cross
+        }
+
         return SignalModel(
             symbol=symbol,
             strategy=self.get_name(),

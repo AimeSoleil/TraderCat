@@ -160,6 +160,20 @@ class MAStrategy(TradingStrategy):
         else:
             signal = "hold"
 
+        details = {
+            'prev_ema': prev_ema if 'prev_ema' in locals() else None,
+            'curr_ema': curr_ema if 'curr_ema' in locals() else None,
+            'prev_sma': prev_sma if 'prev_sma' in locals() else None,
+            'curr_sma': curr_sma if 'curr_sma' in locals() else None,
+            'prev_macd': prev_macd_val if 'prev_macd_val' in locals() else None,
+            'curr_macd': curr_macd_val if 'curr_macd_val' in locals() else None,
+            'prev_signal': prev_signal_val if 'prev_signal_val' in locals() else None,
+            'curr_signal': curr_signal_val if 'curr_signal_val' in locals() else None,
+            'curr_rsi': curr_rsi,
+            'avg_volume': avg_vol if 'avg_vol' in locals() else None,
+            'curr_volume': curr_vol if 'curr_vol' in locals() else None
+        }
+
         return SignalModel(
             symbol=symbol,
             strategy=self.get_name(),

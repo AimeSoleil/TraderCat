@@ -42,7 +42,7 @@ class HiddenDivergenceStrategy(TradingStrategy):
     def __init__(
         self,
         ema_period=50,
-        swing_window=1,
+        swing_window=5,
         rsi_period=14,
         macd_fast=12,
         macd_slow=26,
@@ -57,7 +57,7 @@ class HiddenDivergenceStrategy(TradingStrategy):
 
         Args:
             ema_period (int): Period for EMA calculation (default: 50).
-            swing_window (int): Window size for detecting swing points (default: 1).
+            swing_window (int): Window size for detecting swing points (default: 5).
             rsi_period (int): Period for RSI calculation (default: 14).
             macd_fast (int): Short-term EMA period for MACD (default: 12).
             macd_slow (int): Long-term EMA period for MACD (default: 26).
@@ -218,13 +218,6 @@ class HiddenDivergenceStrategy(TradingStrategy):
         swing_kdj_d = kdj[last_swing_index].STOCHd_14_3_3 if kdj else None
         swing_kdj_j = 3 * swing_kdj_k - 2 * swing_kdj_d if swing_kdj_k and swing_kdj_d else None
 
-        details['current_rsi'] = current_rsi
-        details['swing_rsi'] = swing_rsi
-        details['current_macd'] = current_macd
-        details['swing_macd'] = swing_macd
-        details['current_kdj_j'] = current_kdj_j
-        details['swing_kdj_j'] = swing_kdj_j
-
         # Hidden divergence logic
         if trend == "uptrend" and current_price > swing_price:
             if current_rsi < swing_rsi:
@@ -245,6 +238,19 @@ class HiddenDivergenceStrategy(TradingStrategy):
                 reasons.append("Hidden bullish divergence: Price lower, KDJ J higher.")
             if len(reasons) >= 2:
                 signal = "buy"
+
+        details = {
+            "trend": trend,
+            "current_price": current_price,
+            "current_ema": current_ema,
+            "swing_price": swing_price,
+            "current_rsi": current_rsi,
+            "swing_rsi": swing_rsi,
+            "current_macd": current_macd,
+            "swing_macd": swing_macd,
+            "current_kdj_j": current_kdj_j,
+            "swing_kdj_j": swing_kdj_j
+        }
 
         return SignalModel(
             symbol=symbol,

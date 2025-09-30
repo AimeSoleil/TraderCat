@@ -1,6 +1,7 @@
 import asyncio
 import argparse
-from datetime import date
+import pandas as pd
+from datetime import datetime
 import yaml
 import os
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -28,44 +29,80 @@ def load_symbols_from_file(filepath):
             return [line.strip().upper() for line in f if line.strip()]
 
 async def run_all_bots(symbols, executor, discord_notifier):
+    start_time = datetime.now()  # ⏱️ Start timer
+
     all_signals = []
     bots = [
         TradeBot(symbol=symbol, executor=executor)  # strategies will be initialized inside the bot
         for symbol in symbols
     ]
-    for bot in bots:
+
+    for index, bot in enumerate(bots):
         try:
-            print(f'🚀 Starting bot for symbol: {bot.symbol}...')
+            print(f'🚀 Start bot[{index}] for symbol: {bot.symbol}...')
             async for signal_list in bot.run():
                 all_signals.append({
                     "symbol": bot.symbol,
                     "signals": signal_list
                 })
-            print(f'✅ Finish bot for symbol: {bot.symbol}')
+            print(f'✅ Finish bot[{index}] for symbol: {bot.symbol}')
         except Exception as e:
-            print(f"Error running bot for symbol {bot.symbol}: {e}")
+            print(f"Error running bot[{index}] for symbol {bot.symbol}: {e}")
         await asyncio.sleep(5)
 
-    print("✅ All signals collected:")
-    print(all_signals)
+
+    print(f"✅ All signals collected from {len(bots)} symbols")
 
     if not all_signals:
         print("No signals generated. Skipping notification.")
         return
     
-    today_str = date.today().strftime("%Y-%m-%d")
-    summary_message = f"** :money_with_wings: Daily [{today_str}] Trade Signals Summary: **\n"
+    # 🔄 Convert to CSV
+    rows = []
+    for entry in all_signals:
+        symbol = entry["symbol"]
+        for signal in entry["signals"]:
+            rows.append({
+                "Date": datetime.today().strftime("%Y-%m-%d"),
+                "Symbol": symbol,
+                "Strategy": signal.strategy,
+                "Signal": signal.signal,
+                "Reason": signal.reason,
+                "Details": signal.details
+            })
+    df = pd.DataFrame(rows)
+    csv_filename = f"trade_signals_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
+    df.to_csv(csv_filename, index=False)
+    print(f"📄 Signals CSV created: {csv_filename}")
+    
+    # 🔔 Send summary notification to Discord
+    today_str = datetime.today().strftime("%Y-%m-%d")
+    title_message = f"** :money_with_wings: Daily [{today_str}] Trade Signals Summary: **\n"
+    summary_message = ""
     for entry in all_signals:
         symbol = entry["symbol"]
         signals = entry["signals"]
-        for signal in signals:
+        sell_buy_signals = [ signal for signal in signals if signal.signal == "buy" or signal.signal == "sell" ]
+        for signal in sell_buy_signals:
             summary_message += f"* *Symbol: {symbol}, Strategy: {signal.strategy}, Signal: {signal.signal}, Reason: {signal.reason}*\n"
-    print(f"Summary Message:\n{summary_message}")
+    
+    if not summary_message:
+        summary_message = "No buy/sell signals generated. "
+
+    print(f"Summary Message:\n{title_message + summary_message}")
     print("🔔 Sending summary notification to Discord...")
     try:
-        await discord_notifier.send(summary_message)
+        await discord_notifier.send(title_message + summary_message)
     except Exception as e:
         print(f"Error sending summary notification to Discord: {e}")
+    
+    # ⏱️ Log execution time
+    end_time = datetime.now()  # ⏱️ End timer
+    duration = end_time - start_time
+    total_seconds = int(duration.total_seconds())
+    minutes = total_seconds // 60
+    seconds = total_seconds % 60
+    print(f"🕒 Total execution time: {minutes} minutes and {seconds} seconds")
 
 async def schedule_main(symbols, executor, discord_notifier, schedule_hour=16, schedule_minute=0):
     scheduler = AsyncIOScheduler(timezone=pytz.timezone('US/Eastern'))

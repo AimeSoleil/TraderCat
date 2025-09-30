@@ -160,10 +160,6 @@ class BollingerBandStrategy(TradingStrategy):
         current_kdj_d = kdj[-1].STOCHd_14_3_3 if kdj else None
 
         # Bollinger Bands
-        # close_BBL_20_2.0=223.0175783123, 
-        # close_BBM_20_2.0=231.166, 
-        # close_BBU_20_2.0=239.3144216877, 
-        # getattr(bb_last, 'close_BBL_20_2.0', None)
         bb_last = bb[-1] if bb else None
         bb_upper = getattr(bb_last, 'close_BBU_20_2.0', None)
         bb_lower = getattr(bb_last, 'close_BBL_20_2.0', None)
@@ -242,14 +238,22 @@ class BollingerBandStrategy(TradingStrategy):
             if not reasons:
                 reasons.append("No strong signal")
 
-        details["bb"] = bb_last
-        details["rsi"] = current_rsi
-        details["macd"] = current_macd
-        details["macd_signal"] = current_macd_signal
-        details["kdj_k"] = current_kdj_k
-        details["kdj_d"] = current_kdj_d
-        details["volume"] = current_volume
-        details["avg_volume"] = avg_vol
+        details = {
+            "current_close": current_close,
+            "bb_upper": bb_upper,
+            "bb_lower": bb_lower,
+            "current_rsi": current_rsi,
+            "previous_macd": previous_macd,
+            "current_macd": current_macd,
+            "previous_macd_signal": previous_macd_signal,
+            "current_macd_signal": current_macd_signal,
+            "previous_kdj_k": previous_kdj_k,
+            "previous_kdj_d": previous_kdj_d,
+            "current_kdj_k": current_kdj_k,
+            "current_kdj_d": current_kdj_d,
+            "current_volume": current_volume,
+            "avg_volume": avg_vol
+        }
 
         return SignalModel(
             symbol=symbol,
