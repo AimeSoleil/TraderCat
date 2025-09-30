@@ -89,6 +89,13 @@ azurite > /dev/null 2>&1 &
 func start
 ```
 
+## Deploy to azure function
+
+```bash
+az login
+func azure functionapp publish <your function name> --build remote
+```
+
 ## Other Notes
 
 - Supports multiple notification methods (such as Discord, Slack, Telegram, etc.). Please configure the relevant parameters in `trade_bot/notification/`.

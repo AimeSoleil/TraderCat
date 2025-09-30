@@ -250,7 +250,6 @@ class BollingerBandStrategy(TradingStrategy):
         details["kdj_d"] = current_kdj_d
         details["volume"] = current_volume
         details["avg_volume"] = avg_vol
-        details["reasons"] = reasons
 
         return SignalModel(
             symbol=symbol,
