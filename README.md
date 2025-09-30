@@ -91,6 +91,8 @@ func start
 
 ## Deploy to azure function
 
+> I currently give up the deployment to azure function after so many times successful deployment but cannot find my functions in azure portal. It sucks. You can try if you can do that.
+
 ```bash
 az login
 func azure functionapp publish <your function name> --build remote
