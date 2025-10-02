@@ -155,7 +155,7 @@ def main(args=None):
         args = parser.parse_args()
     else:
         args = parser.parse_args(args)
-
+    
     # 选择symbols来源
     if args.symbols:
         symbols = parse_symbols(args.symbols)

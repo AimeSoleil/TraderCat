@@ -77,7 +77,9 @@ export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/your_webhook_url"
 tradercat -m once -s "AAPL,MSFT"
 ```
 
-## Local run with azure function
+## Run with azure function
+
+### Local run with azure function
 
 > when using azure function, you might need to generate requirements.txt
 > try `poetry self update && poetry self add poetry-plugin-export`
@@ -89,7 +91,7 @@ azurite > /dev/null 2>&1 &
 func start
 ```
 
-## Deploy to azure function
+### Deploy to azure function (Deprecated)
 
 > I currently give up the deployment to azure function after so many times successful deployment but cannot find my functions in azure portal. It sucks. You can try if you can do that.
 
@@ -97,6 +99,10 @@ func start
 az login
 func azure functionapp publish <your function name> --build remote
 ```
+
+## Backtest
+
+Under folder `trade_bot/backtest`, you can modify the `main.py` to run backtest for your strategy.
 
 ## Other Notes
 

@@ -219,22 +219,22 @@ class HiddenDivergenceStrategy(TradingStrategy):
         swing_kdj_j = 3 * swing_kdj_k - 2 * swing_kdj_d if swing_kdj_k and swing_kdj_d else None
 
         # Hidden divergence logic
-        if trend == "uptrend" and current_price > swing_price:
-            if current_rsi < swing_rsi:
+        if trend == "downtrend" and current_price < swing_price:
+            if current_rsi > swing_rsi:
                 reasons.append("Hidden bearish divergence: Price higher, RSI lower.")
-            if current_macd < swing_macd:
+            if current_macd > swing_macd:
                 reasons.append("Hidden bearish divergence: Price higher, MACD lower.")
-            if current_kdj_j < swing_kdj_j:
+            if current_kdj_j > swing_kdj_j:
                 reasons.append("Hidden bearish divergence: Price higher, KDJ J lower.")
             if len(reasons) >= 2:
                 signal = "sell"
 
-        elif trend == "downtrend" and current_price < swing_price:
-            if current_rsi > swing_rsi:
+        elif trend == "uptrend" and current_price > swing_price:
+            if current_rsi < swing_rsi:
                 reasons.append("Hidden bullish divergence: Price lower, RSI higher.")
-            if current_macd > swing_macd:
+            if current_macd < swing_macd:
                 reasons.append("Hidden bullish divergence: Price lower, MACD higher.")
-            if current_kdj_j > swing_kdj_j:
+            if current_kdj_j < swing_kdj_j:
                 reasons.append("Hidden bullish divergence: Price lower, KDJ J higher.")
             if len(reasons) >= 2:
                 signal = "buy"

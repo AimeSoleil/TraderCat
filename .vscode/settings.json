@@ -3,7 +3,11 @@
     "python-envs.pythonProjects": [],
     "python-envs.defaultPackageManager": "ms-python.python:pip",
     "cSpell.words": [
+        "backtest",
+        "Backtesting",
+        "backtests",
         "lookback",
+        "mplfinance",
         "openbb",
         "pyproject",
         "tradercat"
