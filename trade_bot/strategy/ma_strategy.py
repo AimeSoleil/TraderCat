@@ -1,5 +1,4 @@
 from trade_bot.strategy.trading_strategy import TradingStrategy
-from trade_bot.data.openbb_provider import OpenBBProvider
 from trade_bot.strategy.signal_model import SignalModel
 
 class MAStrategy(TradingStrategy):
@@ -37,14 +36,14 @@ class MAStrategy(TradingStrategy):
 
     def __init__(
         self,
+        data_provider,
         ema_period=10,
         sma_period=20,
         rsi_period=14,
         macd_fast=12,
         macd_slow=26,
         macd_signal=9,
-        volume_window=5,
-        data_provider=None
+        volume_window=5
     ):
         """
         Initializes the MAStrategy with the specified parameters.
@@ -72,6 +71,13 @@ class MAStrategy(TradingStrategy):
         """Returns the name of the trading strategy."""
         return "Moving Average"
 
+    def get_lookback_window(self) -> int:
+        """
+        Returns minimum length of candle window;
+        MACD need at least 35 candles set at 40 with safety buffer
+        """
+        return 40
+
     def generate_signal(self, symbol: str, candles: dict) -> SignalModel:
         """
         Generates a trading signal based on moving average crossovers, MACD, RSI, and volume analysis.
@@ -82,22 +88,15 @@ class MAStrategy(TradingStrategy):
 
         Returns:
             SignalModel: An object containing the trading signal, reasons for the signal,
-                          and additional details.
+                        and additional details.
         """
         print(f'Strategy[{self.get_name()}] generating signal for {symbol}...')
         details = {}
         signal = "hold"
         reasons = []
 
-        if not self.provider:
-            reason_str = "Data provider not set."
-            return SignalModel(
-                symbol=symbol,
-                strategy=self.get_name(), 
-                signal=signal,
-                reason=reason_str,
-                details=details
-            )
+        if not self.provider or len(candles) < self.get_lookback_window() + 1:
+            return SignalModel(symbol, self.get_name(), signal, "Insufficient data or provider not set.", details)
         
         # Fetch indicators
         ema = self.provider.get_indicator("ema", candles, {"length": self.ema_period})

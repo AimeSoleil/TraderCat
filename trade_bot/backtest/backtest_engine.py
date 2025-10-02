@@ -103,7 +103,7 @@ class BacktestEngine:
         self.tracker = TradeTracker(initial_cash)
 
     def run(self):
-        for i in range(self.strategy.lookback + 1, len(self.candles)):
+        for i in range(self.strategy.get_lookback_window() + 1, len(self.candles)):
             window = self.candles[:i+1]
             signal_model: SignalModel = self.strategy.generate_signal(self.symbol, window)
             signal = signal_model.signal

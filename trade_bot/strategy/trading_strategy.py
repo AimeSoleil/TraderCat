@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from trade_bot.strategy.signal_model import SignalModel
 
 class TradingStrategy(ABC):
+
     @abstractmethod
     def generate_signal(self, symbol: str, candles: dict) -> SignalModel:
         """
@@ -14,5 +15,12 @@ class TradingStrategy(ABC):
     def get_name(self) -> str:
         """
         Returns strategy name
+        """
+        pass
+
+    @abstractmethod
+    def get_lookback_window(self) -> int:
+        """
+        Returns minimum length of candle window
         """
         pass

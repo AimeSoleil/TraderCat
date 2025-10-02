@@ -41,6 +41,7 @@ class HiddenDivergenceStrategy(TradingStrategy):
 
     def __init__(
         self,
+        data_provider,
         ema_period=50,
         swing_window=5,
         rsi_period=14,
@@ -49,8 +50,7 @@ class HiddenDivergenceStrategy(TradingStrategy):
         macd_signal=9,
         kdj_fast_k_period=14,
         kdj_slow_d_period=3,
-        kdj_slow_k_period=3,
-        data_provider=None
+        kdj_slow_k_period=3
     ):
         """
         Initializes the HiddenDivergenceStrategy with the specified parameters.
@@ -81,6 +81,12 @@ class HiddenDivergenceStrategy(TradingStrategy):
     def get_name(self) -> str:
         """Returns the name of the trading strategy."""
         return "Hidden Divergence"
+    
+    def get_lookback_window(self) -> int:
+        """
+        Returns minimum length of candle window
+        """
+        return 60
 
     def calculate_ema(self, prices, period):
         """
@@ -135,32 +141,15 @@ class HiddenDivergenceStrategy(TradingStrategy):
 
         Returns:
             SignalModel: An object containing the trading signal, reasons for the signal,
-                          and additional details.
+                        and additional details.
         """
         print(f'Strategy[{self.get_name()}] generating signal for {symbol}...')
         details = {}
         signal = "hold"
         reasons = []
 
-        if len(candles) < max(self.ema_period, 3):
-            details["reason"] = "Insufficient candles data for swing point and trend analysis."
-            return SignalModel(
-                symbol=symbol,
-                strategy=self.get_name(), 
-                signal=signal, 
-                details=details
-            )
-
-        # Indicators
-        if not self.provider:
-            reason_str = "Data provider not set."
-            return SignalModel(
-                symbol=symbol,
-                strategy=self.get_name(), 
-                signal=signal,
-                reason=reason_str,
-                details=details
-            )
+        if not self.provider or len(candles) < self.get_lookback_window() + 1:
+            return SignalModel(symbol, self.get_name(), signal, "Insufficient data or provider not set.", details)
         
         rsi = self.provider.get_indicator("rsi", candles, {"length": self.rsi_period})
         macd = self.provider.get_indicator("macd", candles, {

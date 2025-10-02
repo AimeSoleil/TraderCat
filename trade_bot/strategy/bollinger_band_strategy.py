@@ -50,6 +50,7 @@ class BollingerBandStrategy(TradingStrategy):
 
     def __init__(
         self,
+        data_provider,
         bb_period=20,
         bb_std=2,
         rsi_period=14,
@@ -59,8 +60,7 @@ class BollingerBandStrategy(TradingStrategy):
         kdj_fast_k_period=14,
         kdj_slow_d_period=3,
         kdj_slow_k_period=3,
-        volume_window=5,
-        data_provider=None
+        volume_window=5
     ):
         """
         Initializes the BollingerBandStrategy with the specified parameters.
@@ -94,6 +94,13 @@ class BollingerBandStrategy(TradingStrategy):
         """Returns the name of the trading strategy."""
         return "Bollinger Bands"
 
+    def get_lookback_window(self) -> int:
+        """
+        Returns minimum length of candle window;
+        MACD need at least 35 candles set at 40 with safety buffer
+        """
+        return 40
+
     def generate_signal(self, symbol: str, candles: dict) -> SignalModel:
         """
         Generates a trading signal based on Bollinger Bands, RSI, MACD, KDJ, and volume analysis.
@@ -104,30 +111,15 @@ class BollingerBandStrategy(TradingStrategy):
 
         Returns:
             SignalModel: An object containing the trading signal, reasons for the signal,
-                          and additional details.
+                        and additional details.
         """
         print(f'Strategy[{self.get_name()}] generating signal for {symbol}...')
         details = {}
         signal = "hold"
         reasons = []
 
-        if len(candles) < max(self.bb_period, self.rsi_period, self.macd_slow, self.kdj_fast_k_period, self.volume_window) + 2:
-            return SignalModel(
-                symbol=symbol,
-                strategy=self.get_name(),
-                signal=signal,
-                reason="Insufficient candles data",
-                details=details
-            )
-
-        if not self.provider:
-            return SignalModel(
-                symbol=symbol,
-                strategy=self.get_name(),
-                signal=signal,
-                reason="Data provider not set",
-                details=details
-            )
+        if not self.provider or len(candles) < self.get_lookback_window() + 1:
+            return SignalModel(symbol, self.get_name(), signal, "Insufficient data or provider not set.", details)
 
         # Fetch indicators
         bb = self.provider.get_indicator("bbands", candles, {"length": self.bb_period, "std": self.bb_std})

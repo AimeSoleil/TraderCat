@@ -32,6 +32,7 @@ class DivergenceStrategy(TradingStrategy):
 
     def __init__(
         self,
+        data_provider,
         bb_period=20,
         rsi_period=14,
         macd_fast=12,
@@ -40,7 +41,6 @@ class DivergenceStrategy(TradingStrategy):
         kdj_fast_k_period=14,
         kdj_slow_d_period=3,
         kdj_slow_k_period=3,
-        data_provider=None
     ):
         """
         Initializes the DivergenceStrategy with the specified parameters.
@@ -70,6 +70,13 @@ class DivergenceStrategy(TradingStrategy):
         """Returns the name of the trading strategy."""
         return "Divergence"
 
+    def get_lookback_window(self) -> int:
+        """
+        Returns minimum length of candle window;
+        MACD need at least 35 candles set at 40 with safety buffer
+        """
+        return 40
+
     def generate_signal(self, symbol: str, candles: dict) -> SignalModel:
         """
         Generates a trading signal based on price action and indicator divergences.
@@ -87,26 +94,8 @@ class DivergenceStrategy(TradingStrategy):
         signal = "hold"
         reasons = []
 
-        if len(candles) < 3:
-            reason_str = "Insufficient candles data for divergence analysis."
-            return SignalModel(
-                symbol=symbol,
-                strategy=self.get_name(), 
-                signal=signal,
-                reason=reason_str,
-                details=details
-            )
-
-        # Fetch indicators
-        if not self.provider:
-            reason_str = "Data provider not set."
-            return SignalModel(
-                symbol=symbol,
-                strategy=self.get_name(), 
-                signal=signal,
-                reason=reason_str,
-                details=details
-            )
+        if not self.provider or len(candles) < self.get_lookback_window() + 1:
+            return SignalModel(symbol, self.get_name(), signal, "Insufficient data or provider not set.", details)
         
         rsi = self.provider.get_indicator("rsi", candles, {"length": self.rsi_period})
         macd = self.provider.get_indicator("macd", candles, {

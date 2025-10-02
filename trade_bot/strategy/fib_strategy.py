@@ -8,7 +8,6 @@ class FibonacciStrategy(TradingStrategy):
     to generate buy/sell signals based on price behavior and momentum.
 
     Attributes:
-        lookback (int): Number of candles to define swing high/low (default: 20)
         rsi_period (int): RSI period for confirmation (default: 14)
         macd_fast (int): Fast EMA for MACD (default: 12)
         macd_slow (int): Slow EMA for MACD (default: 26)
@@ -18,15 +17,13 @@ class FibonacciStrategy(TradingStrategy):
     """
 
     def __init__(self, 
-                lookback=60, 
+                data_provider,
                 rsi_period=14, 
                 macd_fast=12, 
                 macd_slow=26, 
                 macd_signal=9, 
-                volume_window=5, 
-                data_provider=None):
+                volume_window=5):
         self.provider = data_provider
-        self.lookback = lookback
         self.rsi_period = rsi_period
         self.macd_fast = macd_fast
         self.macd_slow = macd_slow
@@ -36,18 +33,25 @@ class FibonacciStrategy(TradingStrategy):
     def get_name(self) -> str:
         return "Fibonacci Retracement with MACD"
 
+    def get_lookback_window(self) -> int:
+        """
+        Returns minimum length of candle window;
+        MACD need at least 35 candles set at 40 with safety buffer
+        """
+        return 60
+
     def generate_signal(self, symbol: str, candles: dict) -> SignalModel:
         print(f'Strategy[{self.get_name()}] generating signal for {symbol}...')
         signal = "hold"
         reasons = []
         details = {}
 
-        if not self.provider or len(candles) < self.lookback + 1:
+        if not self.provider or len(candles) < self.get_lookback_window() + 1:
             return SignalModel(symbol, self.get_name(), signal, "Insufficient data or provider not set.", details)
 
         # Extract swing high/low
-        highs = [candle.high for candle in candles[-self.lookback:]]
-        lows = [candle.low for candle in candles[-self.lookback:]]
+        highs = [candle.high for candle in candles[-self.get_lookback_window():]]
+        lows = [candle.low for candle in candles[-self.get_lookback_window():]]
         swing_high = max(highs)
         swing_low = min(lows)
 
