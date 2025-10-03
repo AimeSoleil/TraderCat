@@ -1,39 +1,8 @@
+from trade_bot.strategy.signal_scorer import SignalScorer
 from trade_bot.strategy.trading_strategy import TradingStrategy
 from trade_bot.strategy.signal_model import SignalModel
 
 class MAStrategy(TradingStrategy):
-    """
-    A trading strategy that utilizes moving average crossovers, MACD, RSI, 
-    and volume analysis to generate buy or sell signals.
-
-    The strategy employs the following indicators:
-    - EMA (Exponential Moving Average) with a short-term period of 10.
-    - SMA (Simple Moving Average) with a medium-term period of 20.
-    - MACD (Moving Average Convergence Divergence) using standard parameters of 12, 26, and 9.
-    - RSI (Relative Strength Index) with a standard period of 14, using thresholds of 
-    70 for overbought and 30 for oversold conditions.
-    - Volume analysis using a 5-period moving average to identify significant volume spikes.
-
-    The strategy looks for:
-    - Bullish signals when the EMA crosses above the SMA, confirmed by MACD crossovers, 
-    RSI levels above 50, and volume spikes.
-    - Bearish signals when the EMA crosses below the SMA, confirmed by MACD crossovers, 
-    RSI levels above 70, and volume spikes.
-
-    The strategy aims for short-term trades, exiting on opposite signals or key levels,
-    and avoids trading in low volume or sideways markets.
-
-    Attributes:
-        ema_period (int): The period for the EMA calculation (default: 10).
-        sma_period (int): The period for the SMA calculation (default: 20).
-        rsi_period (int): The period for RSI calculation (default: 14).
-        macd_fast (int): The short-term EMA period for MACD (default: 12).
-        macd_slow (int): The long-term EMA period for MACD (default: 26).
-        macd_signal (int): The signal line period for MACD (default: 9).
-        volume_window (int): The period for calculating average volume to identify spikes (default: 5).
-        data_provider (optional): The data provider instance for fetching market data.
-    """
-
     def __init__(
         self,
         data_provider,
@@ -43,21 +12,10 @@ class MAStrategy(TradingStrategy):
         macd_fast=12,
         macd_slow=26,
         macd_signal=9,
-        volume_window=5
+        volume_window=5,
+        volume_spike_ratio=1.2,
+        confirmation_threshold=0.6
     ):
-        """
-        Initializes the MAStrategy with the specified parameters.
-
-        Args:
-            ema_period (int): Period for EMA calculation (default: 10).
-            sma_period (int): Period for SMA calculation (default: 20).
-            rsi_period (int): Period for RSI calculation (default: 14).
-            macd_fast (int): Short-term EMA period for MACD (default: 12).
-            macd_slow (int): Long-term EMA period for MACD (default: 26).
-            macd_signal (int): Signal line period for MACD (default: 9).
-            volume_window (int): Period for calculating average volume (default: 5).
-            data_provider (optional): Data provider for fetching market data.
-        """
         self.provider = data_provider
         self.ema_period = ema_period
         self.sma_period = sma_period
@@ -66,117 +24,101 @@ class MAStrategy(TradingStrategy):
         self.macd_slow = macd_slow
         self.macd_signal = macd_signal
         self.volume_window = volume_window
+        self.volume_spike_ratio = volume_spike_ratio
+        self.confirmation_threshold = confirmation_threshold
 
     def get_name(self) -> str:
-        """Returns the name of the trading strategy."""
         return "Moving Average"
 
     def get_lookback_window(self) -> int:
-        """
-        Returns minimum length of candle window;
-        MACD need at least 35 candles set at 40 with safety buffer
-        """
         return 40
 
-    def generate_signal(self, symbol: str, candles: dict) -> SignalModel:
-        """
-        Generates a trading signal based on moving average crossovers, MACD, RSI, and volume analysis.
-
-        Args:
-            symbol (str): The trading symbol (e.g., 'AAPL').
-            candles (dict): Historical market data in candlestick format.
-
-        Returns:
-            SignalModel: An object containing the trading signal, reasons for the signal,
-                        and additional details.
-        """
+    def generate_signal(self, symbol: str, candles: list) -> SignalModel:
         print(f'Strategy[{self.get_name()}] generating signal for {symbol}...')
-        details = {}
         signal = "hold"
-        reasons = []
+        confidence = 0.0
+        details = {}
 
         if not self.provider or len(candles) < self.get_lookback_window() + 1:
-            return SignalModel(symbol, self.get_name(), signal, "Insufficient data or provider not set.", details)
-        
+            return SignalModel(symbol, self.get_name(), signal, "Insufficient data or provider not set.", details, confidence)
+
         # Fetch indicators
         ema = self.provider.get_indicator("ema", candles, {"length": self.ema_period})
         sma = self.provider.get_indicator("sma", candles, {"length": self.sma_period})
         macd = self.provider.get_indicator("macd", candles, {
-            "fast": self.macd_fast,
-            "slow": self.macd_slow,
-            "signal": self.macd_signal
+            "fast": self.macd_fast, "slow": self.macd_slow, "signal": self.macd_signal
         })
         rsi = self.provider.get_indicator("rsi", candles, {"length": self.rsi_period})
-        volumes = [candle.volume for candle in candles]
+        volumes = [c.volume for c in candles]
+
+        if not ema or not sma or not macd or not rsi or len(ema) < 2 or len(sma) < 2 or len(macd) < 2:
+            return SignalModel(symbol, self.get_name(), signal, "Indicator data unavailable or too short.", details, confidence)
 
         # Moving Average crossover detection
-        if len(ema) >= 2 and len(sma) >= 2:
-            prev_ema, curr_ema = ema[-2].close_EMA_10, ema[-1].close_EMA_10
-            prev_sma, curr_sma = sma[-2].close_SMA_20, sma[-1].close_SMA_20
-            ema_sma_bullish = prev_ema < prev_sma and curr_ema > curr_sma  # Bullish crossover
-            ema_sma_bearish = prev_ema > prev_sma and curr_ema < curr_sma  # Bearish crossover
-        else:
-            ema_sma_bullish = ema_sma_bearish = False
+        prev_ema, curr_ema = ema[-2].close_EMA_10, ema[-1].close_EMA_10
+        prev_sma, curr_sma = sma[-2].close_SMA_20, sma[-1].close_SMA_20
+        ema_sma_bullish = prev_ema < prev_sma and curr_ema > curr_sma
+        ema_sma_bearish = prev_ema > prev_sma and curr_ema < curr_sma
 
         # MACD crossover detection
-        if len(macd) >= 2:
-            prev_macd, curr_macd = macd[-2], macd[-1]
-            prev_macd_val = prev_macd.close_MACD_12_26_9
-            prev_signal_val = prev_macd.close_MACDs_12_26_9
-            curr_macd_val = curr_macd.close_MACD_12_26_9
-            curr_signal_val = curr_macd.close_MACDs_12_26_9
-            macd_bullish = prev_macd_val <= prev_signal_val and curr_macd_val > curr_signal_val
-            macd_bearish = prev_macd_val >= prev_signal_val and curr_macd_val < curr_signal_val
-        else:
-            macd_bullish = macd_bearish = False
+        prev_macd = macd[-2]
+        curr_macd = macd[-1]
+        prev_macd_val = prev_macd.close_MACD_12_26_9
+        prev_signal_val = prev_macd.close_MACDs_12_26_9
+        curr_macd_val = curr_macd.close_MACD_12_26_9
+        curr_signal_val = curr_macd.close_MACDs_12_26_9
+        macd_bullish = prev_macd_val <= prev_signal_val and curr_macd_val > curr_signal_val
+        macd_bearish = prev_macd_val >= prev_signal_val and curr_macd_val < curr_signal_val
 
         # RSI value
-        curr_rsi = rsi[-1].close_RSI_14 if rsi else None
+        curr_rsi = rsi[-1].close_RSI_14
 
         # Volume analysis
-        if len(volumes) >= self.volume_window + 1:
-            avg_vol = sum(volumes[-self.volume_window-1:-1]) / self.volume_window
-            curr_vol = volumes[-1]
-            vol_rise = curr_vol > 1.2 * avg_vol  # Check for volume surge
-        else:
-            vol_rise = False
+        avg_vol = sum(volumes[-self.volume_window-1:-1]) / self.volume_window
+        curr_vol = volumes[-1]
+        vol_spike = curr_vol > avg_vol * self.volume_spike_ratio
 
-        # Bullish signal conditions
+        # Scoring system to evaluate
+        scorer = SignalScorer(threshold_percent=self.confirmation_threshold)
+        # Bullish setup
         if ema_sma_bullish:
-            reasons.append("EMA crosses above SMA (bullish)")
-        if macd_bullish:
-            reasons.append("MACD bullish crossover")
-        if curr_rsi is not None and curr_rsi > 50:
-            reasons.append("RSI above 50")
-        if vol_rise:
-            reasons.append("Volume surge")
+            scorer.add(True, "EMA crosses above SMA (bullish)")
+            scorer.add(macd_bullish, "MACD bullish crossover")
+            scorer.add(curr_rsi > 50, "RSI above 50")
+            scorer.add(vol_spike, "Volume spike")
+            signal, confidence, reasons = scorer.evaluate(direction="bullish")
 
-        if ema_sma_bullish and macd_bullish and curr_rsi is not None and curr_rsi < 30 and vol_rise:
-            signal = "buy"
-        # Bearish signal conditions
-        elif ema_sma_bearish and macd_bearish and curr_rsi is not None and curr_rsi > 70 and vol_rise:
-            signal = "sell"
+        # Bearish setup
+        elif ema_sma_bearish:
+            scorer.add(True, "EMA crosses below SMA (bearish)")
+            scorer.add(macd_bearish, "MACD bearish crossover")
+            scorer.add(curr_rsi > 70, "RSI overbought")
+            scorer.add(vol_spike, "Volume spike")
+            signal, confidence, reasons = scorer.evaluate(direction="bearish")
+
         else:
-            signal = "hold"
+            signal, confidence, reasons = "hold", 0.0, ["No strong signal"]
 
         details = {
-            'prev_ema': prev_ema if 'prev_ema' in locals() else None,
-            'curr_ema': curr_ema if 'curr_ema' in locals() else None,
-            'prev_sma': prev_sma if 'prev_sma' in locals() else None,
-            'curr_sma': curr_sma if 'curr_sma' in locals() else None,
-            'prev_macd': prev_macd_val if 'prev_macd_val' in locals() else None,
-            'curr_macd': curr_macd_val if 'curr_macd_val' in locals() else None,
-            'prev_signal': prev_signal_val if 'prev_signal_val' in locals() else None,
-            'curr_signal': curr_signal_val if 'curr_signal_val' in locals() else None,
+            'prev_ema': prev_ema,
+            'curr_ema': curr_ema,
+            'prev_sma': prev_sma,
+            'curr_sma': curr_sma,
+            'prev_macd': prev_macd_val,
+            'curr_macd': curr_macd_val,
+            'prev_signal': prev_signal_val,
+            'curr_signal': curr_signal_val,
             'curr_rsi': curr_rsi,
-            'avg_volume': avg_vol if 'avg_vol' in locals() else None,
-            'curr_volume': curr_vol if 'curr_vol' in locals() else None
+            'avg_volume': avg_vol,
+            'curr_volume': curr_vol,
+            'confidence': confidence
         }
 
         return SignalModel(
             symbol=symbol,
             strategy=self.get_name(),
             signal=signal,
-            reason="; ".join(reasons) if reasons else "No Signal Detected",
-            details=details
+            reason="; ".join(reasons),
+            details=details,
+            confidence=confidence
         )

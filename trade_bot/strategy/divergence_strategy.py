@@ -1,39 +1,11 @@
+from trade_bot.strategy.signal_scorer import SignalScorer
 from trade_bot.strategy.trading_strategy import TradingStrategy
 from trade_bot.strategy.signal_model import SignalModel
 
 class DivergenceStrategy(TradingStrategy):
-    """
-    A trading strategy that identifies divergences between price action 
-    and technical indicators to generate buy or sell signals. This strategy
-    is designed for swing trading and utilizes daily candlestick data.
-
-    The strategy employs the following indicators:
-    - KDJ (K, D, J) with periods of 14, 3, 3 for more stable signals.
-    - MACD (Moving Average Convergence Divergence) with standard windows of 12, 26, and 9.
-    - RSI (Relative Strength Index) with a standard window of 14, using thresholds of 
-    70 for overbought and 30 for oversold conditions.
-
-    The strategy aims for hold periods of 1 to 3 days, exiting on opposite signals 
-    or key support/resistance levels. It avoids trading in low volume or sideways markets. 
-    Confirmation of signals is sought through volume spikes at breakout points, 
-    and the strategy looks for divergences between price action and indicators.
-
-    Attributes:
-        bb_period (int): The period for Bollinger Bands, default is 20.
-        rsi_period (int): The period for RSI calculation, default is 14.
-        macd_fast (int): The short-term EMA period for MACD, default is 12.
-        macd_slow (int): The long-term EMA period for MACD, default is 26.
-        macd_signal (int): The signal line period for MACD, default is 9.
-        kdj_fast_k_period (int): The fast K period for KDJ, default is 14.
-        kdj_slow_d_period (int): The slow D period for KDJ, default is 3.
-        kdj_slow_k_period (int): The slow K period for KDJ, default is 3.
-        data_provider (optional): The data provider instance for fetching market data.
-    """
-
     def __init__(
         self,
         data_provider,
-        bb_period=20,
         rsi_period=14,
         macd_fast=12,
         macd_slow=26,
@@ -41,23 +13,15 @@ class DivergenceStrategy(TradingStrategy):
         kdj_fast_k_period=14,
         kdj_slow_d_period=3,
         kdj_slow_k_period=3,
+        rsi_overbought=70,
+        rsi_oversold=30,
+        kdj_upper=80,
+        kdj_lower=20,
+        swing_window=5,
+        volume_ratio_threshold=1.2,
+        confirmation_threshold=0.6
     ):
-        """
-        Initializes the DivergenceStrategy with the specified parameters.
-
-        Args:
-            bb_period (int): Period for Bollinger Bands (default: 20).
-            rsi_period (int): Period for RSI calculation (default: 14).
-            macd_fast (int): Short-term EMA period for MACD (default: 12).
-            macd_slow (int): Long-term EMA period for MACD (default: 26).
-            macd_signal (int): Signal line period for MACD (default: 9).
-            kdj_fast_k_period (int): Fast K period for KDJ (default: 14).
-            kdj_slow_d_period (int): Slow D period for KDJ (default: 3).
-            kdj_slow_k_period (int): Slow K period for KDJ (default: 3).
-            data_provider (optional): Data provider for fetching market data.
-        """
         self.provider = data_provider
-        self.bb_period = bb_period
         self.rsi_period = rsi_period
         self.macd_fast = macd_fast
         self.macd_slow = macd_slow
@@ -65,38 +29,39 @@ class DivergenceStrategy(TradingStrategy):
         self.kdj_fast_k_period = kdj_fast_k_period
         self.kdj_slow_d_period = kdj_slow_d_period
         self.kdj_slow_k_period = kdj_slow_k_period
+        self.rsi_overbought = rsi_overbought
+        self.rsi_oversold = rsi_oversold
+        self.kdj_upper = kdj_upper
+        self.kdj_lower = kdj_lower
+        self.swing_window = swing_window
+        self.volume_ratio_threshold = volume_ratio_threshold
+        self.confirmation_threshold = confirmation_threshold
 
     def get_name(self) -> str:
-        """Returns the name of the trading strategy."""
         return "Divergence"
 
     def get_lookback_window(self) -> int:
-        """
-        Returns minimum length of candle window;
-        MACD need at least 35 candles set at 40 with safety buffer
-        """
         return 40
 
-    def generate_signal(self, symbol: str, candles: dict) -> SignalModel:
-        """
-        Generates a trading signal based on price action and indicator divergences.
+    def find_recent_swing(self, candles, direction="low"):
+        for i in range(len(candles) - self.swing_window - 1, 0, -1):
+            if direction == "low":
+                if all(candles[i].low < candles[i - j].low and candles[i].low < candles[i + j].low for j in range(1, self.swing_window)):
+                    return i
+            else:
+                if all(candles[i].high > candles[i - j].high and candles[i].high > candles[i + j].high for j in range(1, self.swing_window)):
+                    return i
+        return None
 
-        Args:
-            symbol (str): The trading symbol (e.g., 'AAPL').
-            candles (dict): Historical market data in candlestick format.
-
-        Returns:
-            SignalModel: An object containing the trading signal, reasons for the signal,
-                        and additional details.
-        """
+    def generate_signal(self, symbol: str, candles: list) -> SignalModel:
         print(f'Strategy[{self.get_name()}] generating signal for {symbol}...')
-        details = {}
         signal = "hold"
-        reasons = []
+        confidence = 0.0
+        details = {}
 
         if not self.provider or len(candles) < self.get_lookback_window() + 1:
-            return SignalModel(symbol, self.get_name(), signal, "Insufficient data or provider not set.", details)
-        
+            return SignalModel(symbol, self.get_name(), signal, "Insufficient data or provider not set.", details, confidence)
+
         rsi = self.provider.get_indicator("rsi", candles, {"length": self.rsi_period})
         macd = self.provider.get_indicator("macd", candles, {
             "fast": self.macd_fast,
@@ -109,101 +74,86 @@ class DivergenceStrategy(TradingStrategy):
             "slow_k_period": self.kdj_slow_k_period
         })
 
-        # Extract recent price and indicator values
-        previous_close = candles[-2].close
-        current_close = candles[-1].close
+        if not rsi or not macd or not kdj or len(rsi) < 2 or len(macd) < 2 or len(kdj) < 2:
+            return SignalModel(symbol, self.get_name(), signal, "Indicator data too short or unavailable.", details, confidence)
 
-        # Extract previous and current volumes
-        previous_volume = candles[-2].volume
+        current_close = candles[-1].close
         current_volume = candles[-1].volume
 
-        previous_rsi = rsi[-2].close_RSI_14 if rsi else None
-        current_rsi = rsi[-1].close_RSI_14 if rsi else None
+        swing_low_idx = self.find_recent_swing(candles, "low")
+        swing_high_idx = self.find_recent_swing(candles, "high")
 
-        previous_macd = macd[-2].close_MACD_12_26_9 if macd else None
-        current_macd = macd[-1].close_MACD_12_26_9 if macd else None
-        previous_macd_signal = macd[-2].close_MACDs_12_26_9 if macd else None
-        current_macd_signal = macd[-1].close_MACDs_12_26_9 if macd else None
+        if swing_low_idx is None or swing_high_idx is None:
+            return SignalModel(symbol, self.get_name(), signal, "No valid swing points found.", details, confidence)
 
-        previous_kdj_k = kdj[-2].STOCHk_14_3_3 if kdj else None
-        previous_kdj_d = kdj[-2].STOCHd_14_3_3 if kdj else None
-        current_kdj_k = kdj[-1].STOCHk_14_3_3 if kdj else None
-        current_kdj_d = kdj[-1].STOCHd_14_3_3 if kdj else None
+        swing_low_price = candles[swing_low_idx].close
+        swing_high_price = candles[swing_high_idx].close
+        swing_low_volume = candles[swing_low_idx].volume
+        swing_high_volume = candles[swing_high_idx].volume
 
-        # MACD cross-over detection
-        macd_bullish_cross = (
-            previous_macd is not None and previous_macd_signal is not None and
-            current_macd is not None and current_macd_signal is not None and
-            previous_macd <= previous_macd_signal and current_macd > current_macd_signal
-        )
-        macd_bearish_cross = (
-            previous_macd is not None and previous_macd_signal is not None and
-            current_macd is not None and current_macd_signal is not None and
-            previous_macd >= previous_macd_signal and current_macd < current_macd_signal
-        )
+        swing_rsi_low = rsi[swing_low_idx].close_RSI_14
+        swing_rsi_high = rsi[swing_high_idx].close_RSI_14
+        current_rsi = rsi[-1].close_RSI_14
 
-        # KDJ cross-over detection (K and D)
-        kdj_bullish_cross = (
-            previous_kdj_k is not None and previous_kdj_d is not None and
-            current_kdj_k is not None and current_kdj_d is not None and
-            previous_kdj_k <= previous_kdj_d and current_kdj_k > current_kdj_d
-        )
-        kdj_bearish_cross = (
-            previous_kdj_k is not None and previous_kdj_d is not None and
-            current_kdj_k is not None and current_kdj_d is not None and
-            previous_kdj_k >= previous_kdj_d and current_kdj_k < current_kdj_d
-        )
+        swing_macd = macd[swing_low_idx].close_MACD_12_26_9
+        current_macd = macd[-1].close_MACD_12_26_9
+        swing_macd_signal = macd[swing_low_idx].close_MACDs_12_26_9
+        current_macd_signal = macd[-1].close_MACDs_12_26_9
 
-        # Detect bullish divergence
-        if current_close < previous_close:
-            if current_rsi > previous_rsi and current_rsi < 30:
-                reasons.append("Bullish RSI divergence")
-            if macd_bullish_cross and current_macd < 0:
-                reasons.append("Bullish MACD cross-over")
-            if kdj_bullish_cross and current_kdj_k < 20:
-                reasons.append("Bullish KDJ cross-over")
-            if len(reasons) >= 2 and current_volume >= 1.2 * previous_volume:
-                signal = "buy"
+        swing_kdj_k = kdj[swing_low_idx].STOCHk_14_3_3
+        swing_kdj_d = kdj[swing_low_idx].STOCHd_14_3_3
+        current_kdj_k = kdj[-1].STOCHk_14_3_3
+        current_kdj_d = kdj[-1].STOCHd_14_3_3
 
-        # Detect bearish divergence
-        elif current_close > previous_close:
-            if current_rsi < previous_rsi and current_rsi > 70:
-                reasons.append("Bearish RSI divergence")
-            if macd_bearish_cross and current_macd > 0:
-                reasons.append("Bearish MACD cross-over")
-            if kdj_bearish_cross and current_kdj_k > 80:
-                reasons.append("Bearish KDJ cross-over")
-            if len(reasons) >= 2:
-                signal = "sell"
+        # Scoring system to evaluate
+        scorer = SignalScorer(threshold_percent=self.confirmation_threshold)
+        # Bullish divergence: price higher low, indicator lower low
+        if current_close > swing_low_price:
+            scorer.add(True, "Price forming higher low vs swing")
+            scorer.add(current_rsi < swing_rsi_low and current_rsi < self.rsi_oversold, "Bullish RSI divergence")
+            scorer.add(current_macd > current_macd_signal and current_macd < swing_macd, "Bullish MACD crossover divergence")
+            scorer.add(current_kdj_k > current_kdj_d and current_kdj_k < swing_kdj_k, "Bullish KDJ crossover divergence")
+            scorer.add(current_volume > swing_low_volume * self.volume_ratio_threshold, "Volume spike")
+            signal, confidence, reasons = scorer.evaluate(direction="bullish")
 
-        if not reasons:
-            signal = "hold"
+        # Bearish divergence: price lower high, indicator higher high
+        elif current_close < swing_high_price:
+            scorer.add(True, "Price forming lower high vs swing")
+            scorer.add(current_rsi > swing_rsi_high and current_rsi > self.rsi_overbought, "Bearish RSI divergence")
+            scorer.add(current_macd < current_macd_signal and current_macd > swing_macd, "Bearish MACD crossover divergence")
+            scorer.add(current_kdj_k < current_kdj_d and current_kdj_k > swing_kdj_k, "Bearish KDJ crossover divergence")
+            scorer.add(current_volume > swing_high_volume * self.volume_ratio_threshold, "Volume spike")
+            signal, confidence, reasons = scorer.evaluate(direction="bearish")
+
+        else:
+            signal, confidence, reasons = "hold", 0.0, ["No strong signal"]
 
         details = {
-            "previous_close": previous_close,
             "current_close": current_close,
-            "previous_volume": previous_volume,
+            "swing_low_price": swing_low_price,
+            "swing_high_price": swing_high_price,
             "current_volume": current_volume,
-            "previous_rsi": previous_rsi,
+            "swing_low_volume": swing_low_volume,
+            "swing_high_volume": swing_high_volume,
             "current_rsi": current_rsi,
-            "previous_macd": previous_macd,
+            "swing_rsi_low": swing_rsi_low,
+            "swing_rsi_high": swing_rsi_high,
             "current_macd": current_macd,
-            "previous_macd_signal": previous_macd_signal,
+            "swing_macd": swing_macd,
             "current_macd_signal": current_macd_signal,
-            "previous_kdj_k": previous_kdj_k,
-            "previous_kdj_d": previous_kdj_d,
+            "swing_macd_signal": swing_macd_signal,
             "current_kdj_k": current_kdj_k,
             "current_kdj_d": current_kdj_d,
-            "macd_bullish_cross": macd_bullish_cross,
-            "macd_bearish_cross": macd_bearish_cross,
-            "kdj_bullish_cross": kdj_bullish_cross,
-            "kdj_bearish_cross": kdj_bearish_cross
+            "swing_kdj_k": swing_kdj_k,
+            "swing_kdj_d": swing_kdj_d,
+            "confidence": confidence
         }
 
         return SignalModel(
             symbol=symbol,
             strategy=self.get_name(),
             signal=signal,
-            reason="; ".join(reasons) if reasons else "No Signal Detected",
-            details=details
+            reason="; ".join(reasons),
+            details=details,
+            confidence=confidence
         )

@@ -67,6 +67,7 @@ async def run_all_bots(symbols, executor, discord_notifier):
                 "Symbol": symbol,
                 "Strategy": signal.strategy,
                 "Signal": signal.signal,
+                "Confidence": signal.confidence,
                 "Reason": signal.reason,
                 "Details": signal.details
             })
@@ -84,7 +85,7 @@ async def run_all_bots(symbols, executor, discord_notifier):
         signals = entry["signals"]
         sell_buy_signals = [ signal for signal in signals if signal.signal == "buy" or signal.signal == "sell" ]
         for signal in sell_buy_signals:
-            summary_message += f"* *Symbol: {symbol}, Strategy: {signal.strategy}, Signal: {signal.signal}, Reason: {signal.reason}*\n"
+            summary_message += f"* *Symbol: {symbol}, Strategy: {signal.strategy}, Signal: {signal.signal}, Confidence: {signal.confidence} Reason: {signal.reason}*\n"
     
     if not summary_message:
         summary_message = "No buy/sell signals generated. "
