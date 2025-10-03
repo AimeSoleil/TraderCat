@@ -82,7 +82,7 @@ class MAStrategy(TradingStrategy):
         scorer = SignalScorer(threshold_percent=self.confirmation_threshold)
         # Bullish setup
         if ema_sma_bullish:
-            scorer.add(True, "EMA crosses above SMA (bullish)")
+            scorer.add(True, "Bullish: EMA crosses above SMA")
             scorer.add(macd_bullish, "MACD bullish crossover")
             scorer.add(curr_rsi > 50, "RSI above 50")
             scorer.add(vol_spike, "Volume spike")
@@ -90,7 +90,7 @@ class MAStrategy(TradingStrategy):
 
         # Bearish setup
         elif ema_sma_bearish:
-            scorer.add(True, "EMA crosses below SMA (bearish)")
+            scorer.add(True, "Bearish: EMA crosses below SMA")
             scorer.add(macd_bearish, "MACD bearish crossover")
             scorer.add(curr_rsi > 70, "RSI overbought")
             scorer.add(vol_spike, "Volume spike")

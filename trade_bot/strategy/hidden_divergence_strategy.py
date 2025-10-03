@@ -106,16 +106,16 @@ class HiddenDivergenceStrategy(TradingStrategy):
         scorer = SignalScorer(threshold_percent=self.confirmation_threshold)
         if trend == "downtrend" and current_price < swing_price:
             scorer.add(True, "Hidden bearish divergence: Price forming lower high vs swing")
-            scorer.add(current_rsi > swing_rsi, "Hidden bearish divergence: RSI higher high")
-            scorer.add(current_macd > swing_macd, "Hidden bearish divergence: MACD higher high")
-            scorer.add(current_kdj_j > swing_kdj_j, "Hidden bearish divergence: KDJ J higher high")
+            scorer.add(current_rsi > swing_rsi, "RSI makes higher high")
+            scorer.add(current_macd > swing_macd, "MACD makes higher high")
+            scorer.add(current_kdj_j > swing_kdj_j, "KDJ J makes higher high")
             signal, confidence, reasons = scorer.evaluate(direction="bearish")
 
         elif trend == "uptrend" and current_price > swing_price:
-            scorer.add(True, "Hidden bearish divergence: Price forming higher low vs swing")
-            scorer.add(current_rsi < swing_rsi, "Hidden bullish divergence: RSI lower low")
-            scorer.add(current_macd < swing_macd, "Hidden bullish divergence: MACD lower low")
-            scorer.add(current_kdj_j < swing_kdj_j, "Hidden bullish divergence: KDJ J lower low")
+            scorer.add(True, "Hidden bullish divergence: Price forming higher low vs swing")
+            scorer.add(current_rsi < swing_rsi, "RSI makes lower low")
+            scorer.add(current_macd < swing_macd, "MACD makes lower low")
+            scorer.add(current_kdj_j < swing_kdj_j, "KDJ J makes lower low")
             signal, confidence, reasons = scorer.evaluate(direction="bullish")
 
         else:

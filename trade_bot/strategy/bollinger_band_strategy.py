@@ -101,7 +101,7 @@ class BollingerBandStrategy(TradingStrategy):
         scorer = SignalScorer(threshold_percent=self.confirmation_threshold)
         # Bullish setup
         if bb_lower and current_close < bb_lower:
-            scorer.add(current_close < bb_lower, "Price below lower Bollinger Band")
+            scorer.add(current_close < bb_lower, "Bullish: Price below lower Bollinger Band")
             scorer.add(current_rsi < self.rsi_oversold, "RSI oversold")
             scorer.add(previous_macd <= previous_macd_signal and current_macd > current_macd_signal, "MACD bullish crossover")
             scorer.add(previous_kdj_k <= previous_kdj_d and current_kdj_k > current_kdj_d and current_kdj_k < self.kdj_lower, "KDJ bullish crossover in oversold zone")
@@ -110,7 +110,7 @@ class BollingerBandStrategy(TradingStrategy):
 
         # Bearish setup
         elif bb_upper and current_close > bb_upper:
-            scorer.add(current_close > bb_upper, "Price above upper Bollinger Band")
+            scorer.add(current_close > bb_upper, "Bearish: Price above upper Bollinger Band")
             scorer.add(current_rsi > self.rsi_overbought, "RSI overbought")
             scorer.add(previous_macd >= previous_macd_signal and current_macd < current_macd_signal, "MACD bearish crossover")
             scorer.add(previous_kdj_k >= previous_kdj_d and current_kdj_k < current_kdj_d and current_kdj_k > self.kdj_upper, "KDJ bearish crossover in overbought zone")
