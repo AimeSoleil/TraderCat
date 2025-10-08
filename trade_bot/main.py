@@ -168,7 +168,7 @@ def main(args=None):
         print("Loading symbols from default environment variable [DEFAULT_SYMBOLS_STR].")
         symbols = DEFAULT_SYMBOLS_STR and parse_symbols(DEFAULT_SYMBOLS_STR) or []
 
-    symbols = list(set(symbols)) # remove duplication
+    symbols = list(dict.fromkeys(symbols)) # remove duplication
     if not symbols:
         print("No symbols provided. Exiting.")
         return
