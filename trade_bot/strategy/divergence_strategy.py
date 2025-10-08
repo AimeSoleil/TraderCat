@@ -118,7 +118,7 @@ class DivergenceStrategy(TradingStrategy):
 
         # Bearish divergence: price lower high, indicator higher high
         elif current_close < swing_high_price:
-            scorer.add(True, "Bearish: BPrice forming lower high vs swing")
+            scorer.add(True, "Bearish: Price forming lower high vs swing")
             scorer.add(current_rsi > swing_rsi_high and current_rsi > self.rsi_overbought, "RSI divergence")
             scorer.add(current_macd < current_macd_signal and current_macd > swing_macd, "MACD crossover divergence")
             scorer.add(current_kdj_k < current_kdj_d and current_kdj_k > swing_kdj_k, "KDJ crossover divergence")
