@@ -14,7 +14,6 @@ class TradeBot:
 
     async def run(self):
         print(f'Running bot for symbol: {self.symbol}...')
-        print('Initializing data provider...')
         data_provider = OpenBBProvider()
 
         # Initialize strategies with the data provider and support adding more strategies per need

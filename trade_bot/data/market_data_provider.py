@@ -8,3 +8,7 @@ class MarketDataProvider(ABC):
     @abstractmethod
     def get_indicator(self, symbol: str, indicator: str, params: dict):
         pass
+    
+    @abstractmethod
+    def get_option_chains(self, symbol: str):
+        pass
