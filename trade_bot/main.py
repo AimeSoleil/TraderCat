@@ -159,10 +159,13 @@ def main(args=None):
     
     # 选择symbols来源
     if args.symbols:
+        print(f"Symbols provided via command line: {args.symbols}")
         symbols = parse_symbols(args.symbols)
     elif args.symbols_file:
+        print(f"Loading symbols from file: {args.symbols_file}")
         symbols = load_symbols_from_file(args.symbols_file)
     else:
+        print("Loading symbols from default environment variable [DEFAULT_SYMBOLS_STR].")
         symbols = DEFAULT_SYMBOLS_STR and parse_symbols(DEFAULT_SYMBOLS_STR) or []
 
     symbols = list(set(symbols)) # remove duplication

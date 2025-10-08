@@ -28,7 +28,7 @@ class FibonacciStrategy(TradingStrategy):
         self.confirmation_threshold = confirmation_threshold
 
     def get_name(self) -> str:
-        return "Fibonacci Retracement with MACD"
+        return "Fibonacci Retracement"
 
     def get_lookback_window(self) -> int:
         return 60

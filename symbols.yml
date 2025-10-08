@@ -1,25 +1,188 @@
+# Combined list of stock symbols (sorted by market cap and popularity):
+# * Dow Jones Industrial Average (DJIA)
+# * S&P 500
+# * NASDAQ-100
+# * Top 100 in Russell 2000 by market cap
+# * Additional tech and growth stocks by editor choice
 symbols: [
-  # Top 100 S&P 500 Companies (by weight)
-  "NVDA","MSFT","AAPL","AMZN","META","AVGO","GOOGL","TSLA","GOOG","BRK.B",
-  "JPM","LLY","UNH","V","XOM","MA","HD","PG","JNJ","COST",
-  "ORCL","ABBV","BAC","MRK","WMT","CVX","PEP","KO","CRM","NFLX",
-  "TMO","ACN","LIN","ABT","MCD","CSCO","ADBE","WFC","DHR","TXN",
-  "PM","INTU","AMD","NEE","VZ","IBM","HON","CAT","GS","MS",
-  "AMGN","RTX","LOW","NOW","INTC","GE","ISRG","BKNG","LMT","SPGI",
-  "ELV","MDT","PLD","AXP","AMAT","ADP","PFE","SCHW","BLK","MU",
-  "C","TJX","QCOM","SYK","GILD","T","DE","UBER","ETN","REGN",
-  "VRTX","CI","MMC","CB","BSX","ADI","MO","ZTS","BDX","PANW",
-  "SO","DUK","EQIX","ICE","CL","SHW","CME","NSC","APD","FDX",
-  "HUM","GM","EMR","AON","COF","CSX","EOG","PSX","KDP","MNST",
-
-  # NASDAQ-100 Companies
-  "ASML","TMUS","PDD","MDLZ","REGN","KLAC","MELI","SNPS","CDNS","MAR",
-  "NXPI","FTNT","CHTR","ROST","PAYX","IDXX","ODFL","PCAR","CTAS","WDAY",
-  "TEAM","ABNB","LULU","MRVL","EXC","AEP","XEL","FAST","VRSK","ORLY",
-  "KHC","SBUX","EA","BIIB","ANSS","PLTR","ALGN","CPRT","ZS","DXCM",
-  "DDOG","DOCU","OKTA","ZM","ROKU","NTES","JD","EBAY","PYPL","CSGP",
-  "SPLK","CHKP","CDW","TTWO","CTSH","BKR","CEG","LCID","VERX","ON",
-
-  # Dow Jones Industrial Average (30 companies)
-  "AMGN","AXP","BA","DIS","MMM","TRV","WBA"
+  "NVDA",   # NVIDIA Corporation
+  "MSFT",   # Microsoft Corporation
+  "AAPL",   # Apple Inc.
+  "GOOG",   # Alphabet Inc. (Class C)
+  "GOOGL",  # Alphabet Inc. (Class A)
+  "AMZN",   # Amazon.com Inc.
+  "META",   # Meta Platforms Inc.
+  "AVGO",   # Broadcom Inc.
+  "TSLA",   # Tesla Inc.
+  "BRK.B",  # Berkshire Hathaway Inc.
+  "JPM",    # JPMorgan Chase & Co.
+  "ORCL",   # Oracle Corporation
+  "WMT",    # Walmart Inc.
+  "LLY",    # Eli Lilly and Company
+  "V",      # Visa Inc.
+  "MA",     # Mastercard Inc.
+  "NFLX",   # Netflix Inc.
+  "XOM",    # Exxon Mobil Corporation
+  "JNJ",    # Johnson & Johnson
+  "ABBV",   # AbbVie Inc.
+  "PLTR",   # Palantir Technologies Inc.
+  "COST",   # Costco Wholesale Corporation
+  "HD",     # Home Depot Inc.
+  "BAC",    # Bank of America Corporation
+  "PG",     # Procter & Gamble Co.
+  "UNH",    # UnitedHealth Group Inc.
+  "GE",     # General Electric Co.
+  "CVX",    # Chevron Corporation
+  "KO",     # Coca-Cola Co.
+  "IBM",    # International Business Machines Corp.
+  "CSCO",   # Cisco Systems Inc.
+  "AMD",    # Advanced Micro Devices Inc.
+  "TMUS",   # T-Mobile US Inc.
+  "WFC",    # Wells Fargo & Co.
+  "MS",     # Morgan Stanley
+  "GS",     # Goldman Sachs Group Inc.
+  "PM",     # Philip Morris International Inc.
+  "ABT",    # Abbott Laboratories
+  "CAT",    # Caterpillar Inc.
+  "APP",    # Applovin Corp.
+  "AXP",    # American Express Co.
+  "CRM",    # Salesforce Inc.
+  "RTX",    # RTX Corp.
+  "MRK",    # Merck & Co. Inc.
+  "LIN",    # Linde plc
+  "MCD",    # McDonald's Corp.
+  "MU",     # Micron Technology Inc.
+  "BX",     # Blackstone Inc.
+  "TMO",    # Thermo Fisher Scientific Inc.
+  "DIS",    # Walt Disney Co.
+  "INTU",   # Intuit Inc.
+  "ADBE",   # Adobe Inc.
+  "TXN",    # Texas Instruments Inc.
+  "QCOM",   # Qualcomm Inc.
+  "ISRG",   # Intuitive Surgical Inc.
+  "PEP",    # PepsiCo Inc.
+  "BKNG",   # Booking Holdings Inc.
+  "PDD",    # PDD Holdings Inc.
+  "GILD",   # Gilead Sciences Inc.
+  "VRTX",   # Vertex Pharmaceuticals Inc.
+  "MDLZ",   # Mondelez International Inc.
+  "ADI",    # Analog Devices Inc.
+  "REGN",   # Regeneron Pharmaceuticals Inc.
+  "LRCX",   # Lam Research Corp.
+  "MNST",   # Monster Beverage Corp.
+  "CDNS",   # Cadence Design Systems Inc.
+  "PANW",   # Palo Alto Networks Inc.
+  "FTNT",   # Fortinet Inc.
+  "MAR",    # Marriott International Inc.
+  "KHC",    # Kraft Heinz Co.
+  "EXC",    # Exelon Corp.
+  "DLTR",   # Dollar Tree Inc.
+  "ROST",   # Ross Stores Inc.
+  "WBD",    # Warner Bros. Discovery Inc.
+  "PAYX",   # Paychex Inc.
+  "ODFL",   # Old Dominion Freight Line Inc.
+  "PCAR",   # PACCAR Inc.
+  "EBAY",   # eBay Inc.
+  "FAST",   # Fastenal Co.
+  "CTAS",   # Cintas Corp.
+  "CHTR",   # Charter Communications Inc.
+  "VRSK",   # Verisk Analytics Inc.
+  "BIIB",   # Biogen Inc.
+  "SIRI",   # Sirius XM Holdings Inc.
+  "TEAM",   # Atlassian Corp.
+  "LCID",   # Lucid Group Inc.
+  "ZS",     # Zscaler Inc.
+  "MRVL",   # Marvell Technology Inc.
+  "DXCM",   # Dexcom Inc.
+  "XEL",    # Xcel Energy Inc.
+  "IDXX",   # IDEXX Laboratories Inc.
+  "ALGN",   # Align Technology Inc.
+  "ANSS",   # Ansys Inc.
+  "CEG",    # Constellation Energy Corp.
+  "VRSN",   # Verisign Inc.
+  "SPLK",   # Splunk Inc.
+  "GEN",    # Gen Digital Inc.
+  "TTD",    # Trade Desk Inc.
+  "CRWD",   # CrowdStrike Holdings Inc.
+  "MTCH",   # Match Group Inc.
+  "DDOG",   # Datadog Inc.
+  "SGEN",   # Seagen Inc.
+  "ILMN",   # Illumina Inc.
+  "FANG",   # Diamondback Energy Inc.
+  "BKR",    # Baker Hughes Co.
+  "ON",     # ON Semiconductor Corp.
+  "KLAC",   # KLA Corp.
+  "NXPI",   # NXP Semiconductors NV
+  "OKTA",   # Okta Inc.
+  "TTWO",   # Take-Two Interactive Software Inc.
+  "ENPH",   # Enphase Energy Inc.
+  "SWKS",   # Skyworks Solutions Inc.
+  "DLR",    # Digital Realty Trust Inc.
+  "TT",     # Trane Technologies plc
+  "EXPE",   # Expedia Group Inc.
+  "SBAC",   # SBA Communications Corp.
+  "CDW",    # CDW Corp.
+  "CPRT",   # Copart Inc.
+  "GFS",    # GlobalFoundries Inc.
+  "RIVN",   # Rivian Automotive Inc.
+  "CHKP",   # Check Point Software Technologies Ltd.
+  "VTRS",   # Viatris Inc.
+  "TECH",   # Bio-Techne Corp.
+  "INCY",   # Incyte Corp.
+  "NTES",   # NetEase Inc.
+  "JD",     # JD.com Inc.
+  "BIDU",   # Baidu Inc.
+  "ZM",     # Zoom Video Communications Inc.
+  "MSTR",   # MicroStrategy Inc.
+  "CVNA",   # Carvana Co.
+  "B",      # Barnes Group Inc.
+  "SMCI",   # Super Micro Computer Inc.
+  "FIX",    # Comfort Systems USA Inc.
+  "INSM",   # Insmed Inc.
+  "SMMT",   # Summit Therapeutics Inc.
+  "SFM",    # Sprouts Farmers Market Inc.
+  "ASTS",   # AST SpaceMobile Inc.
+  "APG",    # APi Group Corp.
+  "CRS",    # Carpenter Technology Corp.
+  "ITCI",   # Intra-Cellular Therapies Inc.
+  "ATI",    # Allegheny Technologies Inc.
+  "FTAI",   # FTAI Aviation Ltd.
+  "AVAV",   # AeroVironment Inc.
+  "HIMS",   # Hims & Hers Health Inc.
+  "FN",     # Fabrinet
+  "MTSI",   # MACOM Technology Solutions Holdings Inc.
+  "COKE",   # Coca-Cola Consolidated Inc.
+  "SSB",    # SouthState Corp.
+  "COOP",   # Mr. Cooper Group Inc.
+  "ALTR",   # Altair Engineering Inc.
+  "AIT",    # Applied Industrial Technologies Inc.
+  "MLI",    # Mueller Industries Inc.
+  "FLNG",   # FLEX LNG Ltd.
+  "DUOL",   # Duolingo Inc.
+  "BE",     # Bloom Energy Corp.
+  "JOBY",   # Joby Aviation Inc.
+  "KTOS",   # Kratos Defense & Security Solutions Inc.
+  "SATS",   # EchoStar Corp.
+  "IONQ",   # IonQ Inc.
+  "SMR",    # NuScale Power Corp.
+  "DRS",    # Leonardo DRS Inc.
+  "BBIO",   # BridgeBio Pharma Inc.
+  "PR",     # Permian Resources Corp.
+  "CRDO",   # Credo Technology Group Holding Ltd.
+  "RKLB",   # Rocket Lab USA Inc.
+  "FLEX",   # Flex Ltd.
+  "DOW",    # Dow Inc.
+  "HON",    # Honeywell International Inc.
+  "INTC",   # Intel Corp.
+  "NKE",    # Nike Inc.
+  "MMM",    # 3M Company
+  "TRV",    # Travelers Companies Inc.
+  "VZ",     # Verizon Communications Inc.
+  "AZN",    # AstraZeneca plc
+  "VERI",   # Veritone Inc.
+  # "..." (additional symbols can be added here)
+  "FFAI",   # Faradyne Future AI Limited
+  "KULR",   # KULR Technology Group Inc.
+  "DJT",    # Donald J Trump Inc.
+  "FIG",    # Figma Inc.
 ]
