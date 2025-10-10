@@ -157,10 +157,6 @@ class FibStrategy(TradingStrategy):
         # RSI
         cur_rsi = self._safe_get(rsi, -1, f'close_RSI_{self.rsi_period}', None)
 
-        # Swing indexes (optional)
-        swing_low_idx = self._find_swing(candles, "low")
-        swing_high_idx = self._find_swing(candles, "high")
-
         # Scoring
         scorer = SignalScorer(threshold_percent=self.confirmation_threshold)
 
