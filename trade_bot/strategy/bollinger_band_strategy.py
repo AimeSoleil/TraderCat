@@ -202,11 +202,7 @@ class BollingerBandStrategy(TradingStrategy):
                 macd_cross_up, "MACD bullish crossover", weight=self.weights["macd"]
             )
             scorer.add(adx_strong, "ADX strong trend", weight=self.weights["adx"])
-            signal, confidence, reasons = (
-                scorer.evaluate(direction="bullish")
-                if breakout_up
-                else scorer.evaluate(direction="bullish")
-            )
+            signal, confidence, reasons = scorer.evaluate(direction="bullish")
 
         # Breakout scoring (bearish)
         elif close < bbl:
@@ -236,11 +232,7 @@ class BollingerBandStrategy(TradingStrategy):
                 macd_cross_down, "MACD bearish crossover", weight=self.weights["macd"]
             )
             scorer.add(adx_strong, "ADX strong trend", weight=self.weights["adx"])
-            signal, confidence, reasons = (
-                scorer.evaluate(direction="bearish")
-                if breakout_dn
-                else scorer.evaluate(direction="bearish")
-            )
+            signal, confidence, reasons = scorer.evaluate(direction="bearish")
 
         # Mean reversion scoring (bullish fade)
         elif prev.close < bbl and close >= bbl:
@@ -265,11 +257,7 @@ class BollingerBandStrategy(TradingStrategy):
             scorer.add(
                 vol_spike, "Volume spike catalyst", weight=self.weights["volume"]
             )
-            signal, confidence, reasons = (
-                scorer.evaluate(direction="bullish")
-                if reversion_up
-                else scorer.evaluate(direction="bullish")
-            )
+            signal, confidence, reasons = scorer.evaluate(direction="bullish")
 
         # Mean reversion scoring (bearish fade)
         elif prev.close > bbu and close <= bbu:
@@ -294,11 +282,7 @@ class BollingerBandStrategy(TradingStrategy):
             scorer.add(
                 vol_spike, "Volume spike catalyst", weight=self.weights["volume"]
             )
-            signal, confidence, reasons = (
-                scorer.evaluate(direction="bearish")
-                if reversion_dn
-                else scorer.evaluate(direction="bearish")
-            )
+            signal, confidence, reasons = scorer.evaluate(direction="bearish")
 
         else:
             signal, confidence, reasons = "hold", 0.0, ["No strong signal"]
