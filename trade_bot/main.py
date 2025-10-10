@@ -60,11 +60,10 @@ async def run_all_bots(symbols, executor, discord_notifier):
     # 🔄 Convert to CSV
     rows = []
     for entry in all_signals:
-        symbol = entry["symbol"]
         for signal in entry["signals"]:
             rows.append({
-                "Date": datetime.today().strftime("%Y-%m-%d"),
-                "Symbol": symbol,
+                "Close_Date": signal.date,
+                "Symbol": signal.symbol,
                 "Strategy": signal.strategy,
                 "Signal": signal.signal,
                 "Confidence": signal.confidence,

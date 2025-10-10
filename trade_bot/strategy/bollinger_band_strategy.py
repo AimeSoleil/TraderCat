@@ -1,144 +1,330 @@
-from trade_bot.strategy.signal_scorer import SignalScorer
 from trade_bot.strategy.trading_strategy import TradingStrategy
 from trade_bot.strategy.signal_model import SignalModel
+from trade_bot.strategy.signal_scorer import SignalScorer
 
+# BollingerBandStrategy implements a weighted Bollinger Bands trading strategy
+# If the strategy feels too sensitive, raise structure from 0.40 to 0.50 and reduce momentum_mag to 0.03.
+# If you want momentum-first behavior, increase rsi to 0.20 and momentum_mag to 0.08, keep structure at 0.35.
+# If you enable MACD/ADX from your provider, wire their conditions into macd_cross_up/down and adx_strong, and their weights will contribute automatically.
 class BollingerBandStrategy(TradingStrategy):
     def __init__(
         self,
         data_provider,
-        bb_period=20,
-        bb_std=2,
-        rsi_period=14,
-        rsi_overbought=70,
-        rsi_oversold=30,
-        macd_fast=12,
-        macd_slow=26,
-        macd_signal=9,
-        kdj_fast_k_period=14,
-        kdj_slow_d_period=3,
-        kdj_slow_k_period=3,
-        kdj_upper=80,
-        kdj_lower=20,
+        bb_period=10,
+        bb_std=2.0,
+        rsi_period=7,
         volume_window=5,
         volume_spike_ratio=1.2,
-        confirmation_threshold=0.6
+        bw_median_window=20,
+        atr_period=14,
+        confirmation_threshold=0.55,
+        weights=None,
     ):
         self.provider = data_provider
         self.bb_period = bb_period
         self.bb_std = bb_std
         self.rsi_period = rsi_period
-        self.rsi_overbought = rsi_overbought
-        self.rsi_oversold = rsi_oversold
-        self.macd_fast = macd_fast
-        self.macd_slow = macd_slow
-        self.macd_signal = macd_signal
-        self.kdj_fast_k_period = kdj_fast_k_period
-        self.kdj_slow_d_period = kdj_slow_d_period
-        self.kdj_slow_k_period = kdj_slow_k_period
-        self.kdj_upper = kdj_upper
-        self.kdj_lower = kdj_lower
         self.volume_window = volume_window
         self.volume_spike_ratio = volume_spike_ratio
+        self.bw_median_window = bw_median_window
+        self.atr_period = atr_period
         self.confirmation_threshold = confirmation_threshold
+
+        # Strategy-defined default weights (can be overridden via constructor)
+        self.weights = weights or {
+            "structure": 0.40,  # band breach / re-entry trigger
+            "macd": 0.20,  # MACD crossover / histogram (optional)
+            "rsi": 0.15,  # RSI extreme / momentum filter
+            "volume": 0.12,  # volume spike catalyst
+            "adx": 0.08,  # ADX trend strength (optional)
+            "momentum_mag": 0.05,  # %b magnitude / band distance partial credit
+        }
 
     def get_name(self) -> str:
         return "Bollinger Bands"
 
     def get_lookback_window(self) -> int:
-        return max(40, self.bb_period + self.volume_window)
+        return max(
+            50,
+            self.bb_period
+            + self.bw_median_window
+            + self.volume_window
+            + self.atr_period,
+        )
 
     def generate_signal(self, symbol: str, candles: list) -> SignalModel:
-        print(f'Strategy[{self.get_name()}] generating signal for {symbol}...')
-        signal = "hold"
-        confidence = 0.0
-        details = {}
+        print(f"Strategy[{self.get_name()}] generating signal for {symbol}...")
+        signal, confidence, details = "hold", 0.0, {}
+        current_close_date = candles[-1].date if candles else None
 
         if not self.provider or len(candles) < self.get_lookback_window():
-            return SignalModel(symbol, self.get_name(), signal, "Insufficient data or provider not set.", details, confidence)
+            return SignalModel(
+                date=current_close_date,
+                symbol=symbol,
+                strategy=self.get_name(),
+                signal=signal,
+                confidence=confidence,
+                reason="Insufficient data",
+                details=details,
+            )
 
-        # Fetch indicators
-        bb = self.provider.get_indicator("bbands", candles, {"length": self.bb_period, "std": self.bb_std})
+        # Indicators
+        bb = self.provider.get_indicator(
+            "bbands", candles, {"length": self.bb_period, "std": self.bb_std}
+        )
         rsi = self.provider.get_indicator("rsi", candles, {"length": self.rsi_period})
-        macd = self.provider.get_indicator("macd", candles, {
-            "fast": self.macd_fast, "slow": self.macd_slow, "signal": self.macd_signal
-        })
-        kdj = self.provider.get_indicator("stoch", candles, {
-            "fast_k_period": self.kdj_fast_k_period,
-            "slow_d_period": self.kdj_slow_d_period,
-            "slow_k_period": self.kdj_slow_k_period
-        })
+        atr = self.provider.get_indicator("atr", candles, {"length": self.atr_period})
 
-        if not all([bb, rsi, macd, kdj]):
-            return SignalModel(symbol, self.get_name(), signal, "Indicator data unavailable.", details, confidence)
+        if not all([bb, rsi, atr]):
+            return SignalModel(
+                date=current_close_date,
+                symbol=symbol,
+                strategy=self.get_name(),
+                signal=signal,
+                confidence=confidence,
+                reason="Indicator data unavailable",
+                details=details,
+            )
 
-        # Extract latest values
-        current = candles[-1]
-        previous = candles[-2]
-        current_close = current.close
-        current_volume = current.volume
+        cur = candles[-1]
+        prev = candles[-2]
+        close = cur.close
+        volume = cur.volume
 
         bb_last = bb[-1]
-        bb_upper = getattr(bb_last, f'close_BBU_{self.bb_period}_{self.bb_std}', None)
-        bb_lower = getattr(bb_last, f'close_BBL_{self.bb_period}_{self.bb_std}', None)
+        ma = getattr(bb_last, f"close_BBM_{self.bb_period}_{self.bb_std}", None)
+        bbu = getattr(bb_last, f"close_BBU_{self.bb_period}_{self.bb_std}", None)
+        bbl = getattr(bb_last, f"close_BBL_{self.bb_period}_{self.bb_std}", None)
+        if not all([ma, bbu, bbl]):
+            return SignalModel(
+                date=current_close_date,
+                symbol=symbol,
+                strategy=self.get_name(),
+                signal=signal,
+                confidence=confidence,
+                reason="BB fields missing",
+                details=details,
+            )
 
-        current_rsi = rsi[-1].close_RSI_14
-        previous_macd = macd[-2].close_MACD_12_26_9
-        current_macd = macd[-1].close_MACD_12_26_9
-        previous_macd_signal = macd[-2].close_MACDs_12_26_9
-        current_macd_signal = macd[-1].close_MACDs_12_26_9
+        # Derived: %b and Bandwidth
+        band_width = bbu - bbl
+        pct_b = (close - bbl) / band_width if band_width > 0 else 0.5
+        bw = band_width / ma if ma else 0
 
-        previous_kdj_k = kdj[-2].STOCHk_14_3_3
-        previous_kdj_d = kdj[-2].STOCHd_14_3_3
-        current_kdj_k = kdj[-1].STOCHk_14_3_3
-        current_kdj_d = kdj[-1].STOCHd_14_3_3
+        # Median BW (squeeze/expansion reference)
+        recent_bb = bb[-self.bw_median_window :]
+        recent_bw = []
+        for x in recent_bb:
+            up = getattr(x, f"close_BBU_{self.bb_period}_{self.bb_std}", 0)
+            lo = getattr(x, f"close_BBL_{self.bb_period}_{self.bb_std}", 0)
+            m = getattr(x, f"close_BBM_{self.bb_period}_{self.bb_std}", 0)
+            recent_bw.append((up - lo) / m if m else 0)
+        bw_median = sorted(recent_bw)[len(recent_bw) // 2] if recent_bw else 0
 
-        # Volume spike detection
-        volumes = [c.volume for c in candles[-self.volume_window - 1:]]
-        avg_vol = sum(volumes[:-1]) / self.volume_window
-        vol_spike = current_volume > avg_vol * self.volume_spike_ratio
+        # RSI and ATR
+        cur_rsi = getattr(rsi[-1], f"close_RSI_{self.rsi_period}", None)
+        cur_atr = getattr(atr[-1], f"ATRr_{self.atr_period}", None)
+        atr_series = [
+            getattr(x, f"ATRr_{self.atr_period}", 0)
+            for x in atr[-self.bw_median_window :]
+        ]
+        atr_median = sorted(atr_series)[len(atr_series) // 2] if atr_series else 0
 
-        # Scoring system to evaluate
+        # Volume spike
+        vols = [c.volume for c in candles[-self.volume_window - 1 :]]
+        avg_vol = (
+            (sum(vols[:-1]) / self.volume_window) if self.volume_window > 0 else volume
+        )
+        vol_spike = volume > avg_vol * self.volume_spike_ratio
+
+        # Optional placeholders (uncomment if provider supports)
+        # macd = self.provider.get_indicator("macd", candles, {"fast": 12, "slow": 26, "signal": 9})
+        # adx = self.provider.get_indicator("adx", candles, {"length": 14})
+        macd_cross_up = False
+        macd_cross_down = False
+        adx_strong = False
+
+        # Regimes
+        breakout_up = (
+            (close > bbu)
+            and (bw > bw_median)
+            and (cur_rsi is not None and cur_rsi > 55)
+            and (cur_atr > atr_median)
+        )
+        breakout_dn = (
+            (close < bbl)
+            and (bw > bw_median)
+            and (cur_rsi is not None and cur_rsi < 45)
+            and (cur_atr > atr_median)
+        )
+        reversion_up = (
+            (pct_b < 0)
+            and (cur_rsi is not None and cur_rsi < 30)
+            and (prev.close < bbl)
+            and (close >= bbl)
+            and (bw <= bw_median)
+        )
+        reversion_dn = (
+            (pct_b > 1)
+            and (cur_rsi is not None and cur_rsi > 70)
+            and (prev.close > bbu)
+            and (close <= bbu)
+            and (bw <= bw_median)
+        )
+
         scorer = SignalScorer(threshold_percent=self.confirmation_threshold)
-        # Bullish setup
-        if bb_lower and current_close < bb_lower:
-            scorer.add(current_close < bb_lower, "Bullish: Price below lower Bollinger Band")
-            scorer.add(current_rsi < self.rsi_oversold, "RSI oversold")
-            scorer.add(previous_macd <= previous_macd_signal and current_macd > current_macd_signal, "MACD bullish crossover")
-            scorer.add(previous_kdj_k <= previous_kdj_d and current_kdj_k > current_kdj_d and current_kdj_k < self.kdj_lower, "KDJ bullish crossover in oversold zone")
-            scorer.add(vol_spike, "Volume spike")
-            signal, confidence, reasons = scorer.evaluate(direction="bullish")
 
-        # Bearish setup
-        elif bb_upper and current_close > bb_upper:
-            scorer.add(current_close > bb_upper, "Bearish: Price above upper Bollinger Band")
-            scorer.add(current_rsi > self.rsi_overbought, "RSI overbought")
-            scorer.add(previous_macd >= previous_macd_signal and current_macd < current_macd_signal, "MACD bearish crossover")
-            scorer.add(previous_kdj_k >= previous_kdj_d and current_kdj_k < current_kdj_d and current_kdj_k > self.kdj_upper, "KDJ bearish crossover in overbought zone")
-            scorer.add(vol_spike, "Volume spike")
-            signal, confidence, reasons = scorer.evaluate(direction="bearish")
+        # Breakout scoring (bullish)
+        if close > bbu:
+            scorer.add(
+                True, "Breakout: Close > upper band", weight=self.weights["structure"]
+            )
+            scorer.add(
+                bw > bw_median,
+                "Bandwidth expansion",
+                weight=self.weights["momentum_mag"],
+            )
+            scorer.add(
+                cur_rsi is not None and cur_rsi > 55,
+                "RSI momentum > 55",
+                weight=self.weights["rsi"],
+            )
+            scorer.add(
+                cur_atr > atr_median,
+                "ATR above median",
+                weight=self.weights["momentum_mag"],
+            )
+            scorer.add(
+                vol_spike, "Volume spike catalyst", weight=self.weights["volume"]
+            )
+            # Optional extras
+            scorer.add(
+                macd_cross_up, "MACD bullish crossover", weight=self.weights["macd"]
+            )
+            scorer.add(adx_strong, "ADX strong trend", weight=self.weights["adx"])
+            signal, confidence, reasons = (
+                scorer.evaluate(direction="bullish")
+                if breakout_up
+                else scorer.evaluate(direction="bullish")
+            )
+
+        # Breakout scoring (bearish)
+        elif close < bbl:
+            scorer.add(
+                True, "Breakdown: Close < lower band", weight=self.weights["structure"]
+            )
+            scorer.add(
+                bw > bw_median,
+                "Bandwidth expansion",
+                weight=self.weights["momentum_mag"],
+            )
+            scorer.add(
+                cur_rsi is not None and cur_rsi < 45,
+                "RSI momentum < 45",
+                weight=self.weights["rsi"],
+            )
+            scorer.add(
+                cur_atr > atr_median,
+                "ATR above median",
+                weight=self.weights["momentum_mag"],
+            )
+            scorer.add(
+                vol_spike, "Volume spike catalyst", weight=self.weights["volume"]
+            )
+            # Optional extras
+            scorer.add(
+                macd_cross_down, "MACD bearish crossover", weight=self.weights["macd"]
+            )
+            scorer.add(adx_strong, "ADX strong trend", weight=self.weights["adx"])
+            signal, confidence, reasons = (
+                scorer.evaluate(direction="bearish")
+                if breakout_dn
+                else scorer.evaluate(direction="bearish")
+            )
+
+        # Mean reversion scoring (bullish fade)
+        elif prev.close < bbl and close >= bbl:
+            scorer.add(
+                True,
+                "Reversion up: Re-entry above lower band",
+                weight=self.weights["structure"],
+            )
+            scorer.add(
+                cur_rsi is not None and cur_rsi < 30,
+                "RSI < 30",
+                weight=self.weights["rsi"],
+            )
+            scorer.add(
+                bw <= bw_median,
+                "No expansion (safe to fade)",
+                weight=self.weights["momentum_mag"],
+            )
+            scorer.add(
+                pct_b < 0, "Extreme %b (<0)", weight=self.weights["momentum_mag"]
+            )
+            scorer.add(
+                vol_spike, "Volume spike catalyst", weight=self.weights["volume"]
+            )
+            signal, confidence, reasons = (
+                scorer.evaluate(direction="bullish")
+                if reversion_up
+                else scorer.evaluate(direction="bullish")
+            )
+
+        # Mean reversion scoring (bearish fade)
+        elif prev.close > bbu and close <= bbu:
+            scorer.add(
+                True,
+                "Reversion down: Re-entry below upper band",
+                weight=self.weights["structure"],
+            )
+            scorer.add(
+                cur_rsi is not None and cur_rsi > 70,
+                "RSI > 70",
+                weight=self.weights["rsi"],
+            )
+            scorer.add(
+                bw <= bw_median,
+                "No expansion (safe to fade)",
+                weight=self.weights["momentum_mag"],
+            )
+            scorer.add(
+                pct_b > 1, "Extreme %b (>1)", weight=self.weights["momentum_mag"]
+            )
+            scorer.add(
+                vol_spike, "Volume spike catalyst", weight=self.weights["volume"]
+            )
+            signal, confidence, reasons = (
+                scorer.evaluate(direction="bearish")
+                if reversion_dn
+                else scorer.evaluate(direction="bearish")
+            )
 
         else:
             signal, confidence, reasons = "hold", 0.0, ["No strong signal"]
 
         details = {
-            "current_close": current_close,
-            "bb_upper": bb_upper,
-            "bb_lower": bb_lower,
-            "current_rsi": current_rsi,
-            "current_macd": current_macd,
-            "current_macd_signal": current_macd_signal,
-            "current_kdj_k": current_kdj_k,
-            "current_kdj_d": current_kdj_d,
-            "current_volume": current_volume,
+            "close": close,
+            "ma": ma,
+            "bb_upper": bbu,
+            "bb_lower": bbl,
+            "pct_b": pct_b,
+            "bw": bw,
+            "bw_median": bw_median,
+            "rsi": cur_rsi,
+            "atr": cur_atr,
+            "atr_median": atr_median,
+            "volume": volume,
             "avg_volume": avg_vol,
-            "confidence": confidence
+            "confidence": confidence,
         }
 
         return SignalModel(
+            date=current_close_date,
             symbol=symbol,
             strategy=self.get_name(),
             signal=signal,
             confidence=confidence,
             reason="; ".join(reasons),
-            details=details
+            details=details,
         )

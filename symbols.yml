@@ -5,6 +5,16 @@
 # * Top 100 in Russell 2000 by market cap
 # * Additional tech and growth stocks by editor choice
 symbols: [
+  "QQQ",    # Invesco QQQ Trust
+  "SPY",    # SPDR S&P 500 ETF Trust
+  "DIA",    # SPDR Dow Jones Industrial Average ETF Trust
+  "IWM",    # iShares Russell 2000 ETF
+  "VTI",    # Vanguard Total Stock Market ETF
+  "ARKK",   # ARK Innovation ETF
+  "TSM",    # Taiwan Semiconductor Manufacturing Co. Ltd.
+  "AMAT",   # Applied Materials Inc.
+  "ASML",   # ASML Holding NV
+  "ADSK",   # Autodesk Inc.
   "NVDA",   # NVIDIA Corporation
   "MSFT",   # Microsoft Corporation
   "AAPL",   # Apple Inc.
@@ -14,7 +24,7 @@ symbols: [
   "META",   # Meta Platforms Inc.
   "AVGO",   # Broadcom Inc.
   "TSLA",   # Tesla Inc.
-  "BRK.B",  # Berkshire Hathaway Inc.
+  "BRK-B",  # Berkshire Hathaway Inc.
   "JPM",    # JPMorgan Chase & Co.
   "ORCL",   # Oracle Corporation
   "WMT",    # Walmart Inc.
@@ -185,4 +195,12 @@ symbols: [
   "KULR",   # KULR Technology Group Inc.
   "DJT",    # Donald J Trump Inc.
   "FIG",    # Figma Inc.
+  "S",      # SentinelOne Inc.
+  "SNAP",   # Snap Inc.
+  "BMNR",   # Bitminer Industries Inc. (ETC Mining)
+  "SLMT",   # Brera Holdings Inc. (Solana Mining)
+  "LUMN",   # Lumen Technologies Inc.
+  "PFE",   # Pfizer Inc.
+  "OSCR",   # Oscar Health Inc.
+  "MODN",   # Moderna Inc.
 ]

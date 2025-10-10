@@ -1,7 +1,9 @@
+from datetime import datetime
 from pydantic import BaseModel
 from typing import Dict, Any
 
 class SignalModel(BaseModel):
+    date: datetime
     symbol: str
     strategy: str
     signal: str  # 'buy' | 'sell' | 'hold'

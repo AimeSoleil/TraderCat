@@ -100,23 +100,22 @@ class BacktestEngine:
         self.strategy = strategy
         self.candles = candles
         self.symbol = symbol
-        self.tracker = TradeTracker(initial_cash)
+        self.tracker = TradeTracker(symbol, initial_cash)
 
     def run(self):
         for i in range(self.strategy.get_lookback_window() + 1, len(self.candles)):
             window = self.candles[:i+1]
             signal_model: SignalModel = self.strategy.generate_signal(self.symbol, window)
-            signal = signal_model.signal
+            print(f"Signal Index {i}: {signal_model}")
             price = window[-1].close
-
-            self.tracker.execute(self.symbol, signal, price, i)
+            self.tracker.execute(signal_model, price, i)
             self.tracker.record_portfolio(price)
 
         return PerformanceReport(self.tracker).generate()
 
 class MultiSymbolBacktestEngine:
-    def __init__(self, strategy_class, symbols, provider, interval="1d", lookback_days=365, initial_cash=100000):
-        self.strategy_class = strategy_class
+    def __init__(self, strategy, symbols, provider, interval="1d", lookback_days=365, initial_cash=100000):
+        self.strategy = strategy
         self.symbols = symbols
         self.provider = provider
         self.interval = interval
@@ -134,8 +133,7 @@ class MultiSymbolBacktestEngine:
                 print(f"⚠️ Skipping {symbol}: insufficient data.")
                 continue
             self.candle_data[symbol] = candles
-            strategy = self.strategy_class(data_provider=self.provider)
-            engine = BacktestEngine(strategy, candles, symbol, initial_cash=self.initial_cash)
+            engine = BacktestEngine(self.strategy, candles, symbol, initial_cash=self.initial_cash)
             report = engine.run()
             self.results[symbol] = report
             self.trackers[symbol] = engine.tracker
@@ -155,8 +153,8 @@ class BacktestRunner:
     printing performance dashboards, and visualizing trade results.
     """
 
-    def __init__(self, strategy_class, symbols, provider, interval="1d", lookback_days=365, initial_cash=100000):
-        self.strategy_class = strategy_class
+    def __init__(self, strategy, symbols, provider, interval="1d", lookback_days=365, initial_cash=100000):
+        self.strategy = strategy
         self.symbols = symbols
         self.provider = provider
         self.interval = interval
@@ -167,7 +165,7 @@ class BacktestRunner:
     def run(self):
         print(f"\n🚀 Running backtest for {len(self.symbols)} symbols...")
         self.engine = MultiSymbolBacktestEngine(
-            strategy_class=self.strategy_class,
+            strategy=self.strategy,
             symbols=self.symbols,
             provider=self.provider,
             interval=self.interval,
