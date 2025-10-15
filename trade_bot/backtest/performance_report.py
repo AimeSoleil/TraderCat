@@ -19,7 +19,8 @@ class PerformanceReport:
             "win_rate": round(len(wins) / len(profits), 2) if profits else 0,
             "avg_win": round(sum(wins) / len(wins), 2) if wins else 0,
             "avg_loss": round(sum(losses) / len(losses), 2) if losses else 0,
-            "max_drawdown": self._max_drawdown()
+            "max_drawdown": self._max_drawdown(),
+            "trade_hist": trades
         }
 
     def _max_drawdown(self):

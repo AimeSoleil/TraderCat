@@ -2,9 +2,8 @@ from regex import P
 from trade_bot.data.openbb_provider import OpenBBProvider
 from trade_bot.strategy.bollinger_band_strategy import BollingerBandStrategy
 from trade_bot.strategy.divergence_strategy import DivergenceStrategy
-from trade_bot.strategy.fib_strategy import FibStrategy
+from trade_bot.strategy.fib_strategy import FibonacciStrategy
 from trade_bot.strategy.ma_strategy import MAStrategy
-from trade_bot.strategy.hidden_divergence_strategy import HiddenDivergenceStrategy
 from trade_bot.strategy.signal_model import SignalModel
 
 class TradeBot:
@@ -19,10 +18,9 @@ class TradeBot:
         # Initialize strategies with the data provider and support adding more strategies per need
         strategies = [
             DivergenceStrategy(data_provider=data_provider),
-            HiddenDivergenceStrategy(data_provider=data_provider),
             MAStrategy(data_provider=data_provider),
             BollingerBandStrategy(data_provider=data_provider),
-            FibStrategy(data_provider=data_provider)
+            FibonacciStrategy(data_provider=data_provider)
         ]
 
         # Fetch basic candles (e.g., last 30 days of candles); 

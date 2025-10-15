@@ -95,6 +95,27 @@ def print_dashboard(results):
     print("\n📊 Strategy Performance Dashboard")
     print(tabulate(table, headers=headers, tablefmt="pretty"))
 
+def print_trade_hist(trades):
+    if not trades:
+        print("No trades executed.")
+        return
+    table = []
+    for trade in trades:
+        row = [
+            trade.get("index"),
+            trade.get("date", "N/A"),
+            trade.get("type").upper(),
+            round(trade.get("price", 0), 2),
+            trade.get("shares", 0),
+            round(trade.get("entry_price", 0), 2) if "entry_price" in trade else "",
+            round(trade.get("profit", 0), 2) if "profit" in trade else "",
+            round(trade.get("cash_after", 0), 2)
+        ]
+        table.append(row)
+    headers = ["Index", "Date", "Type", "Price", "Shares", "Entry Price", "Profit", "Cash After"]
+    print("\n📈 Trade History")
+    print(tabulate(table, headers=headers, tablefmt="pretty"))
+
 class BacktestEngine:
     def __init__(self, strategy, candles, symbol, initial_cash=100000):
         self.strategy = strategy
@@ -106,11 +127,11 @@ class BacktestEngine:
         for i in range(self.strategy.get_lookback_window() + 1, len(self.candles)):
             window = self.candles[:i+1]
             signal_model: SignalModel = self.strategy.generate_signal(self.symbol, window)
-            print(f"Signal Index {i}: {signal_model}")
             price = window[-1].close
             self.tracker.execute(signal_model, price, i)
             self.tracker.record_portfolio(price)
 
+        self.tracker.get_trade_table()
         return PerformanceReport(self.tracker).generate()
 
 class MultiSymbolBacktestEngine:
@@ -145,6 +166,7 @@ class MultiSymbolBacktestEngine:
         plot_equity_curve(self.trackers)
         for symbol in self.symbols:
             if symbol in self.candle_data and symbol in self.trackers:
+                print_trade_hist(self.trackers[symbol].trades)
                 plot_trade_chart(self.candle_data[symbol], self.trackers[symbol].trades, symbol)
 
 class BacktestRunner:
