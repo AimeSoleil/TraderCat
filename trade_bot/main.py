@@ -1,5 +1,6 @@
 import asyncio
 import argparse
+import traceback
 import pandas as pd
 from datetime import datetime
 import yaml
@@ -47,7 +48,7 @@ async def run_all_bots(symbols, executor, discord_notifier):
                 })
             print(f'✅ Finish bot[{index}] for symbol: {bot.symbol}')
         except Exception as e:
-            print(f"Error running bot[{index}] for symbol {bot.symbol}: {e}")
+            print(f"Error running bot[{index}] for symbol {bot.symbol}: {traceback.format_exc()}")
         await asyncio.sleep(5)
 
 

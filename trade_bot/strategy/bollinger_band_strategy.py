@@ -209,41 +209,19 @@ class BollingerBandStrategy(TradingStrategy):
         bbu = self._safe_get(
             bb,
             completed_idx,
-            [
-                f"close_BBU_{self.bb_period}_{self.bb_std}",
-                f"BBU_{self.bb_period}_{self.bb_std}",
-                "BBU",
-                "bbu",
-                "upper",
-                "upper_band",
-            ],
+            f"close_BBU_{self.bb_period}_{self.bb_std}",
             None,
         )
         bbm = self._safe_get(
             bb,
             completed_idx,
-            [
-                f"close_BBM_{self.bb_period}_{self.bb_std}",
-                f"BBM_{self.bb_period}_{self.bb_std}",
-                "BBM",
-                "bbm",
-                "mid",
-                "middle",
-                "middle_band",
-            ],
+            f"close_BBM_{self.bb_period}_{self.bb_std}",
             None,
         )
         bbl = self._safe_get(
             bb,
             completed_idx,
-            [
-                f"close_BBL_{self.bb_period}_{self.bb_std}",
-                f"BBL_{self.bb_period}_{self.bb_std}",
-                "BBL",
-                "bbl",
-                "lower",
-                "lower_band",
-            ],
+            f"close_BBL_{self.bb_period}_{self.bb_std}",
             None,
         )
 

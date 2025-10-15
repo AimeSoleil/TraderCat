@@ -302,7 +302,6 @@ class DivergenceStrategy(TradingStrategy):
                 a = lows[i]
                 b = lows[i + 1]
                 div = compare_pair(a, b, "low")
-                print(f"Comparing lows {a} and {b}, got divergence: {div}")  # Debugging line
                 if div:
                     divergence = div
                     break
@@ -311,7 +310,6 @@ class DivergenceStrategy(TradingStrategy):
                 a = highs[i]
                 b = highs[i + 1]
                 div = compare_pair(a, b, "high")
-                print(f"Comparing highs {a} and {b}, got divergence: {div}")  # Debugging line
                 if div:
                     divergence = div
                     break

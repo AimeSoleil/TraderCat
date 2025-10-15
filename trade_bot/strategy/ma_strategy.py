@@ -120,7 +120,7 @@ class MAStrategy(TradingStrategy):
     # Public API
     # -------------------------
     def get_name(self) -> str:
-        return "MA (EMA/SMA) weekly-option"
+        return "MA (EMA/SMA)"
 
     def get_lookback_window(self) -> int:
         core = max(self.sma_slow, self.atr_period)
