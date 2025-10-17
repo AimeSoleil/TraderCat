@@ -192,7 +192,7 @@ class FibonacciStrategy(TradingStrategy):
     # Public API
     # -------------------------
     def get_name(self) -> str:
-        return "Fibonacci Weekly (fib primary)"
+        return "Fibonacci"
 
     def get_lookback_window(self) -> int:
         core = max(
@@ -614,37 +614,39 @@ class FibonacciStrategy(TradingStrategy):
 # Preset factory
 # -------------------------
 def make_fib_presets() -> Dict[str, Dict[str, Any]]:
+    # 🟦 Mid-Term Presets (1–3 week swing setups)
+
     mid_balanced = {
-        "swing_lookback": 60,
-        "fib_levels": [0.236, 0.382, 0.5, 0.618, 0.786],
-        "rsi_period": 14,
-        "atr_period": 14,
-        "volume_window": 30,
-        "volume_zscore_threshold": 1.5,
-        "atr_percentile_filter": 0.4,
-        "atr_percentile_window": 60,
-        "confirmation_threshold": 0.58,
+        "swing_lookback": 60,                  # How far back to search for swing highs/lows
+        "fib_levels": [0.236, 0.382, 0.5, 0.618, 0.786],  # Fibonacci retracement levels to monitor
+        "rsi_period": 14,                      # RSI window for momentum confirmation
+        "atr_period": 14,                      # ATR window for volatility sizing
+        "volume_window": 30,                   # Number of candles for volume Z-score
+        "volume_zscore_threshold": 1.5,        # Minimum volume Z-score to confirm breakout
+        "atr_percentile_filter": 0.4,          # Minimum ATR percentile to filter low-volatility setups
+        "atr_percentile_window": 60,           # Lookback window for ATR percentile calculation
+        "confirmation_threshold": 0.58,        # Minimum signal strength to trigger entry
         "weights": {
-            "fibonacci": 0.50,
-            "atr": 0.18,
-            "rsi": 0.12,
-            "volume": 0.10,
-            "vwap": 0.05,
-            "obv": 0.03,
-            "macd": 0.02,
+            "fibonacci": 0.50,                 # Core signal: price interaction with fib levels
+            "atr": 0.18,                       # Volatility filter
+            "rsi": 0.12,                       # Momentum confirmation
+            "volume": 0.10,                    # Volume spike confirmation
+            "vwap": 0.05,                      # VWAP alignment
+            "obv": 0.03,                       # On-Balance Volume trend
+            "macd": 0.02,                      # MACD trend confirmation
         },
     }
 
     mid_conservative = {
         "swing_lookback": 80,
-        "fib_levels": [0.382, 0.5, 0.618],
+        "fib_levels": [0.382, 0.5, 0.618],      # Focus on stronger retracement zones
         "rsi_period": 14,
         "atr_period": 14,
         "volume_window": 40,
-        "volume_zscore_threshold": 1.8,
+        "volume_zscore_threshold": 1.8,         # Require stronger volume confirmation
         "atr_percentile_filter": 0.5,
         "atr_percentile_window": 80,
-        "confirmation_threshold": 0.62,
+        "confirmation_threshold": 0.62,         # Higher threshold for more reliable signals
         "weights": {
             "fibonacci": 0.55,
             "atr": 0.20,
@@ -657,7 +659,7 @@ def make_fib_presets() -> Dict[str, Dict[str, Any]]:
     }
 
     mid_aggressive = {
-        "swing_lookback": 40,
+        "swing_lookback": 40,                   # Shorter swing window for faster entries
         "fib_levels": [0.236, 0.382, 0.5, 0.618],
         "rsi_period": 10,
         "atr_period": 10,
@@ -677,8 +679,10 @@ def make_fib_presets() -> Dict[str, Dict[str, Any]]:
         },
     }
 
+    # 🟨 Short-Term Weekly Presets (2–5 day trades)
+
     short_quick = {
-        "swing_lookback": 20,
+        "swing_lookback": 20,                   # Very short swing window
         "fib_levels": [0.382, 0.5, 0.618],
         "rsi_period": 7,
         "atr_period": 7,
@@ -748,3 +752,4 @@ def make_fib_presets() -> Dict[str, Dict[str, Any]]:
         "short_balanced": short_balanced,
         "short_conservative": short_conservative,
     }
+

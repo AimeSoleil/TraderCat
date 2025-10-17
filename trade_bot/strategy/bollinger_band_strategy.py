@@ -135,7 +135,7 @@ class BollingerBandStrategy(TradingStrategy):
     # Public API
     # -------------------------
     def get_name(self) -> str:
-        return "BB Weekly (Bollinger primary)"
+        return "Bollinger Band"
 
     def get_lookback_window(self) -> int:
         core = max(
@@ -488,37 +488,39 @@ class BollingerBandStrategy(TradingStrategy):
 # Presets
 # -------------------------
 def make_bb_presets() -> Dict[str, Dict[str, Any]]:
+    # 🟦 Mid-Term Presets (1–3 week swing setups)
+
     mid_balanced = {
-        "bb_period": 20,
-        "bb_std": 2.0,
-        "rsi_period": 14,
-        "atr_period": 14,
-        "volume_window": 30,
-        "volume_zscore_threshold": 1.5,
-        "atr_percentile_filter": 0.4,
-        "atr_percentile_window": 60,
-        "confirmation_threshold": 0.58,
+        "bb_period": 20,                    # Number of periods for Bollinger Band calculation
+        "bb_std": 2.0,                      # Standard deviation multiplier for band width
+        "rsi_period": 14,                   # RSI window for momentum confirmation
+        "atr_period": 14,                   # ATR window for volatility sizing
+        "volume_window": 30,                # Number of candles for volume Z-score
+        "volume_zscore_threshold": 1.5,     # Minimum volume Z-score to confirm breakout
+        "atr_percentile_filter": 0.4,       # Minimum ATR percentile to filter low-volatility setups
+        "atr_percentile_window": 60,        # Lookback window for ATR percentile calculation
+        "confirmation_threshold": 0.58,     # Minimum signal strength to trigger entry
         "weights": {
-            "bb": 0.50,
-            "atr": 0.18,
-            "rsi": 0.12,
-            "volume": 0.10,
-            "vwap": 0.05,
-            "obv": 0.03,
-            "macd": 0.02,
+            "bb": 0.50,                     # Core signal: price interaction with Bollinger Bands
+            "atr": 0.18,                    # Volatility filter
+            "rsi": 0.12,                    # Momentum confirmation
+            "volume": 0.10,                 # Volume spike confirmation
+            "vwap": 0.05,                   # VWAP alignment
+            "obv": 0.03,                    # On-Balance Volume trend
+            "macd": 0.02,                   # MACD trend confirmation
         },
     }
 
     mid_conservative = {
         "bb_period": 20,
-        "bb_std": 2.2,
+        "bb_std": 2.2,                      # Wider bands to reduce false breakouts
         "rsi_period": 14,
         "atr_period": 14,
         "volume_window": 40,
-        "volume_zscore_threshold": 1.8,
+        "volume_zscore_threshold": 1.8,     # Require stronger volume confirmation
         "atr_percentile_filter": 0.5,
         "atr_percentile_window": 80,
-        "confirmation_threshold": 0.62,
+        "confirmation_threshold": 0.62,     # Higher threshold for more reliable signals
         "weights": {
             "bb": 0.55,
             "atr": 0.20,
@@ -531,8 +533,8 @@ def make_bb_presets() -> Dict[str, Dict[str, Any]]:
     }
 
     mid_aggressive = {
-        "bb_period": 14,
-        "bb_std": 1.9,
+        "bb_period": 14,                    # Shorter band window for faster signals
+        "bb_std": 1.9,                      # Slightly tighter bands
         "rsi_period": 10,
         "atr_period": 10,
         "volume_window": 25,
@@ -550,6 +552,8 @@ def make_bb_presets() -> Dict[str, Dict[str, Any]]:
             "macd": 0.02,
         },
     }
+
+    # 🟨 Short-Term Weekly Presets (2–5 day trades)
 
     short_quick = {
         "bb_period": 10,

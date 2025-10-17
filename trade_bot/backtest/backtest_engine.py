@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,8 +9,7 @@ from trade_bot.backtest.performance_report import PerformanceReport
 from trade_bot.backtest.trader_tracker import TradeTracker
 from trade_bot.strategy.signal_model import SignalModel
 
-def plot_trade_chart(candles, trades, symbol):
-    # Step 1: Convert candles to DataFrame
+def plot_trade_chart(candles, trades, symbol, preset_name=None, save=False, filename=None):
     df = pd.DataFrame([{
         'Date': candle.date,
         'Open': candle.open,
@@ -23,12 +23,10 @@ def plot_trade_chart(candles, trades, symbol):
     df.set_index('Date', inplace=True)
     df.dropna(inplace=True)
 
-    # Step 2: Build full date index
     candle_dates = df.index.to_list()
     buy_markers = [np.nan] * len(candle_dates)
     sell_markers = [np.nan] * len(candle_dates)
 
-    # Step 3: Fill marker values at trade indices
     for trade in trades:
         idx = trade.get('index')
         if isinstance(idx, int) and 0 <= idx < len(candle_dates):
@@ -39,29 +37,31 @@ def plot_trade_chart(candles, trades, symbol):
                 elif trade['type'] == 'sell':
                     sell_markers[idx] = price
 
-    # Step 4: Create Series and validate
     apds = []
     if np.isfinite(buy_markers).any():
         buy_series = pd.Series(buy_markers, index=candle_dates)
         apds.append(mpf.make_addplot(buy_series, type='scatter', marker='^', color='green', markersize=100))
-
     if np.isfinite(sell_markers).any():
         sell_series = pd.Series(sell_markers, index=candle_dates)
         apds.append(mpf.make_addplot(sell_series, type='scatter', marker='v', color='red', markersize=100))
 
-    # Step 6: Plot
     plot_kwargs = {
         "type": "candle",
         "style": "yahoo",
-        "title": f"{symbol} Trade Chart",
+        "title": f"{preset_name} - {symbol} Trade Chart",
         "volume": True,
-        "figsize": (12, 6)
+        "figsize": (12, 6),
     }
+
     if apds:
         plot_kwargs["addplot"] = apds
+
+    if save and filename:
+        plot_kwargs["savefig"] = filename
+
     mpf.plot(df, **plot_kwargs)
 
-def plot_equity_curve(trackers):
+def plot_equity_curve(trackers, preset_name=None, save=False, filename=None):
     min_len = min(len(t.portfolio_values) for t in trackers.values())
     combined = np.zeros(min_len)
     for t in trackers.values():
@@ -71,17 +71,23 @@ def plot_equity_curve(trackers):
     plt.plot(combined, label="Portfolio Equity", color="blue", linewidth=2)
     plt.title("Combined Portfolio Equity Curve")
     plt.xlabel("Time (Days)")
-    plt.ylabel("Portfolio Value")
+    plt.ylabel(f"{preset_name} - Portfolio Value")
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.show()
+
+    if save and filename:
+        plt.savefig(filename)
+        plt.close()
+    else:
+        plt.show()
 
 
-def print_dashboard(results):
+def print_dashboard(results, preset_name=None):
     table = []
     for symbol, report in results.items():
         table.append([
+            preset_name or "N/A",
             symbol,
             round(report["final_value"], 2),
             round(report["net_profit"], 2),
@@ -91,11 +97,11 @@ def print_dashboard(results):
             report["avg_loss"],
             report["max_drawdown"]
         ])
-    headers = ["Symbol", "Final Value", "Net Profit", "Trades", "Win Rate", "Avg Win", "Avg Loss", "Max Drawdown"]
+    headers = ["Preset", "Symbol", "Final Value", "Net Profit", "Trades", "Win Rate", "Avg Win", "Avg Loss", "Max Drawdown"]
     print("\n📊 Strategy Performance Dashboard")
     print(tabulate(table, headers=headers, tablefmt="pretty"))
 
-def print_trade_hist(trades):
+def print_trade_hist(trades, preset_name=None):
     if not trades:
         print("No trades executed.")
         return
@@ -103,7 +109,9 @@ def print_trade_hist(trades):
     for trade in trades:
         row = [
             trade.get("index"),
+            preset_name or "N/A",
             trade.get("date", "N/A"),
+            trade.get("symbol", "N/A"),
             trade.get("type").upper(),
             round(trade.get("price", 0), 2),
             trade.get("shares", 0),
@@ -112,7 +120,7 @@ def print_trade_hist(trades):
             round(trade.get("cash_after", 0), 2)
         ]
         table.append(row)
-    headers = ["Index", "Date", "Type", "Price", "Shares", "Entry Price", "Profit", "Cash After"]
+    headers = ["Index", "Preset", "Date", "Symbol", "Type", "Price", "Shares", "Entry Price", "Profit", "Cash After"]
     print("\n📈 Trade History")
     print(tabulate(table, headers=headers, tablefmt="pretty"))
 
@@ -135,8 +143,9 @@ class BacktestEngine:
         return PerformanceReport(self.tracker).generate()
 
 class MultiSymbolBacktestEngine:
-    def __init__(self, strategy, symbols, provider, interval="1d", lookback_days=365, initial_cash=100000):
+    def __init__(self, strategy, preset_name, symbols, provider, interval="1d", lookback_days=365, initial_cash=100000):
         self.strategy = strategy
+        self.preset_name = preset_name
         self.symbols = symbols
         self.provider = provider
         self.interval = interval
@@ -148,7 +157,6 @@ class MultiSymbolBacktestEngine:
 
     def run(self):
         for symbol in self.symbols:
-            print(f"\n🔍 Backtesting {symbol}...")
             candles = self.provider.get_price_data(symbol, interval=self.interval, lookback=self.lookback_days)
             if not candles or len(candles) < 100:
                 print(f"⚠️ Skipping {symbol}: insufficient data.")
@@ -161,13 +169,23 @@ class MultiSymbolBacktestEngine:
 
         return self.results
 
-    def visualize(self):
-        print_dashboard(self.results)
-        plot_equity_curve(self.trackers)
+    def visualize(self, save=False, output_dir="charts", file_prefix=None):
+        print_dashboard(self.results, self.preset_name)
+
+        if save:
+            os.makedirs(output_dir, exist_ok=True)
+        plot_equity_curve(self.trackers, self.preset_name, save, f"{output_dir}/{file_prefix}_equity_curve.png")
         for symbol in self.symbols:
             if symbol in self.candle_data and symbol in self.trackers:
-                print_trade_hist(self.trackers[symbol].trades)
-                plot_trade_chart(self.candle_data[symbol], self.trackers[symbol].trades, symbol)
+                print_trade_hist(self.trackers[symbol].trades, self.preset_name)
+                plot_trade_chart(
+                    self.candle_data[symbol], 
+                    self.trackers[symbol].trades,
+                    symbol,
+                    self.preset_name,
+                    save,
+                    f"{output_dir}/{file_prefix}_trade_chart.png"
+                )
 
 class BacktestRunner:
     """
@@ -175,8 +193,9 @@ class BacktestRunner:
     printing performance dashboards, and visualizing trade results.
     """
 
-    def __init__(self, strategy, symbols, provider, interval="1d", lookback_days=365, initial_cash=100000):
+    def __init__(self, strategy, preset_name, symbols, provider, interval="1d", lookback_days=365, initial_cash=100000):
         self.strategy = strategy
+        self.preset_name = preset_name
         self.symbols = symbols
         self.provider = provider
         self.interval = interval
@@ -185,9 +204,9 @@ class BacktestRunner:
         self.engine = None
 
     def run(self):
-        print(f"\n🚀 Running backtest for {len(self.symbols)} symbols...")
         self.engine = MultiSymbolBacktestEngine(
             strategy=self.strategy,
+            preset_name=self.preset_name,
             symbols=self.symbols,
             provider=self.provider,
             interval=self.interval,
@@ -197,8 +216,8 @@ class BacktestRunner:
         results = self.engine.run()
         return results
 
-    def visualize(self):
+    def visualize(self, save=False, output_dir="charts", file_prefix=None):
         if not self.engine:
             print("⚠️ Backtest not yet run. Call run() first.")
             return
-        self.engine.visualize()
+        self.engine.visualize(save, output_dir, file_prefix)

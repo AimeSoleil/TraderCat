@@ -1,3 +1,4 @@
+from datetime import datetime
 from trade_bot.strategy.signal_model import SignalModel
 
 class TradeTracker:
@@ -17,7 +18,8 @@ class TradeTracker:
             self.entry_price = price
             self.cash -= self.position * price
             self.trades.append({
-                "date": signal_mode.date,
+                "date": signal_mode.date.strftime("%Y-%m-%d"),
+                "symbol": self.symbol,
                 "type": "buy",
                 "price": price,
                 "index": index,
@@ -29,7 +31,8 @@ class TradeTracker:
             self.cash += self.position * price
             profit = (price - self.entry_price) * self.position
             self.trades.append({
-                "date": signal_mode.date,
+                "date": signal_mode.date.strftime("%Y-%m-%d"),
+                "symbol": self.symbol,
                 "type": "sell",
                 "price": price,
                 "index": index,
@@ -55,6 +58,7 @@ class TradeTracker:
             row = {
                 "Index": trade.get("index"),
                 "Date": trade.get("date", "N/A"),
+                "Symbol": trade.get("symbol", "N/A"),
                 "Type": trade.get("type").upper(),
                 "Price": round(trade.get("price", 0), 2),
                 "Shares": trade.get("shares", 0),

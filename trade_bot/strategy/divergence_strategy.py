@@ -40,7 +40,7 @@ class DivergenceStrategy(TradingStrategy):
         - atr_period: ATR period for volatility and position sizing
         - volume_window: window for volume z-score (set 0 to disable volume)
         - volume_z_th: volume z-score threshold for "volume confirmation"
-        - sma_fast, sma_slow: for trend filter (e.g., 20, 60)
+        - ema_fast, ema_slow: for trend filter (e.g., 20, 60)
         - confirmation_threshold: scorer threshold (0-1)
         - weights: override DEFAULT_WEIGHTS (will be normalized)
     """
@@ -54,8 +54,8 @@ class DivergenceStrategy(TradingStrategy):
         atr_period: int = 14,
         volume_window: int = 30,
         volume_z_th: float = 1.0,
-        sma_fast: int = 20,
-        sma_slow: int = 60,
+        ema_fast: int = 20,
+        ema_slow: int = 60,
         confirmation_threshold: float = 0.58,
         weights: Optional[Dict[str, float]] = None,
     ):
@@ -66,8 +66,8 @@ class DivergenceStrategy(TradingStrategy):
         self.atr_period = int(atr_period)
         self.volume_window = int(max(0, volume_window))
         self.volume_z_th = float(volume_z_th)
-        self.sma_fast = int(sma_fast)
-        self.sma_slow = int(sma_slow)
+        self.ema_fast = int(ema_fast)
+        self.ema_slow = int(ema_slow)
         self.confirmation_threshold = float(confirmation_threshold)
 
         merged = DEFAULT_WEIGHTS.copy()
@@ -76,7 +76,7 @@ class DivergenceStrategy(TradingStrategy):
         self.weights = self._normalize_weights(merged)
 
     def get_name(self) -> str:
-        return "MidTerm Divergence"
+        return "Divergence (regular & hidden)"
 
     def get_lookback_window(self) -> int:
         return max(120, self.lookback_days + self.atr_period + self.volume_window + 10)
@@ -226,8 +226,6 @@ class DivergenceStrategy(TradingStrategy):
         if len(highs) < 2:
             highs = []
 
-        print(f"Detected lows: {lows}, highs: {highs}")  # Debugging line
-
         def compare_pair(pairA, pairB, kind: str):
             """
             pairA/B: (abs_idx, price)
@@ -344,12 +342,13 @@ class DivergenceStrategy(TradingStrategy):
         # fetch indicators
         rsi = self.provider.get_indicator("rsi", candles, {"length": self.rsi_period})
         atr = self.provider.get_indicator("atr", candles, {"length": self.atr_period})
-        sma_fast = self.provider.get_indicator(
-            "sma", candles, {"length": self.sma_fast}
+        ema_fast = self.provider.get_indicator(
+            "ema", candles, {"length": self.ema_fast}
         )
-        sma_slow = self.provider.get_indicator(
-            "sma", candles, {"length": self.sma_slow}
+        ema_slow = self.provider.get_indicator(
+            "ema", candles, {"length": self.ema_slow}
         )
+
         try:
             macd = self.provider.get_indicator(
                 "macd", candles, {"fast": 12, "slow": 26, "signal": 9}
@@ -410,15 +409,15 @@ class DivergenceStrategy(TradingStrategy):
             ]  # simple 30th pct approx
         atr_ok = cur_atr is not None and cur_atr > (atr_percentile + EPS)
 
-        # trend filter using SMA fast/slow (completed)
-        sma_fast = self._safe_get(
-            sma_fast, -2, f"close_SMA_{self.sma_fast}", None
-        ) or self._safe_get(sma_fast, -2, "value", None)
-        sma_slow = self._safe_get(
-            sma_slow, -2, f"close_SMA_{self.sma_slow}", None
-        ) or self._safe_get(sma_slow, -2, "value", None)
-        trend_is_up = sma_fast is not None and sma_slow is not None and sma_fast > sma_slow
-        trend_is_down = sma_fast is not None and sma_slow is not None and sma_fast < sma_slow
+        # trend filter using EMA fast/slow (completed)
+        ema_fast = self._safe_get(
+            ema_fast, -2, f"close_EMA_{self.ema_fast}", None
+        ) or self._safe_get(ema_fast, -2, "value", None)
+        ema_slow = self._safe_get(
+            ema_slow, -2, f"close_EMA_{self.ema_slow}", None
+        ) or self._safe_get(ema_slow, -2, "value", None)
+        trend_is_up = ema_fast is not None and ema_slow is not None and ema_fast > ema_slow
+        trend_is_down = ema_fast is not None and ema_slow is not None and ema_fast < ema_slow
 
         # volume confirmation if enabled
         vol_z = 0.0
@@ -548,8 +547,8 @@ class DivergenceStrategy(TradingStrategy):
             "cur_atr": cur_atr,
             "atr_percentile_est": atr_percentile,
             "atr_ok": atr_ok,
-            "sma_fast": sma_fast,
-            "sma_slow": sma_slow,
+            "ema_fast": ema_fast,
+            "ema_slow": ema_slow,
             "trend_is_up": trend_is_up,
             "trend_is_down": trend_is_down,
             "vol_z": round(vol_z, 3),
@@ -571,35 +570,37 @@ class DivergenceStrategy(TradingStrategy):
 # Presets
 # -------------------------
 def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
+    # 🟦 Mid-Term Presets (1–3 week swing setups)
+
     mid_balanced = {
-        "lookback_days": 45,
-        "min_swing_pct": 0.02,
-        "rsi_period": 14,
-        "atr_period": 14,
-        "volume_window": 25,
-        "volume_z_th": 1.2,
-        "sma_fast": 50,
-        "sma_slow": 200,
-        "confirmation_threshold": 0.58,
-        "weights": {
-            "divergence": 0.45,
-            "atr": 0.20,
-            "trend_filter": 0.15,
-            "momentum": 0.10,
-            "volume": 0.10,
+        "lookback_days": 40,         # How far back to search for swing highs/lows
+        "min_swing_pct": 0.02,       # Minimum price movement to qualify as a swing
+        "rsi_period": 12,            # RSI window for momentum confirmation
+        "atr_period": 12,            # ATR window for volatility sizing
+        "volume_window": 25,         # Number of candles for volume Z-score calculation
+        "volume_z_th": 1.2,          # Minimum volume Z-score to confirm breakout
+        "ema_fast": 20,              # Fast EMA for trend direction
+        "ema_slow": 50,              # Slow EMA for trend filter
+        "confirmation_threshold": 0.58,  # Minimum signal strength to trigger entry
+        "weights": {                 # Relative importance of each signal component
+            "divergence": 0.45,      # Core signal: price vs indicator divergence
+            "atr": 0.20,             # Volatility filter
+            "trend_filter": 0.15,    # EMA-based trend bias
+            "momentum": 0.10,        # RSI confirmation
+            "volume": 0.10,          # Volume spike confirmation
         },
     }
 
     mid_conservative = {
-        "lookback_days": 60,
-        "min_swing_pct": 0.03,
+        "lookback_days": 50,         # Longer swing window for stronger setups
+        "min_swing_pct": 0.025,      # Require larger price moves
         "rsi_period": 14,
         "atr_period": 14,
         "volume_window": 30,
-        "volume_z_th": 1.5,
-        "sma_fast": 50,
-        "sma_slow": 200,
-        "confirmation_threshold": 0.62,
+        "volume_z_th": 1.5,          # Higher volume threshold for confirmation
+        "ema_fast": 30,
+        "ema_slow": 100,
+        "confirmation_threshold": 0.62,  # Stricter signal requirement
         "weights": {
             "divergence": 0.45,
             "atr": 0.20,
@@ -610,15 +611,15 @@ def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
     }
 
     mid_aggressive = {
-        "lookback_days": 30,
-        "min_swing_pct": 0.015,
+        "lookback_days": 25,         # Shorter swing window for faster entries
+        "min_swing_pct": 0.015,      # Allow smaller price moves
         "rsi_period": 10,
         "atr_period": 10,
         "volume_window": 20,
-        "volume_z_th": 1.0,
-        "sma_fast": 30,
-        "sma_slow": 100,
-        "confirmation_threshold": 0.54,
+        "volume_z_th": 1.0,          # Lower volume threshold for more signals
+        "ema_fast": 10,
+        "ema_slow": 30,
+        "confirmation_threshold": 0.54,  # Looser signal gate
         "weights": {
             "divergence": 0.48,
             "atr": 0.18,
@@ -628,15 +629,17 @@ def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
         },
     }
 
+    # 🟨 Short-Term Weekly Presets (2–5 day trades)
+
     short_quick = {
-        "lookback_days": 15,
+        "lookback_days": 12,         # Very short swing window
         "min_swing_pct": 0.012,
         "rsi_period": 5,
         "atr_period": 7,
         "volume_window": 12,
         "volume_z_th": 1.0,
-        "sma_fast": 20,
-        "sma_slow": 50,
+        "ema_fast": 8,
+        "ema_slow": 21,
         "confirmation_threshold": 0.54,
         "weights": {
             "divergence": 0.45,
@@ -648,14 +651,14 @@ def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
     }
 
     short_balanced = {
-        "lookback_days": 18,
+        "lookback_days": 15,
         "min_swing_pct": 0.015,
         "rsi_period": 6,
         "atr_period": 10,
         "volume_window": 15,
         "volume_z_th": 1.1,
-        "sma_fast": 20,
-        "sma_slow": 50,
+        "ema_fast": 10,
+        "ema_slow": 30,
         "confirmation_threshold": 0.56,
         "weights": {
             "divergence": 0.45,
@@ -667,14 +670,14 @@ def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
     }
 
     short_conservative = {
-        "lookback_days": 20,
+        "lookback_days": 18,
         "min_swing_pct": 0.018,
         "rsi_period": 7,
         "atr_period": 10,
         "volume_window": 18,
         "volume_z_th": 1.3,
-        "sma_fast": 20,
-        "sma_slow": 50,
+        "ema_fast": 12,
+        "ema_slow": 35,
         "confirmation_threshold": 0.60,
         "weights": {
             "divergence": 0.45,
@@ -693,5 +696,6 @@ def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
         "short_balanced": short_balanced,
         "short_conservative": short_conservative,
     }
+
 
 

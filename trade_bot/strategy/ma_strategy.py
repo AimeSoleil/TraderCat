@@ -120,7 +120,7 @@ class MAStrategy(TradingStrategy):
     # Public API
     # -------------------------
     def get_name(self) -> str:
-        return "MA (EMA/SMA)"
+        return "EMA/SMA"
 
     def get_lookback_window(self) -> int:
         core = max(self.sma_slow, self.atr_period)
@@ -130,8 +130,6 @@ class MAStrategy(TradingStrategy):
     # Main signal generation
     # -------------------------
     def generate_signal(self, symbol: str, candles: list) -> SignalModel:
-        print(f"Strategy[{self.get_name()}] generating signal for {symbol}...")
-
         current_date = candles[-1].date if candles else None
 
         # 1) Data sufficiency
@@ -328,35 +326,37 @@ class MAStrategy(TradingStrategy):
 # Preset factory
 # -------------------------
 def make_ma_presets() -> Dict[str, Dict[str, Any]]:
+    # 🟦 Mid-Term Presets (1–3 week swing setups)
+
     mid_balanced = {
-        "ema_fast": 20,
-        "sma_slow": 50,
-        "rsi_period": 14,
-        "atr_period": 14,
-        "volume_window": 30,
-        "volume_zscore_threshold": 1.5,
-        "atr_expansion_ratio": 1.2,
-        "confirmation_threshold": 0.58,
+        "ema_fast": 20,                      # Fast EMA for trend entry signal
+        "sma_slow": 50,                      # Slow SMA for trend confirmation
+        "rsi_period": 14,                    # RSI window for momentum filter
+        "atr_period": 14,                    # ATR window for volatility sizing
+        "volume_window": 30,                 # Number of candles for volume Z-score
+        "volume_zscore_threshold": 1.5,      # Minimum volume spike to confirm breakout
+        "atr_expansion_ratio": 1.2,          # Minimum ATR expansion vs baseline
+        "confirmation_threshold": 0.58,      # Minimum signal strength to trigger entry
         "weights": {
-            "ma_cross": 0.50,
-            "atr": 0.18,
-            "rsi": 0.12,
-            "volume": 0.10,
-            "vwap": 0.05,
-            "obv": 0.03,
-            "macd": 0.02,
+            "ma_cross": 0.50,                # Core signal: EMA/SMA crossover
+            "atr": 0.18,                     # Volatility filter
+            "rsi": 0.12,                     # Momentum confirmation
+            "volume": 0.10,                  # Volume spike confirmation
+            "vwap": 0.05,                    # VWAP alignment
+            "obv": 0.03,                     # On-Balance Volume trend
+            "macd": 0.02,                    # MACD trend confirmation
         },
     }
 
     mid_conservative = {
         "ema_fast": 30,
-        "sma_slow": 100,
+        "sma_slow": 100,                     # Longer-term trend confirmation
         "rsi_period": 14,
         "atr_period": 14,
         "volume_window": 40,
         "volume_zscore_threshold": 1.8,
         "atr_expansion_ratio": 1.2,
-        "confirmation_threshold": 0.62,
+        "confirmation_threshold": 0.62,      # Higher threshold for stronger signals
         "weights": {
             "ma_cross": 0.55,
             "atr": 0.20,
@@ -370,7 +370,7 @@ def make_ma_presets() -> Dict[str, Dict[str, Any]]:
 
     mid_aggressive = {
         "ema_fast": 10,
-        "sma_slow": 30,
+        "sma_slow": 30,                      # Shorter-term trend confirmation
         "rsi_period": 10,
         "atr_period": 10,
         "volume_window": 25,
@@ -387,6 +387,8 @@ def make_ma_presets() -> Dict[str, Dict[str, Any]]:
             "macd": 0.02,
         },
     }
+
+    # 🟨 Short-Term Weekly Presets (2–5 day trades)
 
     short_quick = {
         "ema_fast": 5,
