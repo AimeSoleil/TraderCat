@@ -13,35 +13,63 @@ class TradeTracker:
     def execute(self, signal_mode: SignalModel, price: float, index: int):
         action = signal_mode.signal.lower()
 
-        if action == "buy" and self.position == 0:
-            self.position = self.cash // price
-            self.entry_price = price
-            self.cash -= self.position * price
-            self.trades.append({
-                "date": signal_mode.date.strftime("%Y-%m-%d"),
-                "symbol": self.symbol,
-                "type": "buy",
-                "price": price,
-                "index": index,
-                "shares": self.position,
-                "cash_after": self.cash
-            })
+        if action == "buy" or action == "sell":
+            print(f"*********** [{signal_mode.date}] Executing signal: {action} at price {price} for symbol {self.symbol}:")
+            print(f"*********** Reason: {signal_mode.reason}, Confidence: {signal_mode.confidence}, Details: {signal_mode.details}\n")
 
-        elif action == "sell" and self.position > 0:
-            self.cash += self.position * price
-            profit = (price - self.entry_price) * self.position
-            self.trades.append({
-                "date": signal_mode.date.strftime("%Y-%m-%d"),
-                "symbol": self.symbol,
-                "type": "sell",
-                "price": price,
-                "index": index,
-                "shares": self.position,
-                "entry_price": self.entry_price,
-                "profit": profit,
-                "cash_after": self.cash
-            })
-            self.position = 0
+        if action == "buy":
+            self.position = self.cash // price
+            if self.position == 0:
+                self.trades.append({
+                    "date": signal_mode.date.strftime("%Y-%m-%d"),
+                    "symbol": self.symbol,
+                    "type": "buy",
+                    "price": price,
+                    "index": index,
+                    "shares": 0, # which means no shares bought
+                    "note": "Insufficient cash to buy shares",
+                    "cash_after": self.cash
+                })
+            else:
+                self.entry_price = price
+                self.cash -= self.position * price
+                self.trades.append({
+                    "date": signal_mode.date.strftime("%Y-%m-%d"),
+                    "symbol": self.symbol,
+                    "type": "buy",
+                    "price": price,
+                    "index": index,
+                    "shares": self.position,
+                    "cash_after": self.cash
+                })
+
+        elif action == "sell":
+            if self.position == 0:
+                self.trades.append({
+                    "date": signal_mode.date.strftime("%Y-%m-%d"),
+                    "symbol": self.symbol,
+                    "type": "sell",
+                    "price": price,
+                    "index": index,
+                    "shares": 0, # which means no shares to sell
+                    "note": "No shares to sell",
+                    "cash_after": self.cash
+                })
+            else:
+                self.cash += self.position * price
+                profit = (price - self.entry_price) * self.position
+                self.trades.append({
+                    "date": signal_mode.date.strftime("%Y-%m-%d"),
+                    "symbol": self.symbol,
+                    "type": "sell",
+                    "price": price,
+                    "index": index,
+                    "shares": self.position,
+                    "entry_price": self.entry_price,
+                    "profit": profit,
+                    "cash_after": self.cash
+                })
+                self.position = 0
             self.entry_price = None
 
     def record_portfolio(self, price):

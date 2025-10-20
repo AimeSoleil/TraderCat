@@ -21,30 +21,30 @@ from trade_bot.strategy.ma_strategy import MAStrategy, make_ma_presets
 CONFIG = {
     "symbols": ["QQQ"],  # Add more tickers as needed
     "strategies": { # Strategy name to list of preset names
-        "Divergence": [
-            "short_quick",
-            "short_balanced",
-            "short_conservative",
-            "mid_aggressive",
-            "mid_balanced",
-            "mid_conservative",
-        ],
-        "Fibonacci": [
-            "short_quick",
-            "short_balanced",
-            "short_conservative",
-            "mid_aggressive",
-            "mid_balanced",
-            "mid_conservative",
-        ],
-        "MovingAverage": [
-            "short_quick",
-            "short_balanced",
-            "short_conservative",
-            "mid_aggressive",
-            "mid_balanced",
-            "mid_conservative",
-        ],
+        # "Divergence": [
+        #     "short_quick",
+        #     "short_balanced",
+        #     "short_conservative",
+        #     "mid_aggressive",
+        #     "mid_balanced",
+        #     "mid_conservative",
+        # ],
+        # "Fibonacci": [
+        #     "short_quick",
+        #     "short_balanced",
+        #     "short_conservative",
+        #     "mid_aggressive",
+        #     "mid_balanced",
+        #     "mid_conservative",
+        # ],
+        # "MovingAverage": [
+        #     "short_quick",
+        #     "short_balanced",
+        #     "short_conservative",
+        #     "mid_aggressive",
+        #     "mid_balanced",
+        #     "mid_conservative",
+        # ],
         "BollingerBand": [
             "short_quick",
             "short_balanced",
@@ -133,7 +133,6 @@ def print_total_results(total_results):
     
     table = []
     for preset_key, results in total_results.items():
-        print(f"==preset_key: {preset_key}, reports: {results}")
         for symbol, result in results.items():
             report = {k: v for k, v in result.items() if k != 'trade_hist'}
             table.append([

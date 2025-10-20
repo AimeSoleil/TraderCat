@@ -117,10 +117,11 @@ def print_trade_hist(trades, preset_name=None):
             trade.get("shares", 0),
             round(trade.get("entry_price", 0), 2) if "entry_price" in trade else "",
             round(trade.get("profit", 0), 2) if "profit" in trade else "",
-            round(trade.get("cash_after", 0), 2)
+            round(trade.get("cash_after", 0), 2),
+            trade.get("note", "")
         ]
         table.append(row)
-    headers = ["Index", "Preset", "Date", "Symbol", "Type", "Price", "Shares", "Entry Price", "Profit", "Cash After"]
+    headers = ["Index", "Preset", "Date", "Symbol", "Type", "Price", "Shares", "Entry Price", "Profit", "Cash After", "Note"]
     print("\n📈 Trade History")
     print(tabulate(table, headers=headers, tablefmt="pretty"))
 

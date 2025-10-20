@@ -1,9 +1,9 @@
 from regex import P
 from trade_bot.data.openbb_provider import OpenBBProvider
-from trade_bot.strategy.bollinger_band_strategy import BollingerBandStrategy
-from trade_bot.strategy.divergence_strategy import DivergenceStrategy
-from trade_bot.strategy.fib_strategy import FibonacciStrategy
-from trade_bot.strategy.ma_strategy import MAStrategy
+from trade_bot.strategy.bollinger_band_strategy import BollingerBandStrategy, make_bb_presets
+from trade_bot.strategy.divergence_strategy import DivergenceStrategy, make_divergence_presets
+from trade_bot.strategy.fib_strategy import FibonacciStrategy, make_fib_presets
+from trade_bot.strategy.ma_strategy import MAStrategy, make_ma_presets
 from trade_bot.strategy.signal_model import SignalModel
 
 class TradeBot:
@@ -17,10 +17,10 @@ class TradeBot:
 
         # Initialize strategies with the data provider and support adding more strategies per need
         strategies = [
-            DivergenceStrategy(data_provider=data_provider),
-            MAStrategy(data_provider=data_provider),
-            BollingerBandStrategy(data_provider=data_provider),
-            FibonacciStrategy(data_provider=data_provider)
+            DivergenceStrategy(data_provider=data_provider, **make_divergence_presets()['short_quick']),
+            MAStrategy(data_provider=data_provider, **make_ma_presets()['short_quick']),
+            BollingerBandStrategy(data_provider=data_provider, **make_bb_presets()['short_quick']),
+            FibonacciStrategy(data_provider=data_provider, **make_fib_presets()['short_quick'])
         ]
 
         # Fetch basic candles (e.g., last 30 days of candles); 
