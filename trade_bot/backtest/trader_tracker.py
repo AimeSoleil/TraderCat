@@ -18,8 +18,8 @@ class TradeTracker:
             print(f"*********** Reason: {signal_mode.reason}, Confidence: {signal_mode.confidence}, Details: {signal_mode.details}\n")
 
         if action == "buy":
-            self.position = self.cash // price
-            if self.position == 0:
+            trade_position = self.cash // price
+            if trade_position == 0:
                 self.trades.append({
                     "date": signal_mode.date.strftime("%Y-%m-%d"),
                     "symbol": self.symbol,
@@ -32,6 +32,7 @@ class TradeTracker:
                 })
             else:
                 self.entry_price = price
+                self.position += trade_position
                 self.cash -= self.position * price
                 self.trades.append({
                     "date": signal_mode.date.strftime("%Y-%m-%d"),
@@ -52,6 +53,8 @@ class TradeTracker:
                     "price": price,
                     "index": index,
                     "shares": 0, # which means no shares to sell
+                    "entry_price": self.entry_price,
+                    "profit": 0,
                     "note": "No shares to sell",
                     "cash_after": self.cash
                 })
@@ -70,7 +73,6 @@ class TradeTracker:
                     "cash_after": self.cash
                 })
                 self.position = 0
-            self.entry_price = None
 
     def record_portfolio(self, price):
         value = self.cash + (self.position * price if self.position > 0 else 0)

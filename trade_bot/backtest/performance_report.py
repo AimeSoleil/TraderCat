@@ -7,7 +7,7 @@ class PerformanceReport:
 
     def generate(self):
         trades = self.tracker.trades
-        profits = [t["profit"] for t in trades if t["type"] == "sell"]
+        profits = [t["profit"] or 0 for t in trades if t["type"] == "sell"]
         wins = [p for p in profits if p > 0]
         losses = [p for p in profits if p <= 0]
 

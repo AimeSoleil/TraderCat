@@ -19,7 +19,6 @@ symbols: [
   "MSFT",   # Microsoft Corporation
   "AAPL",   # Apple Inc.
   "GOOG",   # Alphabet Inc. (Class C)
-  "GOOGL",  # Alphabet Inc. (Class A)
   "AMZN",   # Amazon.com Inc.
   "META",   # Meta Platforms Inc.
   "AVGO",   # Broadcom Inc.

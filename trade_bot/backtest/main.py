@@ -19,7 +19,7 @@ from trade_bot.strategy.ma_strategy import MAStrategy, make_ma_presets
 
 # 🔧 Configuration
 CONFIG = {
-    "symbols": ["QQQ"],  # Add more tickers as needed
+    "symbols": ["PLTR"],  # Add more tickers as needed
     "strategies": { # Strategy name to list of preset names
         # "Divergence": [
         #     "short_quick",
@@ -47,11 +47,11 @@ CONFIG = {
         # ],
         "BollingerBand": [
             "short_quick",
-            "short_balanced",
-            "short_conservative",
-            "mid_aggressive",
-            "mid_balanced",
-            "mid_conservative",
+            # "short_balanced",
+            # "short_conservative",
+            # "mid_aggressive",
+            # "mid_balanced",
+            # "mid_conservative",
         ],
     },
     "interval": "1d",
