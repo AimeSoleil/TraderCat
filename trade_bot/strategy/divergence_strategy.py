@@ -396,7 +396,7 @@ class DivergenceStrategy(TradingStrategy):
             )
 
         # basic price info and ATR
-        completed_idx = -2
+        completed_idx = -1
         completed_close = self._safe_get(candles, completed_idx, "close", None)
         cur_atr = self._safe_get(
             atr, completed_idx, f"ATRr_{self.atr_period}", None

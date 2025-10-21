@@ -196,9 +196,12 @@ class BollingerBandStrategy(TradingStrategy):
                 details={},
             )
 
-        # Completed-bar indices
-        completed_idx = -2
-        prior_idx = -3
+        # Completed-bar indices; 
+        # The strategy will be used for swing trade, 
+        # which means the signal will be generated after market close.
+        # The latest candle is the completed candle.
+        completed_idx = -1
+        prior_idx = -2
 
         # Price and volume
         completed_close = self._safe_get(candles, completed_idx, "close", None)

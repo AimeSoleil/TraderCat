@@ -24,7 +24,7 @@ class FibonacciStrategy(TradingStrategy):
     Highlights:
     - Uses automatic swing identification (recent high/low) to generate Fibonacci retracement
     and extension levels. Signals derived from price behavior around those levels.
-    - Completed-bar based decisions (no lookahead): uses completed_idx = -2 for confirmations.
+    - Completed-bar based decisions (no lookahead): uses completed_idx = -1 for confirmations.
     - Robust volume z-score computation with MAD fallback.
     - ATR percentile filtering to avoid low-volatility noise.
     - VWAP/OBV soft confirmations where available from provider.
@@ -271,8 +271,8 @@ class FibonacciStrategy(TradingStrategy):
         )  # mapping level->price
 
         # completed bar indices
-        completed_idx = -2
-        prior_idx = -3
+        completed_idx = -1
+        prior_idx = -2
 
         completed_close = self._safe_get(candles, completed_idx, "close", None)
         latest_close = self._safe_get(candles, -1, "close", None)

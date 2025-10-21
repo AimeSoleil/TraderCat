@@ -179,8 +179,8 @@ class MAStrategy(TradingStrategy):
 
         # Use completed-bar values only (no values from the still-forming latest bar)
         # completed bar indices: -2 (most recent completed), -3 (prior completed)
-        completed_idx = -2
-        prior_idx = -3
+        completed_idx = -1
+        prior_idx = -2
 
         cur = candles[-1]
         # For price comparisons prefer the last completed close to avoid intrabar lookahead
