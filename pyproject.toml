@@ -38,4 +38,4 @@ dev = [
 ]
 
 [project.scripts]
-tradercat = "trade_bot.main:main"
+tradercat = "trade_bot.main_multi_threads:main"
