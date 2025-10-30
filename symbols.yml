@@ -16,6 +16,9 @@ symbols: [
   "ASML",   # ASML Holding NV
   "ADSK",   # Autodesk Inc.
   "NVDA",   # NVIDIA Corporation
+  "CRWV",   # Core Weave Inc.
+  "NBIS",   # Nebius Group Inc.
+  "APLD",   # Applied Digital Corp.
   "MSFT",   # Microsoft Corporation
   "AAPL",   # Apple Inc.
   "GOOG",   # Alphabet Inc. (Class C)
@@ -57,6 +60,7 @@ symbols: [
   "AXP",    # American Express Co.
   "CRM",    # Salesforce Inc.
   "RTX",    # RTX Corp.
+  "LMT",    # Lockheed Martin Corp.
   "MRK",    # Merck & Co. Inc.
   "LIN",    # Linde plc
   "MCD",    # McDonald's Corp.
@@ -141,10 +145,13 @@ symbols: [
   "NTES",   # NetEase Inc.
   "JD",     # JD.com Inc.
   "BIDU",   # Baidu Inc.
+  "BABA",   # Alibaba Group Holding Ltd.
+  "PINS",   # Pinterest Inc.
+  "UBER",   # Uber Technologies Inc.
   "ZM",     # Zoom Video Communications Inc.
   "MSTR",   # MicroStrategy Inc.
   "CVNA",   # Carvana Co.
-  "B",      # Barnes Group Inc.
+  "B",      # Barrick Mining Inc.
   "SMCI",   # Super Micro Computer Inc.
   "FIX",    # Comfort Systems USA Inc.
   "INSM",   # Insmed Inc.
@@ -202,4 +209,12 @@ symbols: [
   "PFE",   # Pfizer Inc.
   "OSCR",   # Oscar Health Inc.
   "MODN",   # Moderna Inc.
+  # Quantum Computing
+  "IBMQ",   # IBM Quantum Computing Division
+  "QUBT",   # Qubitekk Inc.
+  "QCDA",   # Quantum Computing Inc. 
+  "RGTI",   # Rigetti Computing Inc.
+  "LAES",   # LAES Quantum Computers Inc.
+  # other emerging tech
+  "LULU"
 ]

@@ -7,7 +7,8 @@ class PerformanceReport:
 
     def generate(self):
         trades = self.tracker.trades
-        profits = [t["profit"] or 0 for t in trades if t["type"] == "sell"]
+        # Filter only completed sell trades with shares > 0
+        profits = [t["profit"] or 0 for t in trades if t["type"] == "sell" and t["shares"] > 0]
         wins = [p for p in profits if p > 0]
         losses = [p for p in profits if p <= 0]
 

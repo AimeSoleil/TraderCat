@@ -6,68 +6,70 @@ from tabulate import tabulate
 from tqdm import tqdm
 from trade_bot.backtest.backtest_engine import BacktestRunner
 from trade_bot.data.openbb_provider import OpenBBProvider
-from trade_bot.strategy.bollinger_band_strategy import (
-    BollingerBandStrategy,
-    make_bb_presets,
-)
-from trade_bot.strategy.divergence_strategy import (
-    DivergenceStrategy,
-    make_divergence_presets,
-)
-from trade_bot.strategy.fib_strategy import FibonacciStrategy, make_fib_presets
-from trade_bot.strategy.ma_strategy import MAStrategy, make_ma_presets
+from trade_bot.strategy.bb_breakout_strategy import BBBreakoutStrategy, make_bb_breakout_presets
+from trade_bot.strategy.bb_divergence_strategy import BBDivergenceStrategy, make_bb_divergence_presets
+from trade_bot.strategy.fibonacci_strategy import FibonacciStrategy, make_fibonacci_presets
+from trade_bot.strategy.hidden_divergence_strategy import HiddenDivergenceStrategy, make_hidden_divergence_presets
+from trade_bot.strategy.momentum_trend_strategy import MomentumTrendStrategy, make_momentum_presets
+from trade_bot.strategy.regular_divergence_strategy import RegularDivergenceStrategy, make_divergence_presets
+from trade_bot.strategy.trendline_strategy import TrendlineStrategy, make_trendline_presets
 
 # 🔧 Configuration
 CONFIG = {
-    "symbols": ["PLTR"],  # Add more tickers as needed
+    "symbols": ["GOOG"],  # Add more tickers as needed
     "strategies": { # Strategy name to list of preset names
-        # "Divergence": [
-        #     "short_quick",
-        #     "short_balanced",
-        #     "short_conservative",
-        #     "mid_aggressive",
-        #     "mid_balanced",
-        #     "mid_conservative",
+        # "BBBreakout": [
+        #     "sensitive"
+        #     "balanced"
+        #     "conservative"
+        # ],
+        # "BBDivergence": [
+        #     "sensitive"
+        #     "balanced"
+        #     "conservative"
         # ],
         # "Fibonacci": [
-        #     "short_quick",
-        #     "short_balanced",
-        #     "short_conservative",
-        #     "mid_aggressive",
-        #     "mid_balanced",
-        #     "mid_conservative",
+        #     "aggressive",
+        #     "balanced",
+        #     "conservative"
         # ],
-        # "MovingAverage": [
-        #     "short_quick",
-        #     "short_balanced",
-        #     "short_conservative",
-        #     "mid_aggressive",
-        #     "mid_balanced",
-        #     "mid_conservative",
+        # "HiddenDivergence": [
+        #     "sensitive",
+        #     "balanced",
+        #     "conservative"
         # ],
-        "BollingerBand": [
-            "short_quick",
-            # "short_balanced",
-            # "short_conservative",
-            # "mid_aggressive",
-            # "mid_balanced",
-            # "mid_conservative",
+        "Momentum": [
+            "swing",
+            # "intermediate",
+            # "position"
         ],
+        # "RegularDivergence": [
+        #     "swing",
+        #     "intermediate",
+        #     "position"
+        # ],
+        # "Trendline": [
+        #     "swing",
+        #     "intermediate",
+        #     "position"
+        # ],
     },
     "interval": "1d",
     "initial_cash": 100000,
     "save_charts": True,  # Flag to save charts as PNG files
 }
 
-
 def run_configured_presets():
     data_provider = OpenBBProvider()
 
     strategy_registry = {
-        "Divergence": (DivergenceStrategy, make_divergence_presets()),
-        "Fibonacci": (FibonacciStrategy, make_fib_presets()),
-        "MovingAverage": (MAStrategy, make_ma_presets()),
-        "BollingerBand": (BollingerBandStrategy, make_bb_presets()),
+        "BBBreakout": (BBBreakoutStrategy, make_bb_breakout_presets()),
+        "BBDivergence": (BBDivergenceStrategy, make_bb_divergence_presets()),
+        "Fibonacci": (FibonacciStrategy, make_fibonacci_presets()),
+        "HiddenDivergence": (HiddenDivergenceStrategy, make_hidden_divergence_presets()),
+        "Momentum": (MomentumTrendStrategy, make_momentum_presets()),
+        "RegularDivergence": (RegularDivergenceStrategy, make_divergence_presets()),
+        "Trendline": (TrendlineStrategy, make_trendline_presets()),
     }
 
     total_results = {}

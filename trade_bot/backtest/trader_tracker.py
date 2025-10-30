@@ -6,7 +6,7 @@ class TradeTracker:
         self.symbol = symbol
         self.cash = initial_cash
         self.position = 0
-        self.entry_price = None
+        self.entry_price = 0
         self.trades = []
         self.portfolio_values = []
 
@@ -20,6 +20,7 @@ class TradeTracker:
         if action == "buy":
             trade_position = self.cash // price
             if trade_position == 0:
+                # Mark a buy action but with zero shares due to insufficient cash
                 self.trades.append({
                     "date": signal_mode.date.strftime("%Y-%m-%d"),
                     "symbol": self.symbol,
@@ -27,13 +28,13 @@ class TradeTracker:
                     "price": price,
                     "index": index,
                     "shares": 0, # which means no shares bought
-                    "note": "Insufficient cash to buy shares",
+                    "note": "No cash",
                     "cash_after": self.cash
                 })
             else:
                 self.entry_price = price
                 self.position += trade_position
-                self.cash -= self.position * price
+                self.cash -= trade_position * price
                 self.trades.append({
                     "date": signal_mode.date.strftime("%Y-%m-%d"),
                     "symbol": self.symbol,
@@ -52,10 +53,10 @@ class TradeTracker:
                     "type": "sell",
                     "price": price,
                     "index": index,
-                    "shares": 0, # which means no shares to sell
+                    "shares": 0, # which means no position
                     "entry_price": self.entry_price,
                     "profit": 0,
-                    "note": "No shares to sell",
+                    "note": "No pos",
                     "cash_after": self.cash
                 })
             else:
