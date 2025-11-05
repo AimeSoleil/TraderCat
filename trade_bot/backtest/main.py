@@ -6,53 +6,47 @@ from tabulate import tabulate
 from tqdm import tqdm
 from trade_bot.backtest.backtest_engine import BacktestRunner
 from trade_bot.data.openbb_provider import OpenBBProvider
-from trade_bot.strategy.bb_breakout_strategy import BBBreakoutStrategy, make_bb_breakout_presets
-from trade_bot.strategy.bb_divergence_strategy import BBDivergenceStrategy, make_bb_divergence_presets
-from trade_bot.strategy.fibonacci_strategy import FibonacciStrategy, make_fibonacci_presets
-from trade_bot.strategy.hidden_divergence_strategy import HiddenDivergenceStrategy, make_hidden_divergence_presets
-from trade_bot.strategy.momentum_trend_strategy import MomentumTrendStrategy, make_momentum_presets
-from trade_bot.strategy.regular_divergence_strategy import RegularDivergenceStrategy, make_divergence_presets
-from trade_bot.strategy.trendline_strategy import TrendlineStrategy, make_trendline_presets
+from trade_bot.strategy.bbands_breakout_strategy import BollingerBreakoutStrategy, make_bbands_breakout_presets
+from trade_bot.strategy.bbands_divergence_strategy import BBandsDivergenceStrategy, make_bbands_divergence_presets
+from trade_bot.strategy.divergence_strategy import DivergenceStrategy, make_divergence_presets
+from trade_bot.strategy.fibonacci_retracement_strategy import FibonacciRetracementStrategy, make_fib_retracement_presets
+from trade_bot.strategy.momentum_strategy import MomentumTrendStrategy, make_momentum_trend_presets
+from trade_bot.strategy.moving_average_strategy import MovingAverageTrendStrategy, make_moving_average_trend_presets
 
 # 🔧 Configuration
 CONFIG = {
-    "symbols": ["GOOG"],  # Add more tickers as needed
+    "symbols": ["PLTR"],  # Add more tickers as needed
     "strategies": { # Strategy name to list of preset names
         # "BBBreakout": [
-        #     "sensitive"
-        #     "balanced"
-        #     "conservative"
+        #     "swing",
+        #     "intermediate"
+        #     "position"
         # ],
         # "BBDivergence": [
-        #     "sensitive"
-        #     "balanced"
-        #     "conservative"
+        #     "swing",
+        #     "intermediate"
+        #     "position"
+        # ],
+        # "Divergence": [
+        #     "swing",
+        #     "intermediate"
+        #     "position"
         # ],
         # "Fibonacci": [
-        #     "aggressive",
-        #     "balanced",
-        #     "conservative"
+        #     "swing",
+        #     "intermediate"
+        #     "position"
         # ],
-        # "HiddenDivergence": [
-        #     "sensitive",
-        #     "balanced",
-        #     "conservative"
+        # "Momentum": [
+        #     "swing",
+        #     "intermediate"
+        #     "position"
         # ],
-        "Momentum": [
+        "MovingAverage": [
             "swing",
-            # "intermediate",
+            # "intermediate"
             # "position"
         ],
-        # "RegularDivergence": [
-        #     "swing",
-        #     "intermediate",
-        #     "position"
-        # ],
-        # "Trendline": [
-        #     "swing",
-        #     "intermediate",
-        #     "position"
-        # ],
     },
     "interval": "1d",
     "initial_cash": 100000,
@@ -63,13 +57,12 @@ def run_configured_presets():
     data_provider = OpenBBProvider()
 
     strategy_registry = {
-        "BBBreakout": (BBBreakoutStrategy, make_bb_breakout_presets()),
-        "BBDivergence": (BBDivergenceStrategy, make_bb_divergence_presets()),
-        "Fibonacci": (FibonacciStrategy, make_fibonacci_presets()),
-        "HiddenDivergence": (HiddenDivergenceStrategy, make_hidden_divergence_presets()),
-        "Momentum": (MomentumTrendStrategy, make_momentum_presets()),
-        "RegularDivergence": (RegularDivergenceStrategy, make_divergence_presets()),
-        "Trendline": (TrendlineStrategy, make_trendline_presets()),
+        "BBBreakout": (BollingerBreakoutStrategy, make_bbands_breakout_presets()),
+        "BBDivergence": (BBandsDivergenceStrategy, make_bbands_divergence_presets()),
+        "Divergence": (DivergenceStrategy, make_divergence_presets()),
+        "Fibonacci": (FibonacciRetracementStrategy, make_fib_retracement_presets()),
+        "Momentum": (MomentumTrendStrategy, make_momentum_trend_presets()),
+        "MovingAverage": (MovingAverageTrendStrategy, make_moving_average_trend_presets()),
     }
 
     total_results = {}

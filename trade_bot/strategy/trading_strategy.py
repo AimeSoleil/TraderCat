@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 
 from trade_bot.strategy.signal_model import SignalModel
 
+EPS = 1e-9
+
 class TradingStrategy(ABC):
 
     @abstractmethod
