@@ -2,10 +2,10 @@ from regex import P
 from trade_bot.data.openbb_provider import OpenBBProvider
 from trade_bot.strategy.bbands_breakout_strategy import BollingerBreakoutStrategy, make_bbands_breakout_presets
 from trade_bot.strategy.bbands_divergence_strategy import BBandsDivergenceStrategy, make_bbands_divergence_presets
+from trade_bot.strategy.candlestick_reversal_strategy import CandlestickReversalStrategy, make_candlestick_reversal_presets
 from trade_bot.strategy.divergence_strategy import DivergenceStrategy, make_divergence_presets
-from trade_bot.strategy.fibonacci_retracement_strategy import FibonacciRetracementStrategy, make_fib_retracement_presets
-from trade_bot.strategy.momentum_strategy import MomentumTrendStrategy, make_momentum_trend_presets
-from trade_bot.strategy.moving_average_strategy import MovingAverageTrendStrategy, make_moving_average_trend_presets
+from trade_bot.strategy.fibonacci_retracement_strategy import FibonacciRetracementStrategy, make_fibonacci_presets
+from trade_bot.strategy.momentum_strategy import MomentumTrendStrategy, make_momentum_presets
 from trade_bot.strategy.signal_model import SignalModel
 
 class TradeBot:
@@ -22,9 +22,9 @@ class TradeBot:
             BollingerBreakoutStrategy(data_provider=data_provider, **make_bbands_breakout_presets()['swing']),
             BBandsDivergenceStrategy(data_provider=data_provider, **make_bbands_divergence_presets()['swing']),
             DivergenceStrategy(data_provider=data_provider, **make_divergence_presets()['swing']),
-            FibonacciRetracementStrategy(data_provider=data_provider, **make_fib_retracement_presets()['swing']),
-            MomentumTrendStrategy(data_provider=data_provider, **make_momentum_trend_presets()['swing']),
-            MovingAverageTrendStrategy(data_provider=data_provider, **make_moving_average_trend_presets()['swing']),
+            CandlestickReversalStrategy(data_provider=data_provider, **make_candlestick_reversal_presets()['swing']),
+            FibonacciRetracementStrategy(data_provider=data_provider, **make_fibonacci_presets()['swing']),
+            MomentumTrendStrategy(data_provider=data_provider, **make_momentum_presets()['swing']),
         ]
 
         # Fetch basic candles (e.g., last 30 days of candles); 
