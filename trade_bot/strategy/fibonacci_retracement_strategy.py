@@ -7,7 +7,6 @@ from trade_bot.strategy.signal_model import SignalModel
 
 EPS = 1e-9
 
-
 class FibonacciRetracementStrategy(TradingStrategy):
     """
     Fibonacci Retracement + Breakout 策略（生产就绪）
@@ -32,13 +31,16 @@ class FibonacciRetracementStrategy(TradingStrategy):
         ema_fast: int = 13,
         ema_slow: int = 34,
         atr_period: int = 14,
-        entry_atr_mult: float = 1.5,
+        rsi_period: int = 14,
+        macd_params: Optional[Dict[str,int]] = None,
+        adx_period: int = 14,
+        adx_threshold: float = 25.0,
         stop_atr_mult: float = 1.5,
         tp_atr_mult: float = 2.5,
         time_stop_bars: int = 20,
         min_atr_price_ratio: float = 0.0015,
-        require_volume: bool = True,
-        require_momentum: bool = True,
+        vol_zscore_window: int = 20,
+        vol_zscore_threshold: float = 1.0,
         score_threshold: float = 0.6,
         data_provider: Any = None,
     ):
@@ -50,15 +52,28 @@ class FibonacciRetracementStrategy(TradingStrategy):
         self.ema_fast = int(ema_fast)
         self.ema_slow = int(ema_slow)
         self.atr_period = int(atr_period)
-        self.entry_atr_mult = float(entry_atr_mult)
+        self.rsi_period = int(rsi_period)
+        self.macd_params = macd_params or {"fast":12,"slow":26,"signal":9}
+        self.adx_period = adx_period
+        self.adx_threshold = adx_threshold
         self.stop_atr_mult = float(stop_atr_mult)
         self.tp_atr_mult = float(tp_atr_mult)
         self.time_stop_bars = int(time_stop_bars)
         self.min_atr_price_ratio = float(min_atr_price_ratio)
-        self.require_volume = bool(require_volume)
-        self.require_momentum = bool(require_momentum)
+        self.vol_zscore_window = int(vol_zscore_window)
+        self.vol_zscore_threshold = float(vol_zscore_threshold)
         self.score_threshold = float(score_threshold)
         self.provider = data_provider
+
+        # 指标字段命名（集中在构造函数定义，方便后续修改）
+        self.ema_fast_field = f"close_EMA_{self.ema_fast}"
+        self.ema_slow_field = f"close_EMA_{self.ema_slow}"
+        self.atr_field = f"ATRr_{self.atr_period}"
+        self.adx_field = f"ADX_{self.adx_period}"
+        self.rsi_field = f"close_RSI_{self.rsi_period}"
+        self.macd_field = f"close_MACD_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}"
+        self.macd_signal_field = f"close_MACDs_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}"
+        self.macd_hist_field = f"close_MACDh_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}"
 
     def get_name(self) -> str:
         return "FibonacciRetracement"
@@ -112,36 +127,71 @@ class FibonacciRetracementStrategy(TradingStrategy):
         }
         return levels
 
-    def _compute_atr(self, highs: List[float], lows: List[float], closes: List[float], period: int) -> Optional[float]:
-        if len(closes) < period + 1:
-            return None
-        trs = []
-        for i in range(-period, 0):
-            h = highs[i]
-            l = lows[i]
-            pc = closes[i - 1]
-            if not (self._is_finite(h) and self._is_finite(l) and self._is_finite(pc)):
-                return None
-            trs.append(max(h - l, abs(h - pc), abs(l - pc)))
-        return sum(trs) / len(trs) if trs else None
-
-    def _extract_indicator_latest(self, series: List[Any], attr_names: List[str]) -> Optional[float]:
-        """尝试从指标对象列表中获取一个数字字段"""
+    def _extract_latest_indicator_value(self, series: Optional[List[Any]], keys: List[str]) -> Optional[float]:
+        """
+        兼容封装：从 provider 的指标序列中提取最后一条数值（兼容对象属性或 dict 字段或直接数值）。
+        keys: 候选属性名列表（优先级顺序）
+        """
         if not series:
             return None
         last = series[-1]
         if last is None:
             return None
         if isinstance(last, (int, float)):
-            return float(last)
-        for a in attr_names:
-            val = getattr(last, a, None) if hasattr(last, a) else (last.get(a) if isinstance(last, dict) else None)
-            if val is not None:
+            try:
+                return float(last)
+            except Exception:
+                return None
+        for k in keys:
+            try:
+                v = getattr(last, k, None) if hasattr(last, k) else (last.get(k) if isinstance(last, dict) else None)
+            except Exception:
+                v = None
+            if v is not None:
                 try:
-                    return float(val)
+                    return float(v)
                 except Exception:
                     continue
         return None
+
+    def _get_indicator_values_at_indices(self, series: List[Optional[float]], indices: List[int], total_candles_len: int) -> List[Optional[float]]:
+        """
+        从 provider 的历史指标序列中按全局索引提取对应值（若不可用返回 None）。
+        """
+        out = []
+        if not series:
+            return [None] * len(indices)
+        rel_base = total_candles_len - len(series)
+        for idx in indices:
+            rel = idx - rel_base
+            if 0 <= rel < len(series):
+                out.append(series[rel])
+            else:
+                out.append(None)
+        return out
+
+    def _momentum_confirmation(self, macd_series: Optional[List[Any]], rsi_series: Optional[List[Any]], prefer: str = "bull") -> bool:
+        """
+        简单动量确认：用最新 RSI / MACD-hist 判断是否支持方向（bear 或 bull）。
+        """
+        r_latest = self._extract_latest_indicator_value(rsi_series, [self.rsi_field]) if rsi_series else None
+        macd_hist_latest = None
+        if macd_series:
+            last = macd_series[-1]
+            macd_hist_latest = getattr(last, self.macd_hist_field, None)
+
+        if prefer == "bear":
+            if r_latest is not None and r_latest < 70:
+                return True
+            if macd_hist_latest is not None and macd_hist_latest < 0:
+                return True
+            return False
+        else:
+            if r_latest is not None and r_latest > 30:
+                return True
+            if macd_hist_latest is not None and macd_hist_latest > 0:
+                return True
+            return False
 
     def _make_exit_plan(self, side: str, entry_price: float, atr: Optional[float], stop_atr_mult: float, tp_atr_mult: float, stop_fib_level: Optional[float] = None) -> Dict[str, Any]:
         plan = {"stop": None, "tp": None, "trailing": None, "atr": atr}
@@ -170,9 +220,9 @@ class FibonacciRetracementStrategy(TradingStrategy):
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
         """
         输入:
-          - candles: 日线列表，按时间升序（旧->新），每条需包含 high/low/open/close/volume/date
+            - candles: 日线列表，按时间升序（旧->新），每条需包含 high/low/open/close/volume/date
         输出:
-          - SignalModel: signal in {'buy','sell','hold'} + details 包含入场/止损/目标计划与诊断信息
+            - SignalModel: signal in {'buy','sell','hold'} + details 包含入场/止损/目标计划与诊断信息
         """
         if not candles or not self.provider or len(candles) < self.get_lookback_window():
             return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=candles[-1].date if candles else None, confidence=0.0, reason="insufficient data or provider", details={})
@@ -180,23 +230,25 @@ class FibonacciRetracementStrategy(TradingStrategy):
         # extract OHLCV windows
         N = min(len(candles), max(self.lookback_swings, self.ema_slow, self.atr_period) + 5)
         base = len(candles) - N
-        highs = [float(getattr(c, "high", getattr(c, "High", None))) for c in candles[base:]]
-        lows = [float(getattr(c, "low", getattr(c, "Low", None))) for c in candles[base:]]
-        closes = [float(getattr(c, "close", getattr(c, "Close", None))) for c in candles[base:]]
-        volumes = [float(getattr(c, "volume", getattr(c, "Volume", 0))) for c in candles[base:]]
+        highs = [float(getattr(c, "high", None)) for c in candles[base:]]
+        lows = [float(getattr(c, "low", None)) for c in candles[base:]]
+        closes = [float(getattr(c, "close", None)) for c in candles[base:]]
+        volumes = [float(getattr(c, "volume", None)) for c in candles[base:]]
         dates = [getattr(c, "date", None) for c in candles[base:]]
         curr_close = closes[-1]
 
-        # indicators (via provider)
+        # 指标 via provider（使用构造函数中定义的 period/field）
         ema_fast_series = self.provider.get_indicator("ema", candles, {"length": self.ema_fast})
         ema_slow_series = self.provider.get_indicator("ema", candles, {"length": self.ema_slow})
         atr_series = self.provider.get_indicator("atr", candles, {"length": self.atr_period})
-        macd_series = self.provider.get_indicator("macd", candles, {"fast": 12, "slow": 26, "signal": 9})
-        rsi_series = self.provider.get_indicator("rsi", candles, {"length": 14})
+        macd_series = self.provider.get_indicator("macd", candles, self.macd_params)
+        rsi_series = self.provider.get_indicator("rsi", candles, {"length": self.rsi_period})
+        adx_series = self.provider.get_indicator("adx", candles, {"length": self.adx_period})
 
-        ema_fast_val = self._extract_indicator_latest(ema_fast_series, [f"EMA_{self.ema_fast}", "ema", "EMA"])
-        ema_slow_val = self._extract_indicator_latest(ema_slow_series, [f"EMA_{self.ema_slow}", "ema", "EMA"])
-        atr_val = self._extract_indicator_latest(atr_series, [f"ATR_{self.atr_period}", "atr", "ATR"]) or self._compute_atr(highs, lows, closes, self.atr_period)
+        ema_fast_val = self._extract_latest_indicator_value(ema_fast_series, [self.ema_fast_field])
+        ema_slow_val = self._extract_latest_indicator_value(ema_slow_series, [self.ema_slow_field])
+        atr_val = self._extract_latest_indicator_value(atr_series, [self.atr_field])
+        adx_val = self._extract_latest_indicator_value(adx_series, [self.adx_field])
 
         # trend filter
         trend_up = ema_fast_val is not None and ema_slow_val is not None and ema_fast_val > ema_slow_val
@@ -204,6 +256,7 @@ class FibonacciRetracementStrategy(TradingStrategy):
 
         # swings detection on lookback window
         swings_highs, swings_lows = self._find_fractal_swings(highs[-self.lookback_swings:], lows[-self.lookback_swings:], self.swing_window)
+
         # convert local indices to global (relative to full candles)
         # pick most recent impulse: last pair of opposite swing (e.g., low->high for bullish impulse)
         signal = "hold"
@@ -215,16 +268,11 @@ class FibonacciRetracementStrategy(TradingStrategy):
             reasons.append("no swings")
             return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=dates[-1], confidence=0.0, reason="no swing points", details=details)
 
-        # determine recent impulse: look for most recent swing high and swing low
-        last_high = swings_highs[-1] if swings_highs else None
-        last_low = swings_lows[-1] if swings_lows else None
-
         # default: treat impulse as high->low or low->high depending on which is more recent
         # choose swing pair to compute fib base: for long we want an impulse low->high, for short high->low
         # find last completed impulse (use the two most recent opposite swings)
         long_candidate = None
         short_candidate = None
-
         if len(swings_lows) >= 2:
             # possible long impulse: earlier low -> later high
             # find latest low preceding a later high
@@ -247,9 +295,28 @@ class FibonacciRetracementStrategy(TradingStrategy):
                     short_candidate = (high_idx, high_val, low_idx, low_val)
                     break
 
+        # ADX 趋势强度
+        adx_ok = True if adx_val >= self.adx_threshold else False # 突破趋势强度
+        # 成交量 z-score 确认（vol_ok）：用最近 vol_zscore_window 样本计算 z-score
+        vol_ok = False
+        volume_z = None
+        recent_window = max(1, min(self.vol_zscore_window, len(volumes)))
+        recent_vols = [v for v in volumes[-recent_window:] if v is not None]
+        try:
+            if recent_vols and len(recent_vols) >= 2 and volumes[-1] is not None:
+                mean_v = sum(recent_vols) / len(recent_vols)
+                std_v = statistics.pstdev(recent_vols) if len(recent_vols) > 1 else 0.0
+                if std_v > 0:
+                    volume_z = (volumes[-1] - mean_v) / std_v
+                    vol_ok = volume_z >= self.vol_zscore_threshold
+        except Exception:
+            vol_ok = False
+        # volatility guard
+        vol_guard = (atr_val is not None) and (atr_val / max(abs(curr_close), EPS) >= self.min_atr_price_ratio)
+
         # evaluate long candidate
         entry_plan = None
-        if long_candidate and trend_up:
+        if long_candidate:
             _, swing_low_val, _, swing_high_val = long_candidate
             # compute fib levels from swing_high (impulse top) and swing_low (impulse low)
             fib_levels = self._calc_fib_levels(swing_high_val, swing_low_val)
@@ -260,35 +327,44 @@ class FibonacciRetracementStrategy(TradingStrategy):
             # breakout confirmation: close above zone_high (i.e., price moves back above the upper zone boundary) OR close above recent swing high
             prior_swing_high = swing_high_val
             breakout_confirm = (curr_close > zone_high + EPS) or (curr_close > prior_swing_high + EPS)
-            # volume / momentum checks
-            vol_ok = True
-            if self.require_volume:
-                vol_ma = sum(volumes[-min(len(volumes), 20):]) / max(1, min(len(volumes), 20))
-                vol_ok = volumes[-1] >= vol_ma * 0.8
-            mom_ok = True
-            if self.require_momentum:
-                # use macd histogram as simple momentum
-                try:
-                    m = getattr(macd_series[-1], "macd", None) or getattr(macd_series[-1], "MACD", None)
-                    s = getattr(macd_series[-1], "signal", None) or getattr(macd_series[-1], "SIGNAL", None)
-                    hist = float(m) - float(s) if m is not None and s is not None else 0.0
-                    mom_ok = hist > 0
-                except Exception:
-                    mom_ok = True
-            # volatility guard
-            vol_guard = (atr_val is not None) and (atr_val / max(abs(curr_close), EPS) >= self.min_atr_price_ratio)
-            # score
+            mom_ok = self._momentum_confirmation(macd_series, rsi_series, prefer="bull")
+            
+            # score: 重点强调 in_zone + breakout_confirm + volume/momentum 共振，并适度降低辅助因子权重
             score = 0.0
+            reasons = []
+            # 回撤区间确认
             if in_zone:
-                score += 0.4
+                score += 0.25
+                reasons.append("价格进入Fibonacci回撤区间")
+            # 突破确认
             if breakout_confirm:
-                score += 0.35
+                score += 0.25
+                reasons.append("突破确认")
+            # 成交量确认
             if vol_ok:
-                score += 0.1
+                score += 0.15
+                reasons.append("成交量放大")
+            # 动量确认
             if mom_ok:
-                score += 0.1
+                score += 0.15
+                reasons.append("动量确认")
+            # 趋势强度
+            if adx_ok:
+                score += 0.10
+                reasons.append("趋势强度确认")
+            # 波动率过滤
             if vol_guard:
                 score += 0.05
+                reasons.append("波动率过滤通过")
+            # EMA 趋势方向一致
+            if trend_up:
+                score += 0.05
+                reasons.append("趋势方向一致")
+            # 共振加分
+            if vol_ok and mom_ok and adx_ok:
+                score += 0.1
+                reasons.append("三重共振加分")
+
             confidence = min(1.0, score)
             reasons.append(f"long_candidate in_zone={in_zone} breakout={breakout_confirm} vol_ok={vol_ok} mom_ok={mom_ok} vol_guard={vol_guard}")
             if confidence >= self.score_threshold and (in_zone and breakout_confirm):
@@ -311,31 +387,44 @@ class FibonacciRetracementStrategy(TradingStrategy):
             in_zone = zone_low - EPS <= curr_close <= zone_high + EPS
             prior_swing_low = swing_low_val
             breakout_confirm = (curr_close < zone_low - EPS) or (curr_close < prior_swing_low - EPS)
-            vol_ok = True
-            if self.require_volume:
-                vol_ma = sum(volumes[-min(len(volumes), 20):]) / max(1, min(len(volumes), 20))
-                vol_ok = volumes[-1] >= vol_ma * 0.8
-            mom_ok = True
-            if self.require_momentum:
-                try:
-                    m = getattr(macd_series[-1], "macd", None) or getattr(macd_series[-1], "MACD", None)
-                    s = getattr(macd_series[-1], "signal", None) or getattr(macd_series[-1], "SIGNAL", None)
-                    hist = float(m) - float(s) if m is not None and s is not None else 0.0
-                    mom_ok = hist < 0
-                except Exception:
-                    mom_ok = True
-            vol_guard = (atr_val is not None) and (atr_val / max(abs(curr_close), EPS) >= self.min_atr_price_ratio)
+            mom_ok = self._momentum_confirmation(macd_series, rsi_series, prefer="bear")
+            
+            # score: 重点强调 in_zone + breakout_confirm + volume/momentum 共振，并适度降低辅助因子权重
             score = 0.0
+            reasons = []
+            # 回撤区间确认
             if in_zone:
-                score += 0.4
+                score += 0.25
+                reasons.append("价格进入Fibonacci回撤区间")
+            # 突破确认
             if breakout_confirm:
-                score += 0.35
+                score += 0.25
+                reasons.append("突破确认")
+            # 成交量确认
             if vol_ok:
-                score += 0.1
+                score += 0.15
+                reasons.append("成交量放大")
+            # 动量确认
             if mom_ok:
-                score += 0.1
+                score += 0.15
+                reasons.append("动量确认")
+            # 趋势强度
+            if adx_ok:
+                score += 0.10
+                reasons.append("趋势强度确认")
+            # 波动率过滤
             if vol_guard:
                 score += 0.05
+                reasons.append("波动率过滤通过")
+            # EMA 趋势方向一致
+            if trend_up:
+                score += 0.05
+                reasons.append("趋势方向一致")
+            # 共振加分
+            if vol_ok and mom_ok and adx_ok:
+                score += 0.1
+                reasons.append("三重共振加分")
+
             confidence = min(1.0, score)
             reasons.append(f"short_candidate in_zone={in_zone} breakout={breakout_confirm} vol_ok={vol_ok} mom_ok={mom_ok} vol_guard={vol_guard}")
             if confidence >= self.score_threshold and (in_zone and breakout_confirm):
@@ -351,65 +440,89 @@ class FibonacciRetracementStrategy(TradingStrategy):
                     signal = "hold"
 
         details.update({"reasons": reasons})
-        return SignalModel(symbol=symbol, strategy=self.get_name(), signal=signal, date=dates[-1], confidence=round(confidence if isinstance(confidence, float) else 0.0, 3), reason=" | ".join(reasons), details=details)
+        return SignalModel(symbol=symbol, strategy=self.get_name(), signal=signal, date=dates[-1], confidence=round(confidence, 3), reason=" | ".join(reasons), details=details)
 
-
-def make_fib_retracement_presets() -> Dict[str, Dict[str, Any]]:
+def make_fibonacci_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Presets:
-      - swing: 1-2 week hold, 灵敏
-      - intermediate: 2-6 week
-      - position: 1-3 month, 更守旧
+    为 FibonacciRetracementStrategy 设计的专业预设（swing / intermediate / position）
+    说明：
+        - 值基于经验与风险管理最佳实践，便于快速在不同周期间切换和回测比较。
     """
     swing = {
-        "lookback_swings": 24,
+        # 回溯与形态识别
+        "lookback_swings": 20,
         "swing_window": 3,
         "fib_zone": (0.382, 0.618),
         "stop_fib": 0.786,
+
+        # 趋势/指标
         "ema_fast": 8,
         "ema_slow": 21,
-        "atr_period": 10,
-        "entry_atr_mult": 1.2,
+        "atr_period": 14,
+        "rsi_period": 9,
+        "macd_params": {"fast": 8, "slow": 17, "signal": 9},
+        "adx_period": 7,
+        "adx_threshold": 18.0,
+
+        # 风控与目标
         "stop_atr_mult": 1.2,
         "tp_atr_mult": 2.0,
         "time_stop_bars": 10,
         "min_atr_price_ratio": 0.001,
-        "require_volume": True,
-        "require_momentum": True,
-        "score_threshold": 0.55,
+
+        # 成交量与置信度
+        "vol_zscore_window": 10,
+        "vol_zscore_threshold": 0.8,
+        "score_threshold": 0.7,
     }
+
     intermediate = {
-        "lookback_swings": 40,
+        "lookback_swings": 30,
         "swing_window": 4,
         "fib_zone": (0.382, 0.618),
         "stop_fib": 0.786,
+
         "ema_fast": 13,
         "ema_slow": 34,
         "atr_period": 14,
-        "entry_atr_mult": 1.5,
+        "rsi_period": 14,
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+        "adx_period": 14,
+        "adx_threshold": 25.0,
+
         "stop_atr_mult": 1.5,
         "tp_atr_mult": 2.5,
         "time_stop_bars": 20,
         "min_atr_price_ratio": 0.0015,
-        "require_volume": True,
-        "require_momentum": True,
-        "score_threshold": 0.6,
+
+        "vol_zscore_window": 20,
+        "vol_zscore_threshold": 1.0,
+        "score_threshold": 0.75,
     }
+
     position = {
-        "lookback_swings": 80,
-        "swing_window": 5,
+        "lookback_swings": 45,
+        "swing_window": 6,
         "fib_zone": (0.382, 0.618),
         "stop_fib": 0.786,
+
         "ema_fast": 21,
         "ema_slow": 55,
         "atr_period": 21,
-        "entry_atr_mult": 2.0,
+        "rsi_period": 21,
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+        "adx_period": 20,
+        "adx_threshold": 30.0,
+
+        # 更保守的止损与更大的目标
         "stop_atr_mult": 2.0,
         "tp_atr_mult": 3.0,
         "time_stop_bars": 40,
         "min_atr_price_ratio": 0.002,
-        "require_volume": False,
-        "require_momentum": False,
-        "score_threshold": 0.65,
+
+        "vol_zscore_window": 40,
+        "vol_zscore_threshold": 1.2,
+        "score_threshold": 0.8,
     }
+
     return {"swing": swing, "intermediate": intermediate, "position": position}

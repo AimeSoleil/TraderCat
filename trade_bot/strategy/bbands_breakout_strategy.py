@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict, Any, Tuple
-import math
 import statistics
-from datetime import datetime, timedelta
+
+import numpy as np
 
 from trade_bot.strategy.trading_strategy import TradingStrategy
 from trade_bot.strategy.signal_model import SignalModel
@@ -26,7 +26,9 @@ class BollingerBreakoutStrategy(TradingStrategy):
     - BW 百分位: 在 trailing_bw_window (默认100日) 内的百分位，用于判断 squeeze
     - EMA(fast), EMA(slow) : 趋势滤波
     - ATR : 风险与止损参考
-    - ADX (可选) : 趋势强度过滤
+    - ADX (可选) : 趋势强度过滤，判断趋势，反正
+
+    Long/bull, filter: in_squeeze, adx, atr, volume, trend(ema/sma), momentum 
     """
 
     def __init__(
@@ -38,13 +40,18 @@ class BollingerBreakoutStrategy(TradingStrategy):
         ema_fast: int = 13,
         ema_slow: int = 34,
         atr_period: int = 14,
-        adx_period: Optional[int] = None,
+        adx_period: int = 14,
+        adx_threshold: float = 25.0,
+        rsi_period: Optional[int] = 14,
+        macd_params: Optional[Dict[str,int]] = {"fast":12,"slow":26,"signal":9},
         prior_swing_bars: int = 5,
         entry_atr_mult: float = 1.8,
         chandelier_len: int = 22,
         chandelier_atr_mult: float = 3.0,
         time_stop_bars: int = 15,
         min_atr_price_ratio: float = 0.002,  # volatility guard: ATR / price
+        vol_zscore_window: int = 20,
+        vol_zscore_threshold: float = 1.0,
         score_threshold: float = 0.6,
         data_provider = None
     ):
@@ -56,14 +63,33 @@ class BollingerBreakoutStrategy(TradingStrategy):
         self.ema_slow = ema_slow
         self.atr_period = atr_period
         self.adx_period = adx_period
+        self.adx_threshold = adx_threshold
+        self.rsi_period = rsi_period
+        self.macd_params = macd_params
         self.prior_swing_bars = prior_swing_bars
         self.entry_atr_mult = entry_atr_mult
         self.chandelier_len = chandelier_len
         self.chandelier_atr_mult = chandelier_atr_mult
         self.time_stop_bars = time_stop_bars
         self.min_atr_price_ratio = min_atr_price_ratio
+        self.vol_zscore_window = int(vol_zscore_window)
+        self.vol_zscore_threshold = float(vol_zscore_threshold)
         self.score_threshold = score_threshold
         self.provider = data_provider
+
+        # 指标字段命名（对应 provider 返回的属性）
+        self.bb_bw_field = f"close_BBB_{self.bb_period}_{self.bb_std}"
+        self.bb_up_field = f"close_BBU_{self.bb_period}_{self.bb_std}"
+        self.bb_low_field = f"close_BBL_{self.bb_period}_{self.bb_std}"
+        self.bb_mid_field = f"close_BBM_{self.bb_period}_{self.bb_std}"
+        self.ema_fast_field = f"close_EMA_{self.ema_fast}"
+        self.ema_slow_field = f"close_EMA_{self.ema_slow}"
+        self.atr_field = f"ATRr_{self.atr_period}"
+        self.adx_field = f"ADX_{self.adx_period}"
+        self.macd_field = f"close_MACD_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}"
+        self.macd_signal_field = f"close_MACDs_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}"
+        self.macd_hist_field = f"close_MACDh_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}"
+        self.rsi_field = f"close_RSI_{self.rsi_period}"
 
     def get_name(self) -> str:
         return "BollingerBreakout"
@@ -94,6 +120,110 @@ class BollingerBreakoutStrategy(TradingStrategy):
     def _lowest(self, vals: List[float], n: int) -> float:
         return min(vals[-n:]) if len(vals) >= n and n > 0 else min(vals)
 
+    def _read_provider_bandwidth(self, bb: Any, closes: List[float], idx: int) -> Tuple[Optional[float], List[float], Optional[float], Optional[float], Optional[float]]:
+        """
+        统一读取 provider 提供的 bandwidth 字段及上/中/下带（若可用）。
+        返回: (curr_bw, bw_list, u_curr, l_curr, m_curr)
+        """
+        curr_bw = None
+        u_curr = l_curr = m_curr = None
+        if not bb:
+            return None, [], None, None, None
+        # 尝试读取 upper/mid/lower（用于止损/显示）
+        try:
+            curr_bw = getattr(bb[-1], self.bb_bw_field, None)
+            u_curr = getattr(bb[-1], self.bb_up_field, None)
+            l_curr = getattr(bb[-1], self.bb_low_field, None)
+            m_curr = getattr(bb[-1], self.bb_mid_field, None)
+        except Exception:
+            u_curr = l_curr = m_curr = None
+        # 构建历史 bandwidth 列表：仅从 provider 的 bandwidth 字段收集
+        bw_list: List[float] = []
+        start = max(0, idx - self.trailing_bw_window + 1)
+        for i in range(start, idx + 1):
+            try:
+                bbi = bb[i] if bb and i < len(bb) else None
+                if bbi is None:
+                    continue
+                v = getattr(bbi, self.bb_bw_field, None)
+                if v is not None:
+                    bw_list.append(float(v))
+            except Exception:
+                continue
+        return curr_bw, bw_list, u_curr, l_curr, m_curr
+
+    def _extract_latest_indicator_value(self, series: Optional[List[Any]], keys: List[str]) -> Optional[float]:
+        """
+        从 provider 返回的指标序列中提取最后一条数值，兼容不同字段命名或直接数值列表。
+        keys: 候选属性名列表（优先级顺序）
+        """
+        if not series:
+            return None
+        last = series[-1]
+        if last is None:
+            return None
+        if isinstance(last, (int, float)):
+            try:
+                return float(last)
+            except Exception:
+                return None
+        for k in keys:
+            try:
+                if hasattr(last, k):
+                    v = getattr(last, k)
+                elif isinstance(last, dict):
+                    v = last.get(k)
+                else:
+                    v = None
+            except Exception:
+                v = None
+            if v is not None:
+                try:
+                    return float(v)
+                except Exception:
+                    continue
+        return None
+
+    def _get_indicator_values_at_indices(self, series: List[Optional[float]], indices: List[int], total_candles_len: int) -> List[Optional[float]]:
+        """
+        从 provider 的指标 history 列表（series，长度可能小于 total_candles_len）中，
+        按全局索引列表 indices 返回对应值列表（顺序与 indices 对应）。
+        """
+        out = []
+        if not series:
+            return [None] * len(indices)
+        rel_base = total_candles_len - len(series)
+        for idx in indices:
+            rel = idx - rel_base
+            if 0 <= rel < len(series):
+                out.append(series[rel])
+            else:
+                out.append(None)
+        return out
+
+    def _momentum_confirmation(self, rsi_series: Optional[List[Any]], macd_series: Optional[List[Any]], prefer: str = "bear") -> bool:
+        """
+        简单的动量确认：检查最新 RSI / MACD-hist 是否支持方向
+        prefer: "bear" 或 "bull"
+        """
+        r_latest = self._extract_latest_indicator_value(rsi_series, [self.rsi_field]) if rsi_series else None
+        macd_hist_latest = None
+        if macd_series:
+            macd_hist_latest = getattr(macd_series[-1], self.macd_hist_field, None)
+
+        if prefer == "bear":
+            if r_latest is not None and r_latest < 70:
+                return True
+            if macd_hist_latest is not None and macd_hist_latest < 0:
+                return True
+            return False
+        else:
+            if r_latest is not None and r_latest > 30:
+                return True
+            if macd_hist_latest is not None and macd_hist_latest > 0:
+                return True
+            return False
+
     # --- 主逻辑 ---
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
         """
@@ -119,82 +249,42 @@ class BollingerBreakoutStrategy(TradingStrategy):
         ema_fast = self.provider.get_indicator("ema", candles, {"length": self.ema_fast})
         ema_slow = self.provider.get_indicator("ema", candles, {"length": self.ema_slow})
         atr = self.provider.get_indicator("atr", candles, {"length": self.atr_period})
-        adx = None
-        if self.adx_period:
-            adx = self.provider.get_indicator("adx", candles, {"length": self.adx_period})
+        adx = self.provider.get_indicator("adx", candles, {"length": self.adx_period})
 
         # 提取 recent 值（以 provider 返回的属性命名为近似格式）
         closes = [float(c.close) for c in candles]
         highs = [float(c.high) for c in candles]
         lows = [float(c.low) for c in candles]
+        vols = [float(c.volume) for c in candles]
         dates = [getattr(c, "date", None) for c in candles]
 
         idx = len(candles) - 1
         close = closes[-1]
 
-        # BB 当前值（根据 provider 字段命名可能不同，尝试常见字段名）
-        bbu = getattr(bb[-1], f"close_BBU_{self.bb_period}_{self.bb_std}", None) if bb else None
-        bbl = getattr(bb[-1], f"close_BBL_{self.bb_period}_{self.bb_std}", None) if bb else None
-        bbm = getattr(bb[-1], f"close_BBM_{self.bb_period}_{self.bb_std}", None) if bb else None
-
-        # 兼容不同provider字段名（常见）
-        if bbu is None and bb:
-            bbu = getattr(bb[-1], "upper", None) or getattr(bb[-1], "BBU", None)
-            bbl = bbl or getattr(bb[-1], "lower", None) or getattr(bb[-1], "BBL", None)
-            bbm = bbm or getattr(bb[-1], "middle", None) or getattr(bb[-1], "BBM", None)
-
-        if None in (bbu, bbl, bbm):
+        # 使用独立函数从 provider 读取 bandwidth（并获取历史 bandwidth 列表与 BBU/BBL/BBM）
+        curr_bw, bw_list, bbu, bbl, bbm = self._read_provider_bandwidth(bb, closes, idx)
+        if curr_bw is None or not bw_list:
             return SignalModel(
                 symbol=symbol,
                 strategy=self.get_name(),
                 signal="hold",
                 date=dates[-1],
-                reason="缺少BB指标",
+                reason=f"缺少 BB bandwidth",
                 confidence=0.0
             )
-
-        # 计算 BandWidth（当前）与 trailing BW 队列（用于百分位）
-        curr_bw = (bbu - bbl) / (bbm if abs(bbm) > EPS else 1.0)
-        bw_list = []
-        # 从 provider 的 bb 历史中提取 bandwidth（兼容字段不足则自计算）
-        for i in range(max(0, idx - self.trailing_bw_window + 1), idx + 1):
-            # 尝试取 provider 中的上/下/中值
-            try:
-                bbi = bb[i]
-                u = getattr(bbi, f"close_BBU_{self.bb_period}_{self.bb_std}", None) or getattr(bbi, "upper", None) or getattr(bbi, "BBU", None)
-                l = getattr(bbi, f"close_BBL_{self.bb_period}_{self.bb_std}", None) or getattr(bbi, "lower", None) or getattr(bbi, "BBL", None)
-                m = getattr(bbi, f"close_BBM_{self.bb_period}_{self.bb_std}", None) or getattr(bbi, "middle", None) or getattr(bbi, "BBM", None)
-                if None not in (u, l, m) and abs(m) > EPS:
-                    bw_list.append((u - l) / m)
-                else:
-                    # 备用：用 price slice 计算
-                    window = closes[max(0, i - self.bb_period + 1):i+1]
-                    if len(window) >= self.bb_period:
-                        sma = self._sma(window)
-                        std = self._std(window)
-                        bw_list.append(( (sma + self.bb_std*std) - (sma - self.bb_std*std) ) / (sma if abs(sma)>EPS else 1.0))
-            except Exception:
-                continue
-
-        bw_pct = self._percentile_rank(bw_list, curr_bw) if bw_list else 100.0
+        bw_pct = self._percentile_rank(bw_list, curr_bw)
+        # 值越小表示相对于历史越窄（更“收缩”）。用 ≤ threshold 表示“在历史最窄的 X% 范围内视为 squeeze”
         in_squeeze = bw_pct <= self.bw_percentile_threshold
 
-        # 趋势过滤（EMA）
-        try:
-            ema_f = float(getattr(ema_fast[-1], f"EMA_{self.ema_fast}") or getattr(ema_fast[-1], "ema", None) or ema_fast[-1])
-            ema_s = float(getattr(ema_slow[-1], f"EMA_{self.ema_slow}") or getattr(ema_slow[-1], "ema", None) or ema_slow[-1])
-        except Exception:
-            # 退回到简单均线差
-            ema_f = sum(closes[-self.ema_fast:]) / self.ema_fast
-            ema_s = sum(closes[-self.ema_slow:]) / self.ema_slow
-
+        # 趋势过滤（EMA），使用封装的提取函数（兼容 provider 命名）
+        ema_f = self._extract_latest_indicator_value(ema_fast, [self.ema_fast_field])
+        ema_s = self._extract_latest_indicator_value(ema_slow, [self.ema_slow_field])
         trend_long = ema_f > ema_s
         trend_short = ema_f < ema_s
 
         # ATR 当前值
-        try:
-            atr_val = float(getattr(atr[-1], f"ATR_{self.atr_period}") or getattr(atr[-1], "atr", None) or atr[-1])
-        except Exception:
+        atr_val = self._extract_latest_indicator_value(atr, [self.atr_field, "atr", "ATR"])
+        if atr_val is None:
             # 计算简单近似 ATR（高低振幅 SMA）
             trs = [abs(highs[i] - lows[i]) for i in range(max(0, idx - self.atr_period + 1), idx+1)]
             atr_val = self._sma(trs) if trs else 0.0
@@ -202,25 +292,33 @@ class BollingerBreakoutStrategy(TradingStrategy):
         # 波动性 guard
         vol_guard_ok = (atr_val / (close if abs(close)>EPS else 1.0)) >= self.min_atr_price_ratio
 
+        # 成交量 z-score 确认（vol_ok）：用最近 vol_zscore_window 样本计算 z-score
+        vol_ok = False
+        volume_z = None
+        recent_window = max(1, min(self.vol_zscore_window, len(vols)))
+        recent_vols = [v for v in vols[-recent_window:] if v is not None]
+        try:
+            if recent_vols and len(recent_vols) >= 2 and vols[-1] is not None:
+                mean_v = sum(recent_vols) / len(recent_vols)
+                std_v = statistics.pstdev(recent_vols) if len(recent_vols) > 1 else 0.0
+                if std_v > 0:
+                    volume_z = (vols[-1] - mean_v) / std_v
+                    vol_ok = volume_z >= self.vol_zscore_threshold
+        except Exception:
+            vol_ok = False
+
         # prior swing high/low over prior_swing_bars (exclude current)
         prior_range_high = max(highs[max(0, idx - self.prior_swing_bars): idx]) if idx - self.prior_swing_bars >= 0 else max(highs[:-1])
         prior_range_low = min(lows[max(0, idx - self.prior_swing_bars): idx]) if idx - self.prior_swing_bars >= 0 else min(lows[:-1])
 
+        # ADX 趋势强度
+        adx_val = self._extract_latest_indicator_value(adx, [self.adx_field]) if adx else None
+        adx_ok = True if adx_val >= self.adx_threshold else False # 突破趋势强度
+
         # 信号判定
-        long_break = (close > bbu) and (close > prior_range_high) and trend_long and in_squeeze and vol_guard_ok
-        short_break = (close < bbl) and (close < prior_range_low) and trend_short and in_squeeze and vol_guard_ok
+        long_break = (close > bbu) and (close > prior_range_high)
+        short_break = (close < bbl) and (close < prior_range_low)
 
-        # ADX 趋势强度（可选）提高置信度
-        adx_val = None
-        if adx:
-            try:
-                adx_val = float(getattr(adx[-1], f"ADX_{self.adx_period}") or getattr(adx[-1], "ADX", None) or adx[-1])
-            except Exception:
-                adx_val = None
-
-        # 评分 & 生成 signal
-        confidence = 0.0
-        reason_parts = []
         details: Dict[str, Any] = {
             "close": close,
             "bbu": bbu,
@@ -235,21 +333,43 @@ class BollingerBreakoutStrategy(TradingStrategy):
             "in_squeeze": in_squeeze,
             "vol_guard_ok": vol_guard_ok
         }
-
+        
+        # 评分 & 生成 signal
+        score = 0.0
+        reasons = []
+        confidence = 0.0
         signal = "hold"
-
+        # 强调 squeeze 和成交量的共振效应
         if long_break or short_break:
-            # 基本信号分数由多条件累加
-            score = 0.0
-            # squeeze 强度（越小越好）
-            score += max(0.0, (100.0 - bw_pct) / 100.0) * 0.4
-            # EMA 趋势确认
-            score += 0.3
-            # ATR guard
-            score += 0.15 if vol_guard_ok else 0.0
-            # ADX 加权
-            if adx_val is not None:
-                score += 0.15 * (min(adx_val, 40.0) / 40.0)
+            # 基础突破信号
+            score += 0.25
+            reasons.append("突破触发")
+            # squeeze 强度（非线性）
+            if in_squeeze:
+                squeeze_score = max(0.0, (self.bw_percentile_threshold - bw_pct) / self.bw_percentile_threshold)
+                squeeze_score = squeeze_score ** 1.5  # 非线性放大
+                score += 0.25 * squeeze_score
+                reasons.append(f"Squeeze强度:{round(squeeze_score, 2)}")
+            # ATR 波动率过滤
+            if vol_guard_ok:
+                score += 0.10
+                reasons.append("波动率过滤通过")
+            # ADX 趋势强度
+            if adx_ok:
+                score += 0.15
+                reasons.append("趋势强度确认")
+            # 成交量确认
+            if vol_ok:
+                score += 0.15
+                reasons.append("成交量放大")
+            # EMA 趋势方向一致
+            if (long_break and trend_long) or (short_break and trend_short):
+                score += 0.10
+                reasons.append("趋势方向一致")
+            # 共振加分
+            if vol_ok and adx_ok and ((long_break and trend_long) or (short_break and trend_short)):
+                score += 0.1
+                reasons.append("三重共振加分")
 
             confidence = min(1.0, score)
             details["score"] = round(score, 3)
@@ -275,31 +395,20 @@ class BollingerBreakoutStrategy(TradingStrategy):
             # 生成具体信号类型
             if long_break and confidence >= self.score_threshold:
                 signal = "buy"
-                reason_parts.append("BB上破后收盘")
-                reason_parts.append(f"Squeeze BW_pct={bw_pct:.1f}%")
-                reason_parts.append("EMA 趋势向上")
-                if adx_val:
-                    reason_parts.append(f"ADX={adx_val:.1f}")
+                
             elif short_break and confidence >= self.score_threshold:
                 signal = "sell"
-                reason_parts.append("BB下破后收盘")
-                reason_parts.append(f"Squeeze BW_pct={bw_pct:.1f}%")
-                reason_parts.append("EMA 趋势向下")
-                if adx_val:
-                    reason_parts.append(f"ADX={adx_val:.1f}")
             else:
                 # 未达到阈值则观望
                 signal = "hold"
-                reason_parts.append("突破发生但置信度不足")
+                reasons.append("突破发生但置信度不足")
         else:
-            reason_parts.append("无有效突破或不在squeeze/趋势不符/波动率不足")
+            reasons.append("无有效突破或不在squeeze/趋势不符/波动率不足")
 
         # 失败保护（mean-reversion failsafe）说明（仅作为出场规则，不直接在此刻触发）
         details["failsafe"] = (
-            "如果入场后在 time_stop_bars 内出现价格回归到 BB 内并穿过 midline (BBM)，则考虑平仓（均值回归保护）"
+            f"如果入场后在 time_stop_bars({self.time_stop_bars}) 内出现价格回归到 BB 内并穿过 midline (BBM)，则考虑平仓（均值回归保护）"
         )
-
-        reason = " | ".join(reason_parts)
 
         return SignalModel(
             symbol=symbol,
@@ -307,68 +416,84 @@ class BollingerBreakoutStrategy(TradingStrategy):
             signal=signal,
             date=dates[-1],
             confidence=round(confidence, 3),
-            reason=reason,
+            reason=" | ".join(reasons),
             details=details
         )
 
-
 def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
     """
-    预设配置（用于快速切换策略参数）
-
-    - swing: 主要用于 1-2 周波段
-    - intermediate: 主要用于 2-6 周波段
-    - position: 主要用于 1-3 月持仓
+    预设：便于在不同持仓周期间快速切换（基于资深 algo trader 的经验调优）
+    - swing: 短波段（1-2周），更灵敏的入场、更短的历史窗口、更低的成交量 z-score 阈值
+    - intermediate: 中波段（2-6周），平衡的参数（回测默认）
+    - position: 中长线（1-3月），更保守、更严格的趋势/成交量/波动性门槛
     """
     swing = {
         "bb_period": 20,
         "bb_std": 2.0,
-        "trailing_bw_window": 80,
-        "bw_percentile_threshold": 30.0,
-        "ema_fast": 13,
-        "ema_slow": 34,
+        "trailing_bw_window": 60,          # 较短历史窗口，更灵敏识别 squeeze
+        "bw_percentile_threshold": 20.0,   # 更严格的 squeeze 要求
+        "ema_fast": 8,
+        "ema_slow": 21,
         "atr_period": 14,
-        "prior_swing_bars": 5,
-        "entry_atr_mult": 1.6,
-        "chandelier_len": 22,
-        "chandelier_atr_mult": 3.0,
-        "time_stop_bars": 12,
-        "min_atr_price_ratio": 0.0015,
-        "score_threshold": 0.6
+        "adx_period": 7,
+        "adx_threshold": 18.0,             # 放低 ADX 要求以提高入场频率
+        "rsi_period": 9,
+        "macd_params": {"fast": 8, "slow": 17, "signal": 9},
+        "prior_swing_bars": 3,
+        "entry_atr_mult": 1.2,
+        "chandelier_len": 14,
+        "chandelier_atr_mult": 2.5,
+        "time_stop_bars": 8,
+        "min_atr_price_ratio": 0.001,
+        "vol_zscore_window": 10,           # 短窗口用于更快响应成交量变化
+        "vol_zscore_threshold": 0.8,       # 较低阈值，允许轻微放量确认
+        "score_threshold": 0.7
     }
 
     intermediate = {
         "bb_period": 20,
         "bb_std": 2.0,
-        "trailing_bw_window": 100,
+        "trailing_bw_window": 100,         # 平衡窗口
         "bw_percentile_threshold": 30.0,
-        "ema_fast": 21,
-        "ema_slow": 55,
+        "ema_fast": 13,
+        "ema_slow": 34,
         "atr_period": 14,
+        "adx_period": 14,
+        "adx_threshold": 25.0,             # 标准 ADX 门槛
+        "rsi_period": 14,
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
         "prior_swing_bars": 8,
-        "entry_atr_mult": 1.8,
-        "chandelier_len": 34,
+        "entry_atr_mult": 1.6,
+        "chandelier_len": 22,
         "chandelier_atr_mult": 3.0,
-        "time_stop_bars": 20,
-        "min_atr_price_ratio": 0.002,
-        "score_threshold": 0.65
+        "time_stop_bars": 15,
+        "min_atr_price_ratio": 0.0015,
+        "vol_zscore_window": 20,
+        "vol_zscore_threshold": 1.0,       # 常用阈值：成交量 >=1σ 放大确认
+        "score_threshold": 0.75
     }
 
     position = {
         "bb_period": 20,
         "bb_std": 2.0,
-        "trailing_bw_window": 150,
-        "bw_percentile_threshold": 35.0,
+        "trailing_bw_window": 200,         # 长窗口，减少假突破
+        "bw_percentile_threshold": 40.0,   # 更宽容的历史百分位（更少信号但更稳）
         "ema_fast": 34,
         "ema_slow": 89,
         "atr_period": 21,
-        "prior_swing_bars": 13,
+        "adx_period": 20,
+        "adx_threshold": 30.0,             # 严格 ADX 要求，确认趋势强度
+        "rsi_period": 21,
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+        "prior_swing_bars": 20,
         "entry_atr_mult": 2.0,
         "chandelier_len": 55,
         "chandelier_atr_mult": 3.5,
         "time_stop_bars": 40,
         "min_atr_price_ratio": 0.0025,
-        "score_threshold": 0.7
+        "vol_zscore_window": 40,           # 更长窗口平滑成交量噪声
+        "vol_zscore_threshold": 1.2,       # 更高阈值要求更强的成交量确认
+        "score_threshold": 0.8
     }
 
     return {"swing": swing, "intermediate": intermediate, "position": position}

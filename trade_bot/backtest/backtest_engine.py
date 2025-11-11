@@ -134,9 +134,11 @@ class BacktestEngine:
 
     def run(self):
         for i in range(self.strategy.get_lookback_window() + 1, len(self.candles)):
-            window = self.candles[:i+1]
-            signal_model: SignalModel = self.strategy.generate_signal(self.symbol, window)
-            price = window[-1].close
+            candle_slice = self.candles[:i+1]
+            signal_model: SignalModel = self.strategy.generate_signal(self.symbol, candle_slice)
+            date = candle_slice[-1].date
+            price = candle_slice[-1].close
+            print(f"{date} symbol: {self.symbol}, signal: {signal_model}")
             self.tracker.execute(signal_model, price, i)
             self.tracker.record_portfolio(price)
 
@@ -157,9 +159,10 @@ class MultiSymbolBacktestEngine:
         self.candle_data = {}
 
     def run(self):
+        lookback = max(self.strategy.get_lookback_window(), self.lookback_days) + 100
         for symbol in self.symbols:
-            candles = self.provider.get_price_data(symbol, interval=self.interval, lookback=self.lookback_days)
-            if not candles or len(candles) < 100:
+            candles = self.provider.get_price_data(symbol, interval=self.interval, lookback=lookback)
+            if not candles or len(candles) < self.strategy.get_lookback_window():
                 print(f"⚠️ Skipping {symbol}: insufficient data.")
                 continue
             self.candle_data[symbol] = candles

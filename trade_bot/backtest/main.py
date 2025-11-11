@@ -8,10 +8,10 @@ from trade_bot.backtest.backtest_engine import BacktestRunner
 from trade_bot.data.openbb_provider import OpenBBProvider
 from trade_bot.strategy.bbands_breakout_strategy import BollingerBreakoutStrategy, make_bbands_breakout_presets
 from trade_bot.strategy.bbands_divergence_strategy import BBandsDivergenceStrategy, make_bbands_divergence_presets
+from trade_bot.strategy.candlestick_reversal_strategy import CandlestickReversalStrategy, make_candlestick_reversal_presets
 from trade_bot.strategy.divergence_strategy import DivergenceStrategy, make_divergence_presets
-from trade_bot.strategy.fibonacci_retracement_strategy import FibonacciRetracementStrategy, make_fib_retracement_presets
-from trade_bot.strategy.momentum_strategy import MomentumTrendStrategy, make_momentum_trend_presets
-from trade_bot.strategy.moving_average_strategy import MovingAverageTrendStrategy, make_moving_average_trend_presets
+from trade_bot.strategy.fibonacci_retracement_strategy import FibonacciRetracementStrategy, make_fibonacci_presets
+from trade_bot.strategy.momentum_strategy import MomentumTrendStrategy, make_momentum_presets
 
 # 🔧 Configuration
 CONFIG = {
@@ -42,11 +42,25 @@ CONFIG = {
         #     "intermediate"
         #     "position"
         # ],
-        "MovingAverage": [
+        
+        # "BBBreakout": [
+        #     "swing",
+        # ],
+        # "BBDivergence": [
+        #     "swing",
+        # ],
+        "Divergence": [
             "swing",
-            # "intermediate"
-            # "position"
         ],
+        # "ReversalCandle": [
+        #     "swing",
+        # ],
+        # "Fibonacci": [
+        #     "swing",
+        # ],
+        # "Momentum": [
+        #     "swing",
+        # ],
     },
     "interval": "1d",
     "initial_cash": 100000,
@@ -60,9 +74,9 @@ def run_configured_presets():
         "BBBreakout": (BollingerBreakoutStrategy, make_bbands_breakout_presets()),
         "BBDivergence": (BBandsDivergenceStrategy, make_bbands_divergence_presets()),
         "Divergence": (DivergenceStrategy, make_divergence_presets()),
-        "Fibonacci": (FibonacciRetracementStrategy, make_fib_retracement_presets()),
-        "Momentum": (MomentumTrendStrategy, make_momentum_trend_presets()),
-        "MovingAverage": (MovingAverageTrendStrategy, make_moving_average_trend_presets()),
+        "ReversalCandle": (CandlestickReversalStrategy, make_candlestick_reversal_presets()),
+        "Fibonacci": (FibonacciRetracementStrategy, make_fibonacci_presets()),
+        "Momentum": (MomentumTrendStrategy, make_momentum_presets()),
     }
 
     total_results = {}
@@ -146,15 +160,15 @@ def print_total_results(total_results):
     print(tabulate(table, headers=headers, tablefmt="pretty"))
 
 def animate_progress_bar(stop_event, prefix='Progress', total=100):
-    with tqdm(total=total, desc=prefix, bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}", ncols=70) as pbar:
+    with tqdm(total=total, desc=prefix, bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}", ncols=70) as p_bar:
         while not stop_event.is_set():
             time.sleep(0.5) # Adjust the sleep time as needed   
-            pbar.update(1)
-            if pbar.n >= total:
-                pbar.n = 0
-                pbar.refresh()
-        pbar.n = total
-        pbar.refresh()
+            p_bar.update(1)
+            if p_bar.n >= total:
+                p_bar.n = 0
+                p_bar.refresh()
+        p_bar.n = total
+        p_bar.refresh()
 
 if __name__ == "__main__":
     run_configured_presets()
