@@ -7,7 +7,7 @@ from tqdm import tqdm
 from trade_bot.backtest.backtest_engine import BacktestRunner
 from trade_bot.data.openbb_provider import OpenBBProvider
 from trade_bot.strategy.bbands_breakout_strategy import BollingerBreakoutStrategy, make_bbands_breakout_presets
-from trade_bot.strategy.bbands_divergence_strategy import BBandsDivergenceStrategy, make_bbands_divergence_presets
+from trade_bot.strategy.bbands_reversal_strategy import BBandsReversalStrategy, make_bbands_reversal_presets
 from trade_bot.strategy.candlestick_reversal_strategy import CandlestickReversalStrategy, make_candlestick_reversal_presets
 from trade_bot.strategy.divergence_strategy import DivergenceStrategy, make_divergence_presets
 from trade_bot.strategy.fibonacci_retracement_strategy import FibonacciRetracementStrategy, make_fibonacci_presets
@@ -22,7 +22,7 @@ CONFIG = {
         #     "intermediate"
         #     "position"
         # ],
-        # "BBDivergence": [
+        # "BBReversal": [
         #     "swing",
         #     "intermediate"
         #     "position"
@@ -46,12 +46,12 @@ CONFIG = {
         # "BBBreakout": [
         #     "swing",
         # ],
-        # "BBDivergence": [
-        #     "swing",
-        # ],
-        "Divergence": [
+        "BBReversal": [
             "swing",
         ],
+        # "Divergence": [
+        #     "swing",
+        # ],
         # "ReversalCandle": [
         #     "swing",
         # ],
@@ -72,7 +72,7 @@ def run_configured_presets():
 
     strategy_registry = {
         "BBBreakout": (BollingerBreakoutStrategy, make_bbands_breakout_presets()),
-        "BBDivergence": (BBandsDivergenceStrategy, make_bbands_divergence_presets()),
+        "BBReversal": (BBandsReversalStrategy, make_bbands_reversal_presets()),
         "Divergence": (DivergenceStrategy, make_divergence_presets()),
         "ReversalCandle": (CandlestickReversalStrategy, make_candlestick_reversal_presets()),
         "Fibonacci": (FibonacciRetracementStrategy, make_fibonacci_presets()),
@@ -108,7 +108,7 @@ def run_configured_presets():
                     symbols=CONFIG["symbols"],
                     provider=data_provider,
                     interval=CONFIG["interval"],
-                    lookback_days=max(365, strategy.get_lookback_window() * 2),
+                    lookback_days=max(720, strategy.get_lookback_window() * 2),
                     initial_cash=CONFIG["initial_cash"],
                 )
 

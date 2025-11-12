@@ -85,12 +85,6 @@ class MomentumTrendStrategy(TradingStrategy):
         )
 
     # ---------- helpers ----------
-    def _sma(self, vals: List[float]) -> float:
-        return sum(vals) / len(vals) if vals else 0.0
-
-    def _std(self, vals: List[float]) -> float:
-        return statistics.pstdev(vals) if len(vals) > 0 else 0.0
-
     def _compute_return_L(self, closes: List[float], L: int) -> Optional[float]:
         if len(closes) <= L:
             return None
@@ -314,6 +308,9 @@ class MomentumTrendStrategy(TradingStrategy):
         )
 
         # momentum rule: long if ret_L > 0 and same direction EMAs; short if ret_L < 0 and EMA alignment
+        # classic momentum measure:
+        #   - If return_L > 0, price has risen over the last L periods → bullish momentum.
+        #   - If return_L < 0, price has fallen → bearish momentum.
         long_cond = (
             (ret_L is not None and ret_L > 0)
             and trend_day_up

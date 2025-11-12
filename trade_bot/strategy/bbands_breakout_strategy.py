@@ -43,7 +43,6 @@ class BollingerBreakoutStrategy(TradingStrategy):
         adx_period: int = 14,
         adx_threshold: float = 25.0,
         rsi_period: Optional[int] = 14,
-        macd_params: Optional[Dict[str,int]] = {"fast":12,"slow":26,"signal":9},
         prior_swing_bars: int = 5,
         entry_atr_mult: float = 1.8,
         chandelier_len: int = 22,
@@ -65,7 +64,6 @@ class BollingerBreakoutStrategy(TradingStrategy):
         self.adx_period = adx_period
         self.adx_threshold = adx_threshold
         self.rsi_period = rsi_period
-        self.macd_params = macd_params
         self.prior_swing_bars = prior_swing_bars
         self.entry_atr_mult = entry_atr_mult
         self.chandelier_len = chandelier_len
@@ -86,9 +84,6 @@ class BollingerBreakoutStrategy(TradingStrategy):
         self.ema_slow_field = f"close_EMA_{self.ema_slow}"
         self.atr_field = f"ATRr_{self.atr_period}"
         self.adx_field = f"ADX_{self.adx_period}"
-        self.macd_field = f"close_MACD_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}"
-        self.macd_signal_field = f"close_MACDs_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}"
-        self.macd_hist_field = f"close_MACDh_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}"
         self.rsi_field = f"close_RSI_{self.rsi_period}"
 
     def get_name(self) -> str:
@@ -107,12 +102,6 @@ class BollingerBreakoutStrategy(TradingStrategy):
         equal = sum(1 for x in arr if x == value)
         rank = (less + 0.5 * equal) / len(arr) * 100.0
         return rank
-
-    def _sma(self, vals: List[float]) -> float:
-        return sum(vals) / len(vals) if vals else 0.0
-
-    def _std(self, vals: List[float]) -> float:
-        return statistics.pstdev(vals) if len(vals) > 0 else 0.0
 
     def _highest(self, vals: List[float], n: int) -> float:
         return max(vals[-n:]) if len(vals) >= n and n > 0 else max(vals)
@@ -184,46 +173,6 @@ class BollingerBreakoutStrategy(TradingStrategy):
                     continue
         return None
 
-    def _get_indicator_values_at_indices(self, series: List[Optional[float]], indices: List[int], total_candles_len: int) -> List[Optional[float]]:
-        """
-        从 provider 的指标 history 列表（series，长度可能小于 total_candles_len）中，
-        按全局索引列表 indices 返回对应值列表（顺序与 indices 对应）。
-        """
-        out = []
-        if not series:
-            return [None] * len(indices)
-        rel_base = total_candles_len - len(series)
-        for idx in indices:
-            rel = idx - rel_base
-            if 0 <= rel < len(series):
-                out.append(series[rel])
-            else:
-                out.append(None)
-        return out
-
-    def _momentum_confirmation(self, rsi_series: Optional[List[Any]], macd_series: Optional[List[Any]], prefer: str = "bear") -> bool:
-        """
-        简单的动量确认：检查最新 RSI / MACD-hist 是否支持方向
-        prefer: "bear" 或 "bull"
-        """
-        r_latest = self._extract_latest_indicator_value(rsi_series, [self.rsi_field]) if rsi_series else None
-        macd_hist_latest = None
-        if macd_series:
-            macd_hist_latest = getattr(macd_series[-1], self.macd_hist_field, None)
-
-        if prefer == "bear":
-            if r_latest is not None and r_latest < 70:
-                return True
-            if macd_hist_latest is not None and macd_hist_latest < 0:
-                return True
-            return False
-        else:
-            if r_latest is not None and r_latest > 30:
-                return True
-            if macd_hist_latest is not None and macd_hist_latest > 0:
-                return True
-            return False
-
     # --- 主逻辑 ---
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
         """
@@ -281,17 +230,10 @@ class BollingerBreakoutStrategy(TradingStrategy):
         ema_s = self._extract_latest_indicator_value(ema_slow, [self.ema_slow_field])
         trend_long = ema_f > ema_s
         trend_short = ema_f < ema_s
-
         # ATR 当前值
-        atr_val = self._extract_latest_indicator_value(atr, [self.atr_field, "atr", "ATR"])
-        if atr_val is None:
-            # 计算简单近似 ATR（高低振幅 SMA）
-            trs = [abs(highs[i] - lows[i]) for i in range(max(0, idx - self.atr_period + 1), idx+1)]
-            atr_val = self._sma(trs) if trs else 0.0
-
+        atr_val = self._extract_latest_indicator_value(atr, [self.atr_field])
         # 波动性 guard
         vol_guard_ok = (atr_val / (close if abs(close)>EPS else 1.0)) >= self.min_atr_price_ratio
-
         # 成交量 z-score 确认（vol_ok）：用最近 vol_zscore_window 样本计算 z-score
         vol_ok = False
         volume_z = None
@@ -346,10 +288,8 @@ class BollingerBreakoutStrategy(TradingStrategy):
             reasons.append("突破触发")
             # squeeze 强度（非线性）
             if in_squeeze:
-                squeeze_score = max(0.0, (self.bw_percentile_threshold - bw_pct) / self.bw_percentile_threshold)
-                squeeze_score = squeeze_score ** 1.5  # 非线性放大
-                score += 0.25 * squeeze_score
-                reasons.append(f"Squeeze强度:{round(squeeze_score, 2)}")
+                score += 0.25
+                reasons.append("Squeeze 确认")
             # ATR 波动率过滤
             if vol_guard_ok:
                 score += 0.10
@@ -438,7 +378,6 @@ def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
         "adx_period": 7,
         "adx_threshold": 18.0,             # 放低 ADX 要求以提高入场频率
         "rsi_period": 9,
-        "macd_params": {"fast": 8, "slow": 17, "signal": 9},
         "prior_swing_bars": 3,
         "entry_atr_mult": 1.2,
         "chandelier_len": 14,
@@ -461,7 +400,6 @@ def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
         "adx_period": 14,
         "adx_threshold": 25.0,             # 标准 ADX 门槛
         "rsi_period": 14,
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
         "prior_swing_bars": 8,
         "entry_atr_mult": 1.6,
         "chandelier_len": 22,
@@ -484,7 +422,6 @@ def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
         "adx_period": 20,
         "adx_threshold": 30.0,             # 严格 ADX 要求，确认趋势强度
         "rsi_period": 21,
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
         "prior_swing_bars": 20,
         "entry_atr_mult": 2.0,
         "chandelier_len": 55,

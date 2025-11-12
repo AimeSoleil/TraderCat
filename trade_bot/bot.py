@@ -1,7 +1,7 @@
 from regex import P
 from trade_bot.data.openbb_provider import OpenBBProvider
 from trade_bot.strategy.bbands_breakout_strategy import BollingerBreakoutStrategy, make_bbands_breakout_presets
-from trade_bot.strategy.bbands_divergence_strategy import BBandsDivergenceStrategy, make_bbands_divergence_presets
+from trade_bot.strategy.bbands_reversal_strategy import BBandsReversalStrategy, make_bbands_reversal_presets
 from trade_bot.strategy.candlestick_reversal_strategy import CandlestickReversalStrategy, make_candlestick_reversal_presets
 from trade_bot.strategy.divergence_strategy import DivergenceStrategy, make_divergence_presets
 from trade_bot.strategy.fibonacci_retracement_strategy import FibonacciRetracementStrategy, make_fibonacci_presets
@@ -20,7 +20,7 @@ class TradeBot:
         # Initialize strategies with the data provider and support adding more strategies per need
         strategies = [
             BollingerBreakoutStrategy(data_provider=data_provider, **make_bbands_breakout_presets()['swing']),
-            BBandsDivergenceStrategy(data_provider=data_provider, **make_bbands_divergence_presets()['swing']),
+            BBandsReversalStrategy(data_provider=data_provider, **make_bbands_reversal_presets()['swing']),
             DivergenceStrategy(data_provider=data_provider, **make_divergence_presets()['swing']),
             CandlestickReversalStrategy(data_provider=data_provider, **make_candlestick_reversal_presets()['swing']),
             FibonacciRetracementStrategy(data_provider=data_provider, **make_fibonacci_presets()['swing']),

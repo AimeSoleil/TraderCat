@@ -222,9 +222,8 @@ class CandlestickReversalStrategy(TradingStrategy):
             reasons.append(f"形态:{pattern}")
             # 成交量评分（非线性）
             if vol_ok:
-                vol_score = 1 / (1 + np.exp(-z_score)) if z_score is not None else 0.0
-                score += vol_score * 0.20
-                reasons.append(f"成交量评分:{round(vol_score, 2)}")
+                score += 0.20
+                reasons.append(f"成交量确认")
             # 动量确认
             if mom_ok:
                 score += 0.15

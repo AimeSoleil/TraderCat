@@ -12,14 +12,14 @@ class FibonacciRetracementStrategy(TradingStrategy):
     Fibonacci Retracement + Breakout 策略（生产就绪）
 
     概要:
-      - 在一次冲击波（impulse）后，等待价格回撤至 Fib 38.2–61.8% 区间，
+        - 在一次冲击波（impulse）后，等待价格回撤至 Fib 38.2–61.8% 区间，
         当价格在该区间确认回撤后出现突破（突破区间高位或突破上一个摆动高点）则入场顺势；
-      - 使用 EMA 快慢线作为趋势滤波；ATR 用于止损与仓位基准；支持时间止损与多种保护；
-      - 以日线为主，持仓以周为单位；通过 presets 可切换为中/长期模式。
+        - 使用 EMA 快慢线作为趋势滤波；ATR 用于止损与仓位基准；支持时间止损与多种保护；
+        - 以日线为主，持仓以周为单位；通过 presets 可切换为中/长期模式。
 
     使用建议（简短）:
-      - 适用: 趋势明显的品种，流动性充足，波段持仓（数日到数周）
-      - 不适用: 新闻驱动价差，低流动性或持续震荡盤
+        - 适用: 趋势明显的品种，流动性充足，波段持仓（数日到数周）
+        - 不适用: 新闻驱动价差，低流动性或持续震荡盤
     """
 
     def __init__(
@@ -82,12 +82,6 @@ class FibonacciRetracementStrategy(TradingStrategy):
         return max(self.lookback_swings, self.ema_slow, self.atr_period) + 10
 
     # ---------- helpers ----------
-    def _sma(self, vals: List[float]) -> float:
-        return sum(vals) / len(vals) if vals else 0.0
-
-    def _std(self, vals: List[float]) -> float:
-        return statistics.pstdev(vals) if len(vals) > 0 else 0.0
-
     def _is_finite(self, v: Any) -> bool:
         try:
             return v is not None and not (isinstance(v, float) and (math.isnan(v) or math.isinf(v)))
