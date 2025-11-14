@@ -1,3 +1,4 @@
+import logging
 import os
 import pandas as pd
 import numpy as np
@@ -8,6 +9,9 @@ from tabulate import tabulate
 from trade_bot.backtest.performance_report import PerformanceReport
 from trade_bot.backtest.trader_tracker import TradeTracker
 from trade_bot.strategy.signal_model import SignalModel
+from trade_bot.logger.logger import get_logger
+
+logger = get_logger(__name__)
 
 def plot_trade_chart(candles, trades, symbol, preset_name=None, save=False, filename=None):
     df = pd.DataFrame([{
@@ -98,12 +102,12 @@ def print_dashboard(results, preset_name=None):
             report["max_drawdown"]
         ])
     headers = ["Preset", "Symbol", "Final Value", "Net Profit", "Trades", "Win Rate", "Avg Win", "Avg Loss", "Max Drawdown"]
-    print("\n📊 Strategy Performance Dashboard")
-    print(tabulate(table, headers=headers, tablefmt="pretty"))
+    logger.info("\n📊 Strategy Performance Dashboard")
+    logger.info(f"\n{tabulate(table, headers=headers, tablefmt="pretty")}")
 
 def print_trade_hist(trades, preset_name=None):
     if not trades:
-        print("No trades executed.")
+        logger.info("No trades executed.")
         return
     table = []
     for trade in trades:
@@ -122,8 +126,8 @@ def print_trade_hist(trades, preset_name=None):
         ]
         table.append(row)
     headers = ["Index", "Preset", "Date", "Symbol", "Type", "Price", "Shares", "Entry Price", "Profit", "Cash After", "Note"]
-    print("\n📈 Trade History")
-    print(tabulate(table, headers=headers, tablefmt="pretty"))
+    logger.info("\n📈 Trade History")
+    logger.info(f"\n{tabulate(table, headers=headers, tablefmt="pretty")}")
 
 class BacktestEngine:
     def __init__(self, strategy, candles, symbol, initial_cash=100000):
@@ -138,7 +142,7 @@ class BacktestEngine:
             signal_model: SignalModel = self.strategy.generate_signal(self.symbol, candle_slice)
             date = candle_slice[-1].date
             price = candle_slice[-1].close
-            print(f"{date} symbol: {self.symbol}, signal: {signal_model}")
+            logger.info(f"{date} symbol: {self.symbol}, signal: {signal_model}")
             self.tracker.execute(signal_model, price, i)
             self.tracker.record_portfolio(price)
 
@@ -163,7 +167,7 @@ class MultiSymbolBacktestEngine:
         for symbol in self.symbols:
             candles = self.provider.get_price_data(symbol, interval=self.interval, lookback=lookback)
             if not candles or len(candles) < self.strategy.get_lookback_window():
-                print(f"⚠️ Skipping {symbol}: insufficient data.")
+                logger.info(f"⚠️ Skipping {symbol}: insufficient data.")
                 continue
             self.candle_data[symbol] = candles
             engine = BacktestEngine(self.strategy, candles, symbol, initial_cash=self.initial_cash)
@@ -222,6 +226,6 @@ class BacktestRunner:
 
     def visualize(self, save=False, output_dir="charts", file_prefix=None):
         if not self.engine:
-            print("⚠️ Backtest not yet run. Call run() first.")
+            logger.info("⚠️ Backtest not yet run. Call run() first.")
             return
         self.engine.visualize(save, output_dir, file_prefix)

@@ -1,16 +1,17 @@
 from typing import List, Optional, Dict, Any, Tuple
 import statistics
 
-from trade_bot.strategy.trading_strategy import TradingStrategy
+from trade_bot.strategy.trading_strategy import TradingStrategy, EPS
 from trade_bot.strategy.signal_model import SignalModel
+from trade_bot.logger.logger import get_logger
 
-EPS = 1e-9
+logger = get_logger(__name__)
 
 class DivergenceStrategy(TradingStrategy):
     """
     Divergence 策略（Regular + Hidden）
     - 目标：在日线识别常规背离（regular divergence）与隐藏背离（hidden divergence），
-      用于捕捉反转（regular）与趋势延续（hidden）。
+        用于捕捉反转（regular）与趋势延续（hidden）。
     - 指标：默认 RSI（可选 MACD histogram）为主；可选 ADX/ATR 过滤。
     - 逻辑要点：
         * Regular Bearish: 价格做 HH，而指标未创新高（或下降） -> 顶背离 -> 做空/平多
@@ -72,6 +73,7 @@ class DivergenceStrategy(TradingStrategy):
                 self.rsi_period,
                 self.atr_period,
                 (self.adx_period or 0),
+                (self.macd_params["slow"] or 0),
             )
             + 5
         )
@@ -131,25 +133,26 @@ class DivergenceStrategy(TradingStrategy):
     ) -> List[Optional[float]]:
         """从 provider 指标序列中提取过去 length 条数值（兼容不同字段名）"""
         out = []
-        for i in range(max(0, len(series) - length), len(series)):
-            v = None
-            item = series[i]
-            if isinstance(item, (int, float)):
-                v = float(item)
-            else:
-                for k in key_names:
-                    v = (
-                        getattr(item, k, None)
-                        if hasattr(item, k)
-                        else (item.get(k) if isinstance(item, dict) else None)
-                    )
-                    if v is not None:
-                        try:
-                            v = float(v)
-                            break
-                        except Exception:
-                            v = None
-            out.append(v)
+        if series:
+            for i in range(max(0, len(series) - length), len(series)):
+                v = None
+                item = series[i]
+                if isinstance(item, (int, float)):
+                    v = float(item)
+                else:
+                    for k in key_names:
+                        v = (
+                            getattr(item, k, None)
+                            if hasattr(item, k)
+                            else (item.get(k) if isinstance(item, dict) else None)
+                        )
+                        if v is not None:
+                            try:
+                                v = float(v)
+                                break
+                            except Exception:
+                                v = None
+                out.append(v)
         return out
 
     def _get_indicator_values_at_indices(
@@ -217,9 +220,9 @@ class DivergenceStrategy(TradingStrategy):
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
         """
         输入:
-          candles: 日线序列（old..new），每条需含 high/low/open/close/volume/date
+            candles: 日线序列（old..new），每条需含 high/low/open/close/volume/date
         输出:
-          SignalModel(signal ∈ {'buy','sell','hold'}, confidence, reason, details)
+            SignalModel(signal ∈ {'buy','sell','hold'}, confidence, reason, details)
         """
         if (
             not candles
@@ -686,7 +689,7 @@ def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
         "swing_window": 3,
         "lookback_swings": 18,
         "rsi_period": 9,
-        "macd_params": {"fast": 8, "slow": 17, "signal": 9},
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
         "atr_period": 14,
         "stop_atr_mult": 1.25,
         "min_atr_price_ratio": 0.0009,

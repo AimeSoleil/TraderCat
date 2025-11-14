@@ -1,10 +1,12 @@
+import logging
 from typing import List, Optional, Dict, Any, Tuple
 import statistics
 
-from trade_bot.strategy.trading_strategy import TradingStrategy
+from trade_bot.strategy.trading_strategy import TradingStrategy, EPS
 from trade_bot.strategy.signal_model import SignalModel
+from trade_bot.logger.logger import get_logger
 
-EPS = 1e-9
+logger = get_logger(__name__)
 
 class BBandsReversalStrategy(TradingStrategy):
     """
@@ -73,6 +75,7 @@ class BBandsReversalStrategy(TradingStrategy):
                 self.rsi_period,
                 self.atr_period,
                 self.max_time_bars,
+                (self.macd_params["slow"] or 0),
             )
             + 5
         )
@@ -145,8 +148,8 @@ class BBandsReversalStrategy(TradingStrategy):
     # 旧的基于影线的回退检测仍可作为回退方案（不作为优先）
     def _is_wick_rejection(self, open_, high, low, close_) -> Tuple[bool, str]:
         body = abs(close_ - open_)
-        upper_wick = high - max(open_, close_)
-        lower_wick = min(open_, close_) - low
+        upper_wick = high - max(open_, close_) # 上影线长度
+        lower_wick = min(open_, close_) - low  # 下影线长度
         if lower_wick >= self.rejection_wick_ratio * max(body, EPS) and upper_wick <= body * 0.5:
             return True, "下影拒绝(影线)"
         if upper_wick >= self.rejection_wick_ratio * max(body, EPS) and lower_wick <= body * 0.5:
@@ -218,14 +221,16 @@ class BBandsReversalStrategy(TradingStrategy):
         except Exception:
             vol_ok = False
 
-        # 检查是否接近上轨/下轨（相对容差）
+        # 检查是否接近上轨/下轨（相对容差
         near_upper = (u_curr is not None) and (
             abs(close - u_curr) / (u_curr if abs(u_curr) > EPS else 1.0)
             <= self.touch_pct
+            or close > u_curr
         )
         near_lower = (l_curr is not None) and (
             abs(close - l_curr) / (l_curr if abs(l_curr) > EPS else 1.0)
             <= self.touch_pct
+            or close < l_curr
         )
 
         # 检测拒绝蜡烛（以最近 self.max_time_bars 根内的任意一根作为确认）
@@ -260,17 +265,15 @@ class BBandsReversalStrategy(TradingStrategy):
                     rejection_type = "流星(上影拒绝)"
                     reject_idx = i
                     break
-            # 回退检测：若未命中以上形态则使用影线长度作为次优判断
-            wr, wrt = self._is_wick_rejection(opens[i], highs[i], lows[i], closes[i])
-            if wr:
-                rejection_found = True
-                rejection_type = wrt
-                reject_idx = i
-                break
 
         # 动量确认（若启用）
-        prefer = "bear" if (near_upper or (rejection_type == "上影拒绝")) else "bull"
-        momentum_ok = self._momentum_confirmation(rsi, macd, prefer=prefer)
+        momentum_ok = False
+        if near_upper or (rejection_type == "流星(上影拒绝)" or rejection_type == "看跌吞没"):
+            self._momentum_confirmation(rsi, macd, prefer="bear")
+        elif near_lower or (rejection_type == "锤子(下影拒绝)" or rejection_type == "看涨吞没"):
+            self._momentum_confirmation(rsi, macd, prefer="bull")
+        else:
+            momentum_ok = False
 
         # 评分构成（中文 reason）
         score = 0.0
@@ -297,22 +300,18 @@ class BBandsReversalStrategy(TradingStrategy):
         if not adx_ok:
             reasons.append("ADX 显示强趋势，不建议逆势开仓")
         # 只有在带位接近并出现拒绝蜡烛的情况下考虑反转
-        candidate_buy = (
-            near_lower and rejection_found and (rejection_type == "下影拒绝")
-        )
-        candidate_sell = (
-            near_upper and rejection_found and (rejection_type == "上影拒绝")
-        )
+        candidate_buy = near_lower and rejection_found
+        candidate_sell = near_upper and rejection_found
 
         if candidate_buy or candidate_sell:
             reasons.append("检测到带位拒绝蜡烛")
             score += 0.35
             # 波动性与adx必须基本通过
             if vol_guard_ok:
-                score += 0.15
+                score += 0.2
                 reasons.append("波动性通过")
             if adx_ok:
-                score += 0.10
+                score += 0.2
                 reasons.append("ADX 允许逆势")
             # 成交量确认
             if vol_ok:
@@ -407,18 +406,18 @@ def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
     swing = {
         "bb_period": 20,
         "bb_std": 2.0,
-        "touch_pct": 0.03,
+        "touch_pct": 0.05,
         "rejection_wick_ratio": 2.0,
         "rsi_period": 9,
         "atr_period": 14,
-        "adx_period": 7,
-        "adx_threshold": 20.0,
+        "adx_period": 10,
+        "adx_threshold": 25.0,
         "max_time_bars": 3,
         "min_atr_price_ratio": 0.001,
         "vol_zscore_window": 10,
         "vol_zscore_threshold": 0.8,
-        "macd_params": {"fast": 8, "slow": 17, "signal": 9},
-        "score_threshold": 0.7,
+        # "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+        "score_threshold": 0.55,
     }
     intermediate = {
         "bb_period": 20,
@@ -443,7 +442,7 @@ def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
         "rejection_wick_ratio": 2.5,
         "rsi_period": 21,
         "atr_period": 21,
-        "adx_period": 20,
+        "adx_period": 28,
         "adx_threshold": 30.0,
         "max_time_bars": 8,
         "min_atr_price_ratio": 0.002,

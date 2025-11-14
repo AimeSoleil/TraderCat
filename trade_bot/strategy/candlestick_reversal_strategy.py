@@ -3,18 +3,19 @@ from typing import List, Optional, Dict, Any
 
 import numpy as np
 
-from trade_bot.strategy.trading_strategy import TradingStrategy
+from trade_bot.strategy.trading_strategy import TradingStrategy, EPS
 from trade_bot.strategy.signal_model import SignalModel
+from trade_bot.logger.logger import get_logger
 
-EPS = 1e-9
+logger = get_logger(__name__)
 
 class CandlestickReversalStrategy(TradingStrategy):
     """
     基于蜡烛图的反转策略（中文注释）
     要点：
-      - 检测常见反转烛形：锤子/倒锤子、吞没、十字/十字星、刺透/乌云（此处实现为常见子集）
-      - 使用 EMA 作为趋势过滤，ATR 作为止损尺度，RSI/MACD/成交量作为确认项
-      - 返回 SignalModel，details 包含 entry/stop/target 与评分细节
+        - 检测常见反转烛形：锤子/倒锤子、吞没、十字/十字星、刺透/乌云（此处实现为常见子集）
+        - 使用 EMA 作为趋势过滤，ATR 作为止损尺度，RSI/MACD/成交量作为确认项
+        - 返回 SignalModel，details 包含 entry/stop/target 与评分细节
     """
     def __init__(
         self,
@@ -127,8 +128,8 @@ class CandlestickReversalStrategy(TradingStrategy):
     def _momentum_confirmation(self, rsi_series: Optional[List[Any]], macd_series: Optional[List[Any]], prefer: str = "bull") -> bool:
         """
         简单动量确认：
-          - prefer="bull": 期待 MACD hist > 0 或 RSI > 30
-          - prefer="bear": 期待 MACD hist < 0 或 RSI < 70
+            - prefer="bull": 期待 MACD hist > 0 或 RSI > 30
+            - prefer="bear": 期待 MACD hist < 0 或 RSI < 70
         """
         r_latest = self._extract_latest_indicator_value(rsi_series, [self.rsi_field]) if rsi_series else None
         macd_hist_latest = None

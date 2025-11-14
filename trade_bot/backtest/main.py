@@ -1,4 +1,5 @@
 # main.py
+import logging
 import threading
 import time
 import traceback
@@ -12,10 +13,13 @@ from trade_bot.strategy.candlestick_reversal_strategy import CandlestickReversal
 from trade_bot.strategy.divergence_strategy import DivergenceStrategy, make_divergence_presets
 from trade_bot.strategy.fibonacci_retracement_strategy import FibonacciRetracementStrategy, make_fibonacci_presets
 from trade_bot.strategy.momentum_strategy import MomentumTrendStrategy, make_momentum_presets
+from trade_bot.logger.logger import get_logger
+
+logger = get_logger(__name__)
 
 # 🔧 Configuration
 CONFIG = {
-    "symbols": ["PLTR"],  # Add more tickers as needed
+    "symbols": ["TSLA"],  # Add more tickers as needed
     "strategies": { # Strategy name to list of preset names
         # "BBBreakout": [
         #     "swing",
@@ -85,15 +89,15 @@ def run_configured_presets():
 
         for preset_name in preset_names:
             if preset_name not in all_presets:
-                print(
+                logger.info(
                     f"⚠️ Skipping unknown preset '{preset_name}' for strategy '{strategy_name}'"
                 )
                 continue
 
-            print("\n" + "=" * 80)
-            print(f"🧪 Running backtest for strategy: {strategy_name}")
-            print(f"🔧 Using preset: {preset_name}")
-            print("=" * 80)
+            logger.info("\n" + "=" * 80)
+            logger.info(f"🧪 Running backtest for strategy: {strategy_name}")
+            logger.info(f"🔧 Using preset: {preset_name}")
+            logger.info("=" * 80)
 
             try:
                 start_time = time.time() # For measuring backtest duration
@@ -108,7 +112,7 @@ def run_configured_presets():
                     symbols=CONFIG["symbols"],
                     provider=data_provider,
                     interval=CONFIG["interval"],
-                    lookback_days=max(720, strategy.get_lookback_window() * 2),
+                    lookback_days=max(365, strategy.get_lookback_window() * 2),
                     initial_cash=CONFIG["initial_cash"],
                 )
 
@@ -127,17 +131,17 @@ def run_configured_presets():
 
                 end_time = time.time()
                 duration = end_time - start_time
-                print(f"✅ Finished backtest for {strategy_name} - {preset_name}")
-                print(f"⏱ Duration: {duration:.2f} seconds")
+                logger.info(f"✅ Finished backtest for {strategy_name} - {preset_name}")
+                logger.info(f"⏱ Duration: {duration:.2f} seconds")
             except Exception as e:
-                print(f"❌ Error during backtest for {strategy_name} - {preset_name}: {traceback.format_exc()}")
+                logger.info(f"❌ Error during backtest for {strategy_name} - {preset_name}: {traceback.format_exc()}")
 
     if total_results:
         print_total_results(total_results)
             
 def print_total_results(total_results):
     if total_results is None:
-        print("No results to display.")
+        logger.info("No results to display.")
         return
     
     table = []
@@ -156,8 +160,8 @@ def print_total_results(total_results):
                 report["max_drawdown"]
             ])
     headers = ["Preset", "Symbol", "Final Value", "Net Profit", "Trades", "Win Rate", "Avg Win", "Avg Loss", "Max Drawdown"]
-    print("\n📊 Overall Strategy Performance Dashboard")
-    print(tabulate(table, headers=headers, tablefmt="pretty"))
+    logger.info("\n📊 Overall Strategy Performance Dashboard")
+    logger.info(f"\n{tabulate(table, headers=headers, tablefmt="pretty")}")
 
 def animate_progress_bar(stop_event, prefix='Progress', total=100):
     with tqdm(total=total, desc=prefix, bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}", ncols=70) as p_bar:

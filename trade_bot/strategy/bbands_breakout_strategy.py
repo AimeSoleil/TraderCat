@@ -3,10 +3,11 @@ import statistics
 
 import numpy as np
 
-from trade_bot.strategy.trading_strategy import TradingStrategy
+from trade_bot.strategy.trading_strategy import TradingStrategy, EPS
 from trade_bot.strategy.signal_model import SignalModel
+from trade_bot.logger.logger import get_logger
 
-EPS = 1e-9
+logger = get_logger(__name__)
 
 class BollingerBreakoutStrategy(TradingStrategy):
     """
@@ -15,10 +16,10 @@ class BollingerBreakoutStrategy(TradingStrategy):
     策略概述
     ----------
     - 波动率扩张策略：在“收缩(squeeze)”之后，价格突破布林带收盘即触发方向性入场，
-      需满足趋势过滤（EMA快线/慢线）和前期摆动高/低位确认。
+        需满足趋势过滤（EMA快线/慢线）和前期摆动高/低位确认。
     - 提供 ATR 风险控制、Chandelier trailing stop、时间止损、以及均值回归失败保护（failsafe）。
     - 设计为基于日线（daily candles）识别短期趋势并执行基于 weekly pattern 的波段交易。
-      通过 presets 可切换到中/长周期模式（mid-term / long-term）。
+        通过 presets 可切换到中/长周期模式（mid-term / long-term）。
 
     关键参数与指标
     - BB: SMA(n), Upper = MA + k*STD, Lower = MA - k*STD

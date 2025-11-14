@@ -2,10 +2,11 @@ from typing import List, Optional, Dict, Any, Tuple
 import math
 import statistics
 
-from trade_bot.strategy.trading_strategy import TradingStrategy
+from trade_bot.strategy.trading_strategy import TradingStrategy, EPS
 from trade_bot.strategy.signal_model import SignalModel
+from trade_bot.logger.logger import get_logger
 
-EPS = 1e-9
+logger = get_logger(__name__)
 
 class FibonacciRetracementStrategy(TradingStrategy):
     """
@@ -79,7 +80,12 @@ class FibonacciRetracementStrategy(TradingStrategy):
         return "FibonacciRetracement"
 
     def get_lookback_window(self) -> int:
-        return max(self.lookback_swings, self.ema_slow, self.atr_period) + 10
+        return max(
+            self.lookback_swings, 
+            self.ema_slow, 
+            self.atr_period,
+            (self.macd_params["slow"] or 0),
+        ) + 10
 
     # ---------- helpers ----------
     def _is_finite(self, v: Any) -> bool:

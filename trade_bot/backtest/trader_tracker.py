@@ -1,5 +1,7 @@
-from datetime import datetime
+from trade_bot.logger.logger import get_logger
 from trade_bot.strategy.signal_model import SignalModel
+
+logger = get_logger(__name__)
 
 class TradeTracker:
     def __init__(self, symbol, initial_cash=100000):
@@ -14,8 +16,7 @@ class TradeTracker:
         action = signal_mode.signal.lower()
 
         if action == "buy" or action == "sell":
-            print(f"*********** [{signal_mode.date}] Executing signal: {action} at price {price} for symbol {self.symbol}:")
-            print(f"*********** Reason: {signal_mode.reason}, Confidence: {signal_mode.confidence}, Details: {signal_mode.details}\n")
+            logger.info(f"*********** [{signal_mode.date}] Executing signal: {action} at price {price} for symbol {self.symbol}:")
 
         if action == "buy":
             trade_position = self.cash // price

@@ -25,7 +25,8 @@ dependencies = [
     "azure-functions>=1.15.0",
     "mplfinance>=0.12.9b7",
     "tqdm>=4.67.1",
-    "pymongo>=4.15.3"
+    "pymongo>=4.15.3",
+    "colorama>=0.4.6"
 ]
 
 [project.optional-dependencies]
