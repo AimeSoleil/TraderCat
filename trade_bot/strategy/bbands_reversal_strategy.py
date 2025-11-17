@@ -2,6 +2,7 @@ import logging
 from typing import List, Optional, Dict, Any, Tuple
 import statistics
 
+from trade_bot.strategy.candle_pattern import CandlePatterns
 from trade_bot.strategy.trading_strategy import TradingStrategy, EPS
 from trade_bot.strategy.signal_model import SignalModel
 from trade_bot.logger.logger import get_logger
@@ -24,7 +25,6 @@ class BBandsReversalStrategy(TradingStrategy):
         bb_period: int = 20,
         bb_std: float = 2.0,
         touch_pct: float = 0.03,  # 价格与带位的相对容差（3%以内视为“接触”）
-        rejection_wick_ratio: float = 2.0,  # 影线/实体比 > 2 视为拒绝
         rsi_period: int = 14,
         atr_period: int = 14,
         adx_period: int = 14,
@@ -40,7 +40,6 @@ class BBandsReversalStrategy(TradingStrategy):
         self.bb_period = bb_period
         self.bb_std = bb_std
         self.touch_pct = float(touch_pct)
-        self.rejection_wick_ratio = float(rejection_wick_ratio)
         self.rsi_period = rsi_period
         self.atr_period = atr_period
         self.adx_period = adx_period
@@ -126,36 +125,6 @@ class BBandsReversalStrategy(TradingStrategy):
                 return True
             return False
 
-    # ---------- 具体烛形模式检测 ----------
-    def _is_hammer(self, open_, high, low, close_) -> bool:
-        body = abs(close_ - open_)
-        upper_wick = high - max(open_, close_)
-        lower_wick = min(open_, close_) - low
-        return (lower_wick >= 2 * max(body, EPS)) and (upper_wick <= body * 0.5)
-
-    def _is_shooting_star(self, open_, high, low, close_) -> bool:
-        body = abs(close_ - open_)
-        upper_wick = high - max(open_, close_)
-        lower_wick = min(open_, close_) - low
-        return (upper_wick >= 2 * max(body, EPS)) and (lower_wick <= body * 0.5)
-
-    def _is_bullish_engulfing(self, prev_open, prev_close, open_, close_) -> bool:
-        return (prev_close < prev_open) and (close_ > open_) and (close_ > prev_open) and (open_ < prev_close)
-
-    def _is_bearish_engulfing(self, prev_open, prev_close, open_, close_) -> bool:
-        return (prev_close > prev_open) and (close_ < open_) and (close_ < prev_open) and (open_ > prev_close)
-
-    # 旧的基于影线的回退检测仍可作为回退方案（不作为优先）
-    def _is_wick_rejection(self, open_, high, low, close_) -> Tuple[bool, str]:
-        body = abs(close_ - open_)
-        upper_wick = high - max(open_, close_) # 上影线长度
-        lower_wick = min(open_, close_) - low  # 下影线长度
-        if lower_wick >= self.rejection_wick_ratio * max(body, EPS) and upper_wick <= body * 0.5:
-            return True, "下影拒绝(影线)"
-        if upper_wick >= self.rejection_wick_ratio * max(body, EPS) and lower_wick <= body * 0.5:
-            return True, "上影拒绝(影线)"
-        return False, ""
-
     # ---------- 主逻辑 ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
         if not candles or len(candles) < self.get_lookback_window():
@@ -236,41 +205,25 @@ class BBandsReversalStrategy(TradingStrategy):
         # 检测拒绝蜡烛（以最近 self.max_time_bars 根内的任意一根作为确认）
         rejection_found = False
         rejection_type = None
+        pattern_type = None
         reject_idx = None
         start = max(0, idx - self.max_time_bars + 1)
         for i in range(start, idx + 1):
-            # 优先使用建议的反转形态检测
-            # 看多候选（接近下轨）: Hammer 或 Bullish Engulfing
             if near_lower:
-                # 吞没需要前一根蜡烛作为参考
-                if i >= 1 and self._is_bullish_engulfing(opens[i - 1], closes[i - 1], opens[i], closes[i]):
-                    rejection_found = True
-                    rejection_type = "看涨吞没"
-                    reject_idx = i
-                    break
-                if self._is_hammer(opens[i], highs[i], lows[i], closes[i]):
-                    rejection_found = True
-                    rejection_type = "锤子(下影拒绝)"
-                    reject_idx = i
-                    break
-            # 看空候选（接近上轨）: Shooting Star 或 Bearish Engulfing
+                rejection_found, rejection_type, pattern_type = CandlePatterns.detect_bullish_pattern(opens, highs, lows, closes, i)
+                reject_idx = i
+                break
+            # 看空候选（接近上轨）
             if near_upper:
-                if i >= 1 and self._is_bearish_engulfing(opens[i - 1], closes[i - 1], opens[i], closes[i]):
-                    rejection_found = True
-                    rejection_type = "看跌吞没"
-                    reject_idx = i
-                    break
-                if self._is_shooting_star(opens[i], highs[i], lows[i], closes[i]):
-                    rejection_found = True
-                    rejection_type = "流星(上影拒绝)"
-                    reject_idx = i
-                    break
+                rejection_found, rejection_type, pattern_type = CandlePatterns.detect_bearish_pattern(opens, highs, lows, closes, i)
+                reject_idx = i
+                break
 
         # 动量确认（若启用）
         momentum_ok = False
-        if near_upper or (rejection_type == "流星(上影拒绝)" or rejection_type == "看跌吞没"):
+        if near_upper or pattern_type == "bearish":
             self._momentum_confirmation(rsi, macd, prefer="bear")
-        elif near_lower or (rejection_type == "锤子(下影拒绝)" or rejection_type == "看涨吞没"):
+        elif near_lower or pattern_type == "bullish":
             self._momentum_confirmation(rsi, macd, prefer="bull")
         else:
             momentum_ok = False
@@ -304,7 +257,7 @@ class BBandsReversalStrategy(TradingStrategy):
         candidate_sell = near_upper and rejection_found
 
         if candidate_buy or candidate_sell:
-            reasons.append("检测到带位拒绝蜡烛")
+            reasons.append(f"检测到带位拒绝蜡烛（{rejection_type}）")
             score += 0.35
             # 波动性与adx必须基本通过
             if vol_guard_ok:
@@ -348,15 +301,6 @@ class BBandsReversalStrategy(TradingStrategy):
             signal = "buy"
             stop_loss = (
                 min(lows[max(0, idx - 3) : idx + 1]) - self.atr_period * 0
-            )  # placeholder, use ATR below
-            stop_loss = round(
-                entry_price
-                - (
-                    self.stop_calc(atr_val)
-                    if hasattr(self, "stop_calc")
-                    else (self.atr_period * 0 + atr_val * 1.5)
-                ),
-                6,
             )
             target = round(
                 entry_price
@@ -407,7 +351,6 @@ def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
         "bb_period": 20,
         "bb_std": 2.0,
         "touch_pct": 0.05,
-        "rejection_wick_ratio": 2.0,
         "rsi_period": 9,
         "atr_period": 14,
         "adx_period": 10,
@@ -423,7 +366,6 @@ def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
         "bb_period": 20,
         "bb_std": 2.0,
         "touch_pct": 0.03,
-        "rejection_wick_ratio": 2.0,
         "rsi_period": 14,
         "atr_period": 14,
         "adx_period": 14,
@@ -439,7 +381,6 @@ def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
         "bb_period": 20,
         "bb_std": 2.0,
         "touch_pct": 0.04,
-        "rejection_wick_ratio": 2.5,
         "rsi_period": 21,
         "atr_period": 21,
         "adx_period": 28,
