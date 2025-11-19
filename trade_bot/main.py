@@ -12,7 +12,7 @@ import pytz
 from trade_bot.logger.logger import get_logger
 from trade_bot.notification.discord import DiscordNotifier
 from trade_bot.execution.trade_execution import TradeExecutor
-from trade_bot.bot import TradeBot
+from trade_bot.bot import GlobalTradeBot, TradeBot
 
 logger = get_logger(__name__)
 
@@ -40,7 +40,25 @@ async def run_all_bots(symbols, executor, discord_notifier):
         TradeBot(symbol=symbol, executor=executor)  # strategies will be initialized inside the bot
         for symbol in symbols
     ]
+    # bots without symbols (global strategies)
+    global_bots = [
+        GlobalTradeBot(executor=executor)
+    ]
 
+    # Run global bots first
+    for index, bot in enumerate(global_bots):
+        try:
+            logger.info(f'🚀 Start global bot[{index}]...')
+            async for signal_list in bot.run():
+                all_signals.append({
+                    "symbol": "GLOBAL",
+                    "signals": signal_list
+                })
+            logger.info(f'✅ Finish global bot[{index}]')
+        except Exception as e:
+            logger.info(f"Error running global bot[{index}]: {traceback.format_exc()}")
+        await asyncio.sleep(5)
+    # Then run symbol-specific bots
     for index, bot in enumerate(bots):
         try:
             logger.info(f'🚀 Start bot[{index}] for symbol: {bot.symbol}...')
@@ -53,7 +71,6 @@ async def run_all_bots(symbols, executor, discord_notifier):
         except Exception as e:
             logger.info(f"Error running bot[{index}] for symbol {bot.symbol}: {traceback.format_exc()}")
         await asyncio.sleep(5)
-
 
     logger.info(f"✅ All signals collected from {len(bots)} symbols")
 

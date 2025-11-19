@@ -12,7 +12,7 @@ import pytz
 from trade_bot.logger.logger import get_logger
 from trade_bot.notification.discord import DiscordNotifier
 from trade_bot.execution.trade_execution import TradeExecutor
-from trade_bot.bot import TradeBot
+from trade_bot.bot import GlobalTradeBot, TradeBot
 
 logger = get_logger(__name__)
 
@@ -57,40 +57,65 @@ async def run_all_bots(symbols, executor, discord_notifier, max_concurrency: int
     start_time = datetime.now()
 
     all_signals = []
+    # bots with symbols 
     bots = [
         TradeBot(symbol=symbol, executor=executor)
         for symbol in symbols
+    ]
+    # bots without symbols (global strategies)
+    global_bots = [
+        GlobalTradeBot(executor=executor)
     ]
 
     lock = asyncio.Lock()
     semaphore = asyncio.Semaphore(max_concurrency)
 
-    async def consume_bot(bot: TradeBot, index: int):
+    async def consume_bot(bot: TradeBot | GlobalTradeBot, index: int):
         await semaphore.acquire()
         try:
-            logger.info(f'🚀 Start bot[{index}] for symbol: {bot.symbol}...')
+            if isinstance(bot, TradeBot):
+                logger.info(f'🚀 Start bot[{index}] for symbol: {bot.symbol}...')
+            else:
+                logger.info(f'🚀 Start global bot[{index}] ...')
             try:
                 async for signal_list in bot.run():
                     # signal_list expected to be an iterable/list of SignalModel
                     async with lock:
-                        all_signals.append({
-                            "symbol": bot.symbol,
-                            "signals": signal_list
-                        })
+                        if isinstance(bot, TradeBot):
+                            all_signals.append({
+                                "symbol": bot.symbol,
+                                "signals": signal_list
+                            })
+                        else:
+                            all_signals.append({
+                                "symbol": f"Global-{index}",
+                                "signals": signal_list
+                            })
             except Exception:
-                logger.info(f"Error running bot[{index}] for symbol {bot.symbol}: {traceback.format_exc()}")
+                if isinstance(bot, TradeBot):
+                    logger.info(f"Error running bot[{index}] for symbol {bot.symbol}: {traceback.format_exc()}")
+                else:
+                    logger.info(f'Error running global bot[{index}]: {traceback.format_exc()}')
             finally:
-                logger.info(f'✅ Finish bot[{index}] for symbol: {bot.symbol}')
+                if isinstance(bot, TradeBot):
+                    logger.info(f'✅ Finish bot[{index}] for symbol: {bot.symbol}')
+                else:
+                    logger.info(f'✅ Finish global bot[{index}]')
         finally:
             semaphore.release()
 
-    # Launch tasks with stagger to avoid thundering init
+    # Launch global bots first
     tasks = []
+    for index, bot in enumerate(global_bots):
+        logger.info(f"Scheduling global bot[{index}]...")
+        tasks.append(asyncio.create_task(consume_bot(bot, index)))
+        await asyncio.sleep(start_stagger_sec)
+    # Launch tasks with stagger to avoid thundering init
     for index, bot in enumerate(bots):
         logger.info(f"Scheduling bot[{index}] for symbol: {bot.symbol}...")
         tasks.append(asyncio.create_task(consume_bot(bot, index)))
         await asyncio.sleep(start_stagger_sec)
-
+    
     # Wait for all tasks to complete
     await asyncio.gather(*tasks)
 

@@ -2,6 +2,7 @@
 import threading
 import time
 import traceback
+from typing import Dict
 from tabulate import tabulate
 from tqdm import tqdm
 from trade_bot.backtest.backtest_engine import BacktestRunner
@@ -13,6 +14,7 @@ from trade_bot.strategy.divergence_strategy import DivergenceStrategy, make_dive
 from trade_bot.strategy.fibonacci_retracement_strategy import FibonacciRetracementStrategy, make_fibonacci_presets
 from trade_bot.strategy.momentum_strategy import MomentumTrendStrategy, make_momentum_presets
 from trade_bot.logger.logger import get_logger
+from trade_bot.strategy.sector_rotation_strategy import SectorRotationStrategy
 
 logger = get_logger(__name__)
 
@@ -80,6 +82,9 @@ def run_configured_presets():
         "ReversalCandle": (CandlestickReversalStrategy, make_candlestick_reversal_presets()),
         "Fibonacci": (FibonacciRetracementStrategy, make_fibonacci_presets()),
         "Momentum": (MomentumTrendStrategy, make_momentum_presets()),
+
+        # Add global strategies here if needed
+        "SectorRotation": (SectorRotationStrategy, {}),
     }
 
     total_results = {}
