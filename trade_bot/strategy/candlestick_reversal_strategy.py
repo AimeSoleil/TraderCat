@@ -3,6 +3,7 @@ from typing import List, Optional, Dict, Any
 
 import numpy as np
 
+from trade_bot.strategy.candle_pattern import CandlePatterns
 from trade_bot.strategy.trading_strategy import TradingStrategy, EPS
 from trade_bot.strategy.signal_model import SignalModel
 from trade_bot.logger.logger import get_logger
@@ -78,28 +79,6 @@ class CandlestickReversalStrategy(TradingStrategy):
         lookback = base + 3
         return int(lookback)
 
-    # ---------- 烛形模式检测 ----------
-    def _is_bullish_engulfing(self, prev_open, prev_close, open_, close_) -> bool:
-        return (prev_close < prev_open) and (close_ > open_) and (close_ > prev_open) and (open_ < prev_close)
-
-    def _is_bearish_engulfing(self, prev_open, prev_close, open_, close_) -> bool:
-        return (prev_close > prev_open) and (close_ < open_) and (close_ < prev_open) and (open_ > prev_close)
-
-    def _is_hammer(self, open_, high, low, close_) -> bool:
-        body = abs(close_ - open_)
-        lower_wick = min(open_, close_) - low
-        upper_wick = high - max(open_, close_)
-        return lower_wick >= 2 * body and upper_wick <= body
-
-    def _is_shooting_star(self, open_, high, low, close_) -> bool:
-        body = abs(close_ - open_)
-        upper_wick = high - max(open_, close_)
-        lower_wick = min(open_, close_) - low
-        return upper_wick >= 2 * body and lower_wick <= body
-
-    def _is_doji(self, open_, close_, tol: float = 0.03) -> bool:
-        return abs(open_ - close_) <= tol * max(abs(open_), abs(close_), 1.0)
-
     # ---------- 通用指标提取与动量确认 ----------
     def _extract_latest_indicator_value(self, series: Optional[List[Any]], keys: List[str]) -> Optional[float]:
         """兼容 provider 返回对象/字典/直接数值，提取最后一条数值字段"""
@@ -151,20 +130,21 @@ class CandlestickReversalStrategy(TradingStrategy):
 
     # ---------- 主决策逻辑 ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
-        # 数据校验
+    # ---------- 数据校验 ----------
         if not candles or len(candles) < max(self.ema_slow, self.atr_period, 3):
-            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=None, reason="insufficient data", confidence=0.0)
+            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold",
+                                date=None, reason="insufficient data", confidence=0.0)
 
         # 提取 OHLCV 与日期
-        closes = [float(getattr(c, "close")) for c in candles]
+        opens = [float(getattr(c, "open")) for c in candles]
         highs = [float(getattr(c, "high")) for c in candles]
         lows = [float(getattr(c, "low")) for c in candles]
-        opens = [float(getattr(c, "open")) for c in candles]
+        closes = [float(getattr(c, "close")) for c in candles]
         vols = [getattr(c, "volume", None) for c in candles]
         dates = [getattr(c, "date", None) for c in candles]
         close = closes[-1]
 
-        # 从 provider 获取指标（尽量使用 provider，再 fallback）
+        # ---------- 指标获取 ----------
         ema_fast_s = self.provider.get_indicator("ema", candles, {"length": self.ema_fast}) if self.provider else None
         ema_slow_s = self.provider.get_indicator("ema", candles, {"length": self.ema_slow}) if self.provider else None
         atr_s = self.provider.get_indicator("atr", candles, {"length": self.atr_period}) if self.provider else None
@@ -178,28 +158,18 @@ class CandlestickReversalStrategy(TradingStrategy):
         rsi_val = self._extract_latest_indicator_value(rsi_s, [self.rsi_field])
         adx_val = self._extract_latest_indicator_value(adx_s, [self.adx_field])
 
-        # 检测烛形（使用最后 1-2 根烛）
-        pattern = None
-        # 优先识别由倒数第二根发起的两根组合（如吞没），否则单根形态以最后一根为参考
-        if len(candles) >= 2 and self._is_bullish_engulfing(opens[-2], closes[-2], opens[-1], closes[-1]):
-            pattern = "bullish_engulfing"; 
-        elif len(candles) >= 2 and self._is_bearish_engulfing(opens[-2], closes[-2], opens[-1], closes[-1]):
-            pattern = "bearish_engulfing"; 
-        else:
-            if self._is_hammer(opens[-1], highs[-1], lows[-1], closes[-1]):
-                pattern = "hammer"; 
-            elif self._is_shooting_star(opens[-1], highs[-1], lows[-1], closes[-1]):
-                pattern = "shooting_star"; 
-            elif self._is_doji(opens[-1], closes[-1]):
-                pattern = "doji"; 
+        # ---------- 烛形检测 (使用 CandlePatterns) ----------
+        idx = len(candles) - 1
+        found_bull, bull_pattern, bull_type = CandlePatterns.detect_bullish_pattern(opens, highs, lows, closes, idx)
+        found_bear, bear_pattern, bear_type = CandlePatterns.detect_bearish_pattern(opens, highs, lows, closes, idx)
+        pattern = bull_pattern if found_bull else (bear_pattern if found_bear else None)
 
-        # 趋势判断
+        # ---------- 趋势判断 ----------
         trend_long = (ema_f is not None and ema_slow is not None and ema_f > ema_slow)
         trend_short = (ema_f is not None and ema_slow is not None and ema_f < ema_slow)
-        # 趋势强度
         adx_ok = True if adx_val <= self.adx_threshold else False
-        
-        # 成交量确认（使用 z-score）
+
+        # ---------- 成交量确认 ----------
         vol_ok = False
         z_score = None
         vol_window = min(self.vol_zscore_window, len(vols)) if vols else 0
@@ -211,49 +181,45 @@ class CandlestickReversalStrategy(TradingStrategy):
                 z_score = (vols[-1] - mean_vol) / std_vol
                 vol_ok = z_score > 1.0
 
-        # 动量确认（MACD / RSI）
-        mom_ok = self._momentum_confirmation(rsi_s, macd_s, prefer="bull" if pattern in ("bullish_engulfing","hammer") else "bear")
+        # ---------- 动量确认 ----------
+        mom_ok = False
+        if found_bull or found_bear:
+            mom_ok = self._momentum_confirmation(rsi_s, macd_s, prefer=bull_type if found_bull else bear_type)
 
-        # 评分系统：简单加权，若要求确认且未确认则降低初始权重
-        # 强调形态 + 成交量 + 趋势共振
-        score = 0.0; reasons = []; entry = None; stop_loss = None; target = None
-        if pattern:
-            # 形态识别
-            score += 0.25
+        # ---------- 评分系统 ----------
+        score = 0.0
+        reasons = []
+        entry = stop_loss = target = None
+        if found_bull or found_bear:
             reasons.append(f"形态:{pattern}")
-            # 成交量评分（非线性）
+            score += 0.25
             if vol_ok:
                 score += 0.20
-                reasons.append(f"成交量确认")
-            # 动量确认
+                reasons.append("成交量确认")
             if mom_ok:
                 score += 0.15
                 reasons.append("动量确认")
-            # 趋势强度确认
             if adx_ok:
                 score += 0.15
                 reasons.append("趋势强度确认")
-            # EMA 趋势方向一致
-            if (pattern in ("bullish_engulfing", "hammer") and trend_long) or \
-            (pattern in ("bearish_engulfing", "shooting_star") and trend_short):
+            if (found_bull and trend_long) or (found_bear and trend_short):
                 score += 0.15
                 reasons.append("趋势方向一致")
-            # 共振加分
-            if mom_ok and adx_ok and ((pattern in ("bullish_engulfing", "hammer") and trend_long) or \
-                                    (pattern in ("bearish_engulfing", "shooting_star") and trend_short)):
-                score += 0.1
+            if mom_ok and adx_ok and ((found_bull and trend_long) or (found_bear and trend_short)):
+                score += 0.10
                 reasons.append("三重共振加分")
 
             confidence = min(1.0, score)
-            # 确定方向并计算 stop/target（用 ATR 缩放）
+
+            # ---------- 交易方向与止盈止损 ----------
             if confidence >= self.score_threshold:
-                if pattern in ("bullish_engulfing", "hammer"):
+                if found_bull:
                     entry = close
                     recent_low = min(lows[-3:]) if len(lows) >= 3 else lows[-1]
                     stop_loss = recent_low - (self.atr_mult_sl * atr_val)
                     target = entry + max(self.target_rr * (entry - stop_loss), 2 * atr_val)
                     signal = "buy"
-                elif pattern in ("bearish_engulfing", "shooting_star"):
+                elif found_bear:
                     entry = close
                     recent_high = max(highs[-3:]) if len(highs) >= 3 else highs[-1]
                     stop_loss = recent_high + (self.atr_mult_sl * atr_val)

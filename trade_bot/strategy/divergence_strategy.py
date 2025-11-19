@@ -375,8 +375,8 @@ class DivergenceStrategy(TradingStrategy):
                     details.update(
                         {
                             "type": "regular_bear",
-                            "swing1": (i1, p1),
-                            "swing2": (i2, p2),
+                            "swing1": (dates[i1], p1),
+                            "swing2": (dates[i2], p2),
                             "indicator_r1": r1,
                             "indicator_r2": r2,
                         }
@@ -481,8 +481,8 @@ class DivergenceStrategy(TradingStrategy):
                     details.update(
                         {
                             "type": "regular_bull",
-                            "swing1": (j1, q1),
-                            "swing2": (j2, q2),
+                            "swing1": (dates[j1], q1),
+                            "swing2": (dates[j2], q2),
                             "indicator_r1": r1,
                             "indicator_r2": r2,
                         }
@@ -561,8 +561,8 @@ class DivergenceStrategy(TradingStrategy):
                         details.update(
                             {
                                 "type": "hidden_bull",
-                                "swing_prev": (a_idx, a_val),
-                                "swing_latest": (b_idx, b_val),
+                                "swing_prev": (dates[a_idx], a_val),
+                                "swing_latest": (dates[b_idx], b_val),
                             }
                         )
                         details.update(
@@ -631,8 +631,8 @@ class DivergenceStrategy(TradingStrategy):
                         details.update(
                             {
                                 "type": "hidden_bear",
-                                "swing_prev": (a_idx, a_val),
-                                "swing_latest": (b_idx, b_val),
+                                "swing_prev": (dates[a_idx], a_val),
+                                "swing_latest": (dates[b_idx], b_val),
                             }
                         )
                         details.update(

@@ -221,12 +221,8 @@ class BBandsReversalStrategy(TradingStrategy):
 
         # 动量确认（若启用）
         momentum_ok = False
-        if near_upper or pattern_type == "bearish":
-            self._momentum_confirmation(rsi, macd, prefer="bear")
-        elif near_lower or pattern_type == "bullish":
-            self._momentum_confirmation(rsi, macd, prefer="bull")
-        else:
-            momentum_ok = False
+        if near_upper or near_upper:
+            self._momentum_confirmation(rsi, macd, prefer=pattern_type)
 
         # 评分构成（中文 reason）
         score = 0.0

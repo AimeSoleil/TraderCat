@@ -10,14 +10,14 @@ class CandlePatterns:
         upper_shadow = high - max(open_, close)
         lower_shadow = min(open_, close) - low
         if lower_shadow >= body * 2 and upper_shadow <= body:
-            return True, "Hammer", "bullish"
+            return True, "Hammer", "bull"
         return False, None, None
 
     @staticmethod
     def _is_bullish_engulfing(o1, c1, o2, c2):
         # Bullish Engulfing (看涨吞没)
         if c1 < o1 and c2 > o2 and c2 > o1 and o2 < c1:
-            return True, "Bullish Engulfing", "bullish"
+            return True, "Bullish Engulfing", "bull"
         return False, None, None
 
     @staticmethod
@@ -29,21 +29,21 @@ class CandlePatterns:
             and c3 > o3
             and c3 > (o1 + c1) / 2
         ):
-            return True, "Morning Star", "bullish"
+            return True, "Morning Star", "bull"
         return False, None, None
 
     @staticmethod
     def _is_piercing_pattern(o1, c1, o2, c2):
         # Piercing Pattern (刺透形态)
         if c1 < o1 and o2 < c1 and c2 > (o1 + c1) / 2 and c2 < o1:
-            return True, "Piercing Pattern", "bullish"
+            return True, "Piercing Pattern", "bull"
         return False, None, None
 
     @staticmethod
     def _is_bullish_harami(o1, c1, o2, c2):
         # Bullish Harami (看涨孕线)
         if c1 < o1 and o2 > c2 and o2 >= c1 and c2 <= o1:
-            return True, "Bullish Harami", "bullish"
+            return True, "Bullish Harami", "bull"
         return False, None, None
 
     @staticmethod
@@ -56,7 +56,7 @@ class CandlePatterns:
             and closes[1] > closes[0]
             and closes[2] > closes[1]
         ):
-            return True, "Three White Soldiers", "bullish"
+            return True, "Three White Soldiers", "bull"
         return False, None, None
 
     # -------------------------
@@ -70,14 +70,14 @@ class CandlePatterns:
         upper_shadow = high - max(open_, close)
         lower_shadow = min(open_, close) - low
         if upper_shadow >= body * 2 and lower_shadow <= body:
-            return True, "Shooting Star", "bearish"
+            return True, "Shooting Star", "bear"
         return False, None, None
 
     @staticmethod
     def _is_bearish_engulfing(o1, c1, o2, c2):
         # Bearish Engulfing (看跌吞没)
         if c1 > o1 and c2 < o2 and c2 < o1 and o2 > c1:
-            return True, "Bearish Engulfing", "bearish"
+            return True, "Bearish Engulfing", "bear"
         return False, None, None
 
     @staticmethod
@@ -89,21 +89,21 @@ class CandlePatterns:
             and c3 < o3
             and c3 < (o1 + c1) / 2
         ):
-            return True, "Evening Star", "bearish"
+            return True, "Evening Star", "bear"
         return False, None, None
 
     @staticmethod
     def _is_dark_cloud_cover(o1, c1, o2, c2):
         # Dark Cloud Cover (乌云盖顶)
         if c1 > o1 and o2 > c1 and c2 < (o1 + c1) / 2 and c2 > o1:
-            return True, "Dark Cloud Cover", "bearish"
+            return True, "Dark Cloud Cover", "bear"
         return False, None, None
 
     @staticmethod
     def _is_bearish_harami(o1, c1, o2, c2):
         # Bearish Harami (看跌孕线)
         if c1 > o1 and o2 < c2 and o2 <= c1 and c2 >= o1:
-            return True, "Bearish Harami", "bearish"
+            return True, "Bearish Harami", "bear"
         return False, None, None
 
     @staticmethod
@@ -116,7 +116,7 @@ class CandlePatterns:
             and closes[1] < closes[0]
             and closes[2] < closes[1]
         ):
-            return True, "Three Black Crows", "bearish"
+            return True, "Three Black Crows", "bear"
         return False, None, None
 
     # -------------------------

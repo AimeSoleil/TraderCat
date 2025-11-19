@@ -1,8 +1,6 @@
 from typing import List, Optional, Dict, Any, Tuple
 import statistics
 
-import numpy as np
-
 from trade_bot.strategy.trading_strategy import TradingStrategy, EPS
 from trade_bot.strategy.signal_model import SignalModel
 from trade_bot.logger.logger import get_logger

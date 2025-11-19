@@ -9,12 +9,15 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
 
+from trade_bot.logger.logger import get_logger
 from trade_bot.notification.discord import DiscordNotifier
 from trade_bot.execution.trade_execution import TradeExecutor
 from trade_bot.bot import TradeBot
 
+logger = get_logger(__name__)
+
 DEFAULT_SYMBOLS_STR = os.environ.get("ENV_SYMBOLS")  # e.g. "AAPL,MSFT,GOOG"
-print(f"Default symbols from ENV_SYMBOLS: {DEFAULT_SYMBOLS_STR}")
+logger.info(f"Default symbols from ENV_SYMBOLS: {DEFAULT_SYMBOLS_STR}")
 
 def parse_symbols(symbols_str):
     return [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
@@ -65,7 +68,7 @@ async def run_all_bots(symbols, executor, discord_notifier, max_concurrency: int
     async def consume_bot(bot: TradeBot, index: int):
         await semaphore.acquire()
         try:
-            print(f'🚀 Start bot[{index}] for symbol: {bot.symbol}...')
+            logger.info(f'🚀 Start bot[{index}] for symbol: {bot.symbol}...')
             try:
                 async for signal_list in bot.run():
                     # signal_list expected to be an iterable/list of SignalModel
@@ -75,33 +78,33 @@ async def run_all_bots(symbols, executor, discord_notifier, max_concurrency: int
                             "signals": signal_list
                         })
             except Exception:
-                print(f"Error running bot[{index}] for symbol {bot.symbol}: {traceback.format_exc()}")
+                logger.info(f"Error running bot[{index}] for symbol {bot.symbol}: {traceback.format_exc()}")
             finally:
-                print(f'✅ Finish bot[{index}] for symbol: {bot.symbol}')
+                logger.info(f'✅ Finish bot[{index}] for symbol: {bot.symbol}')
         finally:
             semaphore.release()
 
     # Launch tasks with stagger to avoid thundering init
     tasks = []
     for index, bot in enumerate(bots):
-        print(f"Scheduling bot[{index}] for symbol: {bot.symbol}...")
+        logger.info(f"Scheduling bot[{index}] for symbol: {bot.symbol}...")
         tasks.append(asyncio.create_task(consume_bot(bot, index)))
         await asyncio.sleep(start_stagger_sec)
 
     # Wait for all tasks to complete
     await asyncio.gather(*tasks)
 
-    print(f"✅ All signals collected from {len(bots)} symbols")
+    logger.info(f"✅ All signals collected from {len(bots)} symbols")
 
     if not all_signals:
-        print("No signals generated. Skipping notification.")
+        logger.info("No signals generated. Skipping notification.")
         # log total time and return
         end_time = datetime.now()
         duration = end_time - start_time
         total_seconds = int(duration.total_seconds())
         minutes = total_seconds // 60
         seconds = total_seconds % 60
-        print(f"🕒 Total execution time: {minutes} minutes and {seconds} seconds")
+        logger.info(f"🕒 Total execution time: {minutes} minutes and {seconds} seconds")
         return
 
     # Convert to CSV
@@ -120,8 +123,8 @@ async def run_all_bots(symbols, executor, discord_notifier, max_concurrency: int
             })
     df = pd.DataFrame(rows)
     csv_filename = f"trade_signals_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
-    df.to_csv(csv_filename, index=False)
-    print(f"📄 Signals CSV created: {csv_filename}")
+    df.to_csv(csv_filename, index=False, encoding='utf-8-sig')
+    logger.info(f"📄 Signals CSV created: {csv_filename}")
 
     # Send summary notification to Discord
     today_str = datetime.today().strftime("%Y-%m-%d")
@@ -137,12 +140,12 @@ async def run_all_bots(symbols, executor, discord_notifier, max_concurrency: int
     if not summary_message:
         summary_message = "No buy/sell signals generated. "
 
-    print(f"Summary Message:\n{title_message + summary_message}")
-    print("🔔 Sending summary notification to Discord...")
+    logger.info(f"Summary Message:\n{title_message + summary_message}")
+    logger.info("🔔 Sending summary notification to Discord...")
     try:
         await discord_notifier.send(title_message + summary_message)
     except Exception as e:
-        print(f"Error sending summary notification to Discord: {e}")
+        logger.info(f"Error sending summary notification to Discord: {e}")
 
     # Log execution time
     end_time = datetime.now()
@@ -150,7 +153,7 @@ async def run_all_bots(symbols, executor, discord_notifier, max_concurrency: int
     total_seconds = int(duration.total_seconds())
     minutes = total_seconds // 60
     seconds = total_seconds % 60
-    print(f"🕒 Total execution time: {minutes} minutes and {seconds} seconds")
+    logger.info(f"🕒 Total execution time: {minutes} minutes and {seconds} seconds")
 
 
 async def schedule_main(symbols, executor, discord_notifier, schedule_hour=16, schedule_minute=0, max_concurrency=5, start_stagger_sec=5):
@@ -159,7 +162,7 @@ async def schedule_main(symbols, executor, discord_notifier, schedule_hour=16, s
         lambda: asyncio.create_task(run_all_bots(symbols, executor, discord_notifier, max_concurrency=max_concurrency, start_stagger_sec=start_stagger_sec)),
         CronTrigger(hour=schedule_hour, minute=schedule_minute)
     )
-    print(f"Scheduler started. Bots will run every day at {schedule_hour:02d}:{schedule_minute:02d} US/Eastern.")
+    logger.info(f"Scheduler started. Bots will run every day at {schedule_hour:02d}:{schedule_minute:02d} US/Eastern.")
     scheduler.start()
     try:
         while True:
@@ -220,20 +223,20 @@ def main(args=None):
 
     # choose symbols source
     if args.symbols:
-        print(f"Symbols provided via command line: {args.symbols}")
+        logger.info(f"Symbols provided via command line: {args.symbols}")
         symbols = parse_symbols(args.symbols)
     elif args.symbols_file:
-        print(f"Loading symbols from file: {args.symbols_file}")
+        logger.info(f"Loading symbols from file: {args.symbols_file}")
         symbols = load_symbols_from_file(args.symbols_file)
     else:
-        print("Loading symbols from default environment variable [DEFAULT_SYMBOLS_STR].")
+        logger.info("Loading symbols from default environment variable [DEFAULT_SYMBOLS_STR].")
         symbols = DEFAULT_SYMBOLS_STR and parse_symbols(DEFAULT_SYMBOLS_STR) or []
 
     symbols = list(dict.fromkeys(symbols))  # remove duplication while preserving order
     if not symbols:
-        print("No symbols provided. Exiting.")
+        logger.info("No symbols provided. Exiting.")
         return
-    print(f"Total unique symbols to trade: {len(symbols)}")
+    logger.info(f"Total unique symbols to trade: {len(symbols)}")
 
     discord_notifier = DiscordNotifier()
     executor = TradeExecutor()

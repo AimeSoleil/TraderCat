@@ -28,8 +28,3 @@ class OpenBBProvider(MarketDataProvider):
     def get_option_chains(self, symbol, end_of_day: date):
         df = obb.derivatives.options.chains(symbol=symbol, date=end_of_day)
         return df.results.implied_volatility
-    
-if __name__ == "__main__":
-    provide = OpenBBProvider()
-    result = provide.get_option_chains('TSLA', date.today())
-    print(f"result: {result}")

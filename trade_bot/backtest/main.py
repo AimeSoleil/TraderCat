@@ -1,5 +1,4 @@
 # main.py
-import logging
 import threading
 import time
 import traceback
@@ -50,21 +49,21 @@ CONFIG = {
         # "BBBreakout": [
         #     "swing",
         # ],
-        "BBReversal": [
-            "swing",
-        ],
-        # "Divergence": [
+        # "BBReversal": [
         #     "swing",
         # ],
         # "ReversalCandle": [
+        #     "swing",
+        # # ],
+        # "Divergence": [
         #     "swing",
         # ],
         # "Fibonacci": [
         #     "swing",
         # ],
-        # "Momentum": [
-        #     "swing",
-        # ],
+        "Momentum": [
+            "swing",
+        ],
     },
     "interval": "1d",
     "initial_cash": 100000,
