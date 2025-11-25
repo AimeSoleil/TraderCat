@@ -1,10 +1,7 @@
-import logging
 from typing import List, Optional, Dict, Any
 
-import numpy as np
-
 from trade_bot.strategy.candle_pattern import CandlePatterns
-from trade_bot.strategy.trading_strategy import TradingStrategy, EPS
+from trade_bot.strategy.trading_strategy import ExitPlanner, TradingStrategy
 from trade_bot.strategy.signal_model import SignalModel
 from trade_bot.logger.logger import get_logger
 
@@ -23,12 +20,11 @@ class CandlestickReversalStrategy(TradingStrategy):
         ema_fast: int = 13,
         ema_slow: int = 34,
         atr_period: int = 14,
-        atr_mult_sl: float = 1.5,
-        target_rr: float = 2.0,
         rsi_period: int = 14,
         adx_period: int = 14,
         adx_threshold: float = 25.0,
         macd_params: Optional[Dict[str,int]] = None,
+        min_atr_price_ratio: float = 0.02,
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 1.0,
         score_threshold: float = 0.6,
@@ -37,12 +33,11 @@ class CandlestickReversalStrategy(TradingStrategy):
         self.ema_fast = int(ema_fast)
         self.ema_slow = int(ema_slow)
         self.atr_period = int(atr_period)
-        self.atr_mult_sl = float(atr_mult_sl)
-        self.target_rr = float(target_rr)
         self.rsi_period = int(rsi_period)
         self.adx_period = adx_period
         self.adx_threshold = adx_threshold
         self.macd_params = macd_params or {"fast": 12, "slow": 26, "signal": 9}
+        self.min_atr_price_ratio = min_atr_price_ratio
         self.vol_zscore_window = int(vol_zscore_window)
         self.vol_zscore_threshold = float(vol_zscore_threshold)
         self.score_threshold = float(score_threshold)
@@ -79,55 +74,6 @@ class CandlestickReversalStrategy(TradingStrategy):
         lookback = base + 3
         return int(lookback)
 
-    # ---------- 通用指标提取与动量确认 ----------
-    def _extract_latest_indicator_value(self, series: Optional[List[Any]], keys: List[str]) -> Optional[float]:
-        """兼容 provider 返回对象/字典/直接数值，提取最后一条数值字段"""
-        if not series:
-            return None
-        last = series[-1]
-        if last is None:
-            return None
-        if isinstance(last, (int, float)):
-            try:
-                return float(last)
-            except Exception:
-                return None
-        for k in keys:
-            try:
-                v = getattr(last, k, None) if hasattr(last, k) else (last.get(k) if isinstance(last, dict) else None)
-            except Exception:
-                v = None
-            if v is not None:
-                try:
-                    return float(v)
-                except Exception:
-                    continue
-        return None
-
-    def _momentum_confirmation(self, rsi_series: Optional[List[Any]], macd_series: Optional[List[Any]], prefer: str = "bull") -> bool:
-        """
-        简单动量确认：
-            - prefer="bull": 期待 MACD hist > 0 或 RSI > 30
-            - prefer="bear": 期待 MACD hist < 0 或 RSI < 70
-        """
-        r_latest = self._extract_latest_indicator_value(rsi_series, [self.rsi_field]) if rsi_series else None
-        macd_hist_latest = None
-        if macd_series:
-            macd_hist_latest = getattr(macd_series[-1], self.macd_hist_field, None)
-
-        if prefer == "bear":
-            if r_latest is not None and r_latest < 70:
-                return True
-            if macd_hist_latest is not None and macd_hist_latest < 0:
-                return True
-            return False
-        else:
-            if r_latest is not None and r_latest > 30:
-                return True
-            if macd_hist_latest is not None and macd_hist_latest > 0:
-                return True
-            return False
-
     # ---------- 主决策逻辑 ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
     # ---------- 数据校验 ----------
@@ -143,20 +89,25 @@ class CandlestickReversalStrategy(TradingStrategy):
         vols = [getattr(c, "volume", None) for c in candles]
         dates = [getattr(c, "date", None) for c in candles]
         close = closes[-1]
-
         # ---------- 指标获取 ----------
-        ema_fast_s = self.provider.get_indicator("ema", candles, {"length": self.ema_fast}) if self.provider else None
-        ema_slow_s = self.provider.get_indicator("ema", candles, {"length": self.ema_slow}) if self.provider else None
-        atr_s = self.provider.get_indicator("atr", candles, {"length": self.atr_period}) if self.provider else None
-        rsi_s = self.provider.get_indicator("rsi", candles, {"length": self.rsi_period}) if self.provider else None
-        macd_s = self.provider.get_indicator("macd", candles, self.macd_params) if (self.provider and self.macd_params) else None
-        adx_s = self.provider.get_indicator("adx", candles, {"length": self.adx_period}) if self.provider else None
+        ema_fast_series = self.provider.get_indicator("ema", candles, {"length": self.ema_fast}) if self.provider else None
+        ema_slow_series = self.provider.get_indicator("ema", candles, {"length": self.ema_slow}) if self.provider else None
+        atr_series = self.provider.get_indicator("atr", candles, {"length": self.atr_period}) if self.provider else None
+        rsi_series = self.provider.get_indicator("rsi", candles, {"length": self.rsi_period}) if self.provider else None
+        macd_series = self.provider.get_indicator("macd", candles, self.macd_params) if (self.provider and self.macd_params) else None
+        adx_series = self.provider.get_indicator("adx", candles, {"length": self.adx_period}) if self.provider else None
 
-        ema_f = self._extract_latest_indicator_value(ema_fast_s, [self.ema_fast_field])
-        ema_slow = self._extract_latest_indicator_value(ema_slow_s, [self.ema_slow_field])
-        atr_val = self._extract_latest_indicator_value(atr_s, [self.atr_field]) or 0.0
-        rsi_val = self._extract_latest_indicator_value(rsi_s, [self.rsi_field])
-        adx_val = self._extract_latest_indicator_value(adx_s, [self.adx_field])
+        atr_val_history = [getattr(a, self.atr_field, None) for a in atr_series]
+        adx_val_history = [getattr(a, self.adx_field, None) for a in adx_series]
+        rsi_val_history = [getattr(r, self.rsi_field, None) for r in rsi_series]
+        macd_hist_val_history = [getattr(m, self.macd_hist_field, None) for m in macd_series] if macd_series else []
+        ema_fast_history = [getattr(m, self.ema_fast_field, None) for m in ema_fast_series]
+        ema_slow_history = [getattr(m, self.ema_slow_field, None) for m in ema_slow_series]
+        current_atr_val = atr_val_history[-1]
+        current_adx_val = adx_val_history[-1]
+        current_rsi_val = rsi_val_history[-1]
+        current_ema_fast_val = ema_fast_history[-1]
+        current_ema_slow_val = ema_slow_history[-1]
 
         # ---------- 烛形检测 (使用 CandlePatterns) ----------
         idx = len(candles) - 1
@@ -165,31 +116,33 @@ class CandlestickReversalStrategy(TradingStrategy):
         pattern = bull_pattern if found_bull else (bear_pattern if found_bear else None)
 
         # ---------- 趋势判断 ----------
-        trend_long = (ema_f is not None and ema_slow is not None and ema_f > ema_slow)
-        trend_short = (ema_f is not None and ema_slow is not None and ema_f < ema_slow)
-        adx_ok = True if adx_val <= self.adx_threshold else False
+        trend_long = (current_ema_fast_val is not None and current_ema_slow_val is not None and current_ema_fast_val > current_ema_slow_val)
+        trend_short = (current_ema_fast_val is not None and current_ema_slow_val is not None and current_ema_fast_val < current_ema_slow_val)
 
-        # ---------- 成交量确认 ----------
-        vol_ok = False
-        z_score = None
-        vol_window = min(self.vol_zscore_window, len(vols)) if vols else 0
-        if vols and vols[-1] is not None and vol_window >= 2:
-            recent_vols = [v for v in vols[-vol_window:] if v is not None]
-            mean_vol = float(np.mean(recent_vols))
-            std_vol = float(np.std(recent_vols, ddof=0))
-            if std_vol > 0:
-                z_score = (vols[-1] - mean_vol) / std_vol
-                vol_ok = z_score > 1.0
+        # ---------- 趋势强度和波动率 -----------
+        trend_strength = self._check_trend_and_volatility(
+            atr_val_history=atr_val_history,
+            adx_val_history=atr_val_history,
+            close=close,
+            window=100,
+            atr_base_threshold=self.min_atr_price_ratio,
+            atr_quantile=0.8,
+            adx_quantile=0.8,
+            mode='reversal'
+        )
+
+        # ---------- 成交量 z-score 确认 -----------
+        recent_window = max(1, min(self.vol_zscore_window, len(vols)))
+        vol_ok, volume_z = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
 
         # ---------- 动量确认 ----------
         mom_ok = False
         if found_bull or found_bear:
-            mom_ok = self._momentum_confirmation(rsi_s, macd_s, prefer=bull_type if found_bull else bear_type)
+            mom_ok = self._momentum_confirmation(rsi_val_history, macd_hist_val_history, prefer=bull_type if found_bull else bear_type)
 
         # ---------- 评分系统 ----------
         score = 0.0
         reasons = []
-        entry = stop_loss = target = None
         if found_bull or found_bear:
             reasons.append(f"形态:{pattern}")
             score += 0.25
@@ -199,31 +152,23 @@ class CandlestickReversalStrategy(TradingStrategy):
             if mom_ok:
                 score += 0.15
                 reasons.append("动量确认")
-            if adx_ok:
+            if trend_strength.signal:
                 score += 0.15
                 reasons.append("趋势强度确认")
             if (found_bull and trend_long) or (found_bear and trend_short):
                 score += 0.15
                 reasons.append("趋势方向一致")
-            if mom_ok and adx_ok and ((found_bull and trend_long) or (found_bear and trend_short)):
+            if mom_ok and trend_strength.signal and ((found_bull and trend_long) or (found_bear and trend_short)):
                 score += 0.10
                 reasons.append("三重共振加分")
 
             confidence = min(1.0, score)
 
-            # ---------- 交易方向与止盈止损 ----------
+            # ---------- 交易方向 ----------
             if confidence >= self.score_threshold:
                 if found_bull:
-                    entry = close
-                    recent_low = min(lows[-3:]) if len(lows) >= 3 else lows[-1]
-                    stop_loss = recent_low - (self.atr_mult_sl * atr_val)
-                    target = entry + max(self.target_rr * (entry - stop_loss), 2 * atr_val)
                     signal = "buy"
                 elif found_bear:
-                    entry = close
-                    recent_high = max(highs[-3:]) if len(highs) >= 3 else highs[-1]
-                    stop_loss = recent_high + (self.atr_mult_sl * atr_val)
-                    target = entry - max(self.target_rr * (stop_loss - entry), 2 * atr_val)
                     signal = "sell"
                 else:
                     signal = "hold"
@@ -235,21 +180,29 @@ class CandlestickReversalStrategy(TradingStrategy):
             confidence = 0.0
             signal = "hold"
             reasons.append("no_pattern")
-
+        
         details = {
             "pattern": pattern,
-            "ema_fast": ema_f,
-            "ema_slow": ema_slow,
-            "atr": atr_val,
-            "rsi": rsi_val,
-            "macd_present": bool(macd_s),
-            "vol_zscore": round(z_score, 3) if z_score is not None else None,
-            "entry": round(entry, 6) if entry is not None else None,
-            "stop_loss": round(stop_loss, 6) if stop_loss is not None else None,
-            "target": round(target, 6) if target is not None else None,
+            "ema_fast": current_ema_fast_val,
+            "ema_slow": current_ema_slow_val,
+            "atr": current_atr_val,
+            "rsi": current_rsi_val,
+            "adx": current_adx_val,
+            "vol_zscore": round(volume_z, 3) if volume_z is not None else None,
             "score": round(score, 3),
-            "reasons": reasons
+            "reasons": reasons,
         }
+            
+        # 计算入场止损与 trailing stop
+        if signal != 'hold':
+            planner = ExitPlanner(
+                highs=highs,
+                lows=lows,
+                atr=current_atr_val,
+                close_price=close
+            )
+            plan = planner.make_exit_plan('long' if signal == 'buy' else 'short')
+            details.update({"plan": plan})
 
         return SignalModel(
             symbol=symbol,
@@ -262,66 +215,25 @@ class CandlestickReversalStrategy(TradingStrategy):
         )
 
 def make_candlestick_reversal_presets() -> Dict[str, Dict[str, Any]]:
-    """
-    CandlestickReversal 策略预设（基于资深 algo trader 经验）
-    三档：
-        - swing: 短波段（1-2 周），更灵敏、更短的确认窗口、较低成交量门槛与较小止损
-        - intermediate: 中波段（2-6 周），平衡设置（回测默认）
-        - position: 中长线（1-3 月），更保守、更严格的趋势/成交量/止损设置
-    """
     swing = {
-        # 指标与周期
-        "ema_fast": 8,
-        "ema_slow": 21,
-        "atr_period": 14,
-        "rsi_period": 9,
-        "adx_period": 7,
-        "adx_threshold": 18.0,
-        "macd_params": {"fast": 8, "slow": 17, "signal": 9},
-
-        # 风险 / 止损 / 目标
-        "atr_mult_sl": 1.2,
-        "target_rr": 1.8,
-        "score_threshold": 0.70,
-
-        # 确认与成交量
-        "vol_zscore_window": 10,
-        "vol_zscore_threshold": 0.8,
+        "ema_fast": 8,                     # Fast EMA for short-term trend
+        "ema_slow": 21,                    # Slow EMA for trend confirmation
+        "atr_period": 14,                  # ATR for volatility context
+        "rsi_period": 14,                  # Standard RSI for reversal confirmation
+        "adx_period": 14,                  # ADX standard period for trend strength
+        "adx_threshold": 20.0,             # Lower threshold to allow reversals in weak trends
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD settings
+        "score_threshold": 0.65,           # Slightly relaxed threshold for reversal signals
+        "vol_zscore_window": 20,           # Match BB/EMA period for volume breakout detection
+        "vol_zscore_threshold": 1.0        # Stricter volume confirmation for reversal validity
     }
 
     intermediate = {
-        "ema_fast": 13,
-        "ema_slow": 34,
-        "atr_period": 14,
-        "rsi_period": 14,
-        "adx_period": 14,
-        "adx_threshold": 25.0,
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-
-        "atr_mult_sl": 1.5,
-        "target_rr": 2.0,
-        "score_threshold": 0.75,
-
-        "vol_zscore_window": 20,
-        "vol_zscore_threshold": 1.0
+        **swing,
     }
 
     position = {
-        "ema_fast": 21,
-        "ema_slow": 55,
-        "atr_period": 21,
-        "rsi_period": 21,
-        "adx_period": 20,
-        "adx_threshold": 30.0,
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-
-        "atr_mult_sl": 2.0,
-        "target_rr": 2.5,
-        "score_threshold": 0.8,
-
-        # 更长期通常放宽短期确认，但要求更强量能
-        "vol_zscore_window": 40,
-        "vol_zscore_threshold": 1.2
+        **swing,
     }
 
     return {"swing": swing, "intermediate": intermediate, "position": position}

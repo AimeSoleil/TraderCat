@@ -2,7 +2,6 @@
 import threading
 import time
 import traceback
-from typing import Dict
 from tabulate import tabulate
 from tqdm import tqdm
 from trade_bot.backtest.backtest_engine import BacktestRunner
@@ -48,21 +47,21 @@ CONFIG = {
         #     "position"
         # ],
         
-        # "BBBreakout": [
-        #     "swing",
-        # ],
-        # "BBReversal": [
-        #     "swing",
-        # ],
-        # "ReversalCandle": [
-        #     "swing",
-        # # ],
-        # "Divergence": [
-        #     "swing",
-        # ],
-        # "Fibonacci": [
-        #     "swing",
-        # ],
+        "BBBreakout": [
+            "swing",
+        ],
+        "BBReversal": [
+            "swing",
+        ],
+        "ReversalCandle": [
+            "swing",
+        ],
+        "Divergence": [
+            "swing",
+        ],
+        "Fibonacci": [
+            "swing",
+        ],
         "Momentum": [
             "swing",
         ],

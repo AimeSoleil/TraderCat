@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict, Any
 import statistics
 
-from trade_bot.strategy.trading_strategy import TradingStrategy, EPS
+from trade_bot.strategy.trading_strategy import ExitPlanner, TradingStrategy, EPS
 from trade_bot.strategy.signal_model import SignalModel
 from trade_bot.logger.logger import get_logger
 
@@ -33,11 +33,7 @@ class MomentumTrendStrategy(TradingStrategy):
         ht_ema_fast: int = 8,  # higher timeframe EMA fast (aggregated weekly)
         ht_ema_slow: int = 21,  # higher timeframe EMA slow
         adx_period: int = 14,
-        adx_threshold: float = 25.0,
         atr_period: int = 14,
-        entry_atr_mult: float = 1.5,
-        trailing_atr_mult: float = 3.0,
-        time_stop_bars: int = 63,
         min_atr_price_ratio: float = 0.001,
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 1.0,
@@ -50,11 +46,7 @@ class MomentumTrendStrategy(TradingStrategy):
         self.ht_ema_fast = int(ht_ema_fast)
         self.ht_ema_slow = int(ht_ema_slow)
         self.adx_period = int(adx_period)
-        self.adx_threshold = float(adx_threshold)
         self.atr_period = int(atr_period)
-        self.entry_atr_mult = float(entry_atr_mult)
-        self.trailing_atr_mult = float(trailing_atr_mult)
-        self.time_stop_bars = int(time_stop_bars)
         self.min_atr_price_ratio = float(min_atr_price_ratio)
         self.vol_zscore_window = int(vol_zscore_window)
         self.vol_zscore_threshold = float(vol_zscore_threshold)
@@ -86,55 +78,13 @@ class MomentumTrendStrategy(TradingStrategy):
         )
 
     # ---------- helpers ----------
-    def _compute_return_L(self, closes: List[float], L: int) -> Optional[float]:
-        if len(closes) <= L:
-            return None
-        past = closes[-L - 1]
-        curr = closes[-1]
-        if abs(past) < EPS:
-            return None
-        return curr / past - 1.0
-
-    def _extract_latest_indicator_value(
-        self, series: Optional[List[Any]], keys: List[str]
-    ) -> Optional[float]:
-        """
-        兼容封装：从 provider 的指标序列中提取最后一条数值（兼容对象属性或 dict 字段或直接数值）。
-        keys: 候选属性名列表（优先级顺序）
-        """
-        if not series:
-            return None
-        last = series[-1]
-        if last is None:
-            return None
-        if isinstance(last, (int, float)):
-            try:
-                return float(last)
-            except Exception:
-                return None
-        for k in keys:
-            try:
-                v = (
-                    getattr(last, k, None)
-                    if hasattr(last, k)
-                    else (last.get(k) if isinstance(last, dict) else None)
-                )
-            except Exception:
-                v = None
-            if v is not None:
-                try:
-                    return float(v)
-                except Exception:
-                    continue
-        return None
-
-    def _compute_ema_manual(self, series: List[float], period: int) -> Optional[float]:
-        if not series or len(series) < period:
+    def _compute_ema_manual(self, ema_series: List[float], period: int) -> Optional[float]:
+        if not ema_series or len(ema_series) < period:
             return None
         # simple EMA calculation for last value
         k = 2.0 / (period + 1.0)
-        ema = series[0]
-        for v in series[1:]:
+        ema = ema_series[0]
+        for v in ema_series[1:]:
             ema = v * k + ema * (1 - k)
         return ema
 
@@ -203,25 +153,26 @@ class MomentumTrendStrategy(TradingStrategy):
         lows = [float(getattr(c, "low")) for c in candles]
         vols = [float(getattr(c, "volume")) for c in candles]
         dates = [getattr(c, "date") for c in candles]
-        price = closes[-1]
+        curr_close = closes[-1]
 
         # 1) momentum ret_L
         ret_L = self._compute_return_L(closes, self.L)
 
         # 2) EMA (daily) via provider or manual fallback
         # EMA via provider (使用封装提取，兼容不同命名)，fallback 到手动计算
-        ema_fast_series = self.provider.get_indicator(
-            "ema", candles, {"length": self.ema_fast}
-        )
-        ema_slow_series = self.provider.get_indicator(
-            "ema", candles, {"length": self.ema_slow}
-        )
-        ema_fast_val = self._extract_latest_indicator_value(
-            ema_fast_series, [self.ema_fast_field]
-        )
-        ema_slow_val = self._extract_latest_indicator_value(
-            ema_slow_series, [self.ema_slow_field]
-        )
+        ema_fast_series = self.provider.get_indicator("ema", candles, {"length": self.ema_fast})
+        ema_slow_series = self.provider.get_indicator("ema", candles, {"length": self.ema_slow})
+        atr_series = self.provider.get_indicator("atr", candles, {"length": self.atr_period})
+        adx_series = self.provider.get_indicator("adx", candles, {"length": self.adx_period})
+
+        atr_val_history = [getattr(a, self.atr_field, None) for a in atr_series]
+        adx_val_history = [getattr(a, self.adx_field, None) for a in adx_series]
+        ema_fast_history = [getattr(m, self.ema_fast_field, None) for m in ema_fast_series]
+        ema_slow_history = [getattr(m, self.ema_slow_field, None) for m in ema_slow_series]
+        current_atr_val = atr_val_history[-1]
+        current_adx_val = adx_val_history[-1]
+        current_ema_fast_val = ema_fast_history[-1]
+        current_ema_slow_val = ema_slow_history[-1]
 
         # 3) higher timeframe EMA confirmation
         # higher timeframe EMA via aggregation, use extractor for last values when available
@@ -243,57 +194,47 @@ class MomentumTrendStrategy(TradingStrategy):
         )
         ht_ema_ok = True if (ht_fast is not None and ht_slow is not None) else False
 
-        # 4) ADX
-        adx_series = self.provider.get_indicator("adx", candles, {"length": self.adx_period})
-        adx_val = self._extract_latest_indicator_value(adx_series, [self.adx_field])
-        adx_ok = True if (adx_val is None or adx_val >= self.adx_threshold) else False
+        # ---------- 趋势强度和波动率 -----------
+        trend_strength = self._check_trend_and_volatility(
+            atr_val_history=atr_val_history,
+            adx_val_history=atr_val_history,
+            close=curr_close,
+            window=100,
+            atr_base_threshold=self.min_atr_price_ratio,
+            atr_quantile=0.8,
+            adx_quantile=0.8,
+            mode='reversal'
+        )
 
-        # 5) ATR
-        atr_series = self.provider.get_indicator("atr", candles, {"length": self.atr_period})
-        atr_val = self._extract_latest_indicator_value(atr_series, [self.atr_field])
-        vol_guard = (atr_val is not None) and (atr_val / max(abs(price), EPS) >= self.min_atr_price_ratio)
-
-        # 6) Volume z-score
-        # 成交量 z-score 确认（vol_ok）：用最近 vol_zscore_window 样本计算 z-score
-        vol_ok = False
-        volume_z = None
+        # ---------- 成交量 z-score 确认 -----------
         recent_window = max(1, min(self.vol_zscore_window, len(vols)))
-        recent_vols = [v for v in vols[-recent_window:] if v is not None]
-        try:
-            if recent_vols and len(recent_vols) >= 2 and vols[-1] is not None:
-                mean_v = sum(recent_vols) / len(recent_vols)
-                std_v = statistics.pstdev(recent_vols) if len(recent_vols) > 1 else 0.0
-                if std_v > 0:
-                    volume_z = (vols[-1] - mean_v) / std_v
-                    vol_ok = volume_z >= self.vol_zscore_threshold
-        except Exception:
-            vol_ok = False
+        vol_ok, volume_z = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
 
         details: Dict[str, Any] = {
-            "price": price,
+            "price": curr_close,
             "ret_L": round(ret_L, 6) if ret_L is not None else None,
-            "ema_fast": round(ema_fast_val, 6) if ema_fast_val is not None else None,
-            "ema_slow": round(ema_slow_val, 6) if ema_slow_val is not None else None,
+            "ema_fast": round(current_ema_fast_val, 6) if current_ema_fast_val is not None else None,
+            "ema_slow": round(current_ema_slow_val, 6) if current_ema_slow_val is not None else None,
             "ht_ema_fast": (
                 round(ht_fast, 6) if ht_ema_ok and ht_fast is not None else None
             ),
             "ht_ema_slow": (
                 round(ht_slow, 6) if ht_ema_ok and ht_slow is not None else None
             ),
-            "adx": round(adx_val, 3) if adx_val is not None else None,
-            "atr": round(atr_val, 6) if atr_val is not None else None,
-            "vol_guard": vol_guard,
+            "adx": round(current_adx_val, 3) if current_adx_val is not None else None,
+            "atr": round(current_atr_val, 6) if current_atr_val is not None else None,
+            "trend_strength": trend_strength.reason,
         }
 
         trend_day_up = (
-            ema_fast_val is not None
-            and ema_slow_val is not None
-            and ema_fast_val > ema_slow_val
+            current_ema_fast_val is not None
+            and current_ema_slow_val is not None
+            and current_ema_fast_val > current_ema_slow_val
         )
         trend_day_down = (
-            ema_fast_val is not None
-            and ema_slow_val is not None
-            and ema_fast_val < ema_slow_val
+            current_ema_fast_val is not None
+            and current_ema_slow_val is not None
+            and current_ema_fast_val < current_ema_slow_val
         )
         trend_ht_up = (
             ht_ema_ok
@@ -332,20 +273,17 @@ class MomentumTrendStrategy(TradingStrategy):
             if trend_day_up:
                 score += 0.20
                 reasons.append("日线EMA向上") # 当前周期趋势确认
+            if trend_strength.signal:
+                score += 0.25
+                reasons.append("趋势强度确认") # 趋势强度决定动量是否有效
             if ht_ema_ok and trend_ht_up:
                 score += 0.15
                 reasons.append("高周期EMA向上") # 多周期共振增强信号
-            if adx_ok:
-                score += 0.15
-                reasons.append("趋势强度确认") # 趋势强度决定动量是否有效
             if vol_ok:
                 score += 0.10
                 reasons.append("成交量放大") # 放量动能更可信
-            if vol_guard:
-                score += 0.10
-                reasons.append("波动率过滤通过") # 防止震荡区假信号
             # 共振加分
-            if trend_day_up and trend_ht_up and adx_ok:
+            if trend_day_up and trend_ht_up and trend_strength.trend:
                 score += 0.1
                 reasons.append("多周期趋势+ADX共振加分")
         elif short_cond:
@@ -354,20 +292,17 @@ class MomentumTrendStrategy(TradingStrategy):
             if trend_day_down:
                 score += 0.20
                 reasons.append("日线EMA向下")
+            if trend_strength.signal:
+                score += 0.25
+                reasons.append("趋势强度确认") # 趋势强度决定动量是否有效
             if ht_ema_ok and trend_ht_down:
                 score += 0.15
                 reasons.append("高周期EMA向下")
-            if adx_ok:
-                score += 0.15
-                reasons.append("趋势强度确认")
             if vol_ok:
                 score += 0.10
                 reasons.append("成交量放大")
-            if vol_guard:
-                score += 0.10
-                reasons.append("波动率过滤通过")
             # 共振加分
-            if trend_day_down and trend_ht_down and adx_ok:
+            if trend_day_down and trend_ht_down and trend_strength.trend:
                 score += 0.1
                 reasons.append("多周期趋势+ADX共振加分")
 
@@ -382,42 +317,21 @@ class MomentumTrendStrategy(TradingStrategy):
             reasons.append("No momentum trend")
 
         # 8) position sizing suggestion (risk per trade using ATR)
-        entry_price = price
-        stop_price = None
-        if atr_val:
-            # risk monetary per share = ATR * entry_atr_mult
-            unit_risk = atr_val * self.entry_atr_mult
-            if unit_risk > 0:
-                # translate to stop price
-                if signal == "buy":
-                    stop_price = entry_price - unit_risk
-                elif signal == "sell":
-                    stop_price = entry_price + unit_risk
-
-        # trailing suggestion (Chandelier style)
-        trailing_stop = None
-        if signal == "buy" and atr_val:
-            trailing_stop = (
-                max([max(highs[-self.atr_period :])]) - self.trailing_atr_mult * atr_val
+        if signal != 'hold':
+            planner = ExitPlanner(
+                highs=highs,
+                lows=lows,
+                atr=current_atr_val,
+                close_price=curr_close,
             )
-        elif signal == "sell" and atr_val:
-            trailing_stop = (
-                min([min(lows[-self.atr_period :])]) + self.trailing_atr_mult * atr_val
-            )
+            plan = planner.make_exit_plan('long' if signal == 'buy' else 'short')
+            details.update({"plan": plan})
 
         details.update(
             {
                 "signal": signal,
                 "confidence": round(confidence, 3),
                 "score": round(score, 3),
-                "entry_price": round(entry_price, 6),
-                "suggested_stop": (
-                    round(stop_price, 6) if stop_price is not None else None
-                ),
-                "trailing_stop": (
-                    round(trailing_stop, 6) if trailing_stop is not None else None
-                ),
-                "time_stop_bars": self.time_stop_bars,
             }
         )
 
@@ -439,57 +353,26 @@ def make_momentum_presets() -> Dict[str, Dict[str, Any]]:
     - position：中长线（更严格确认），更高门槛与更大止损
     """
     swing = {
-        "L": 21,
-        "ema_fast": 8,
-        "ema_slow": 21,
-        "ht_ema_fast": 8,
-        "ht_ema_slow": 21,
-        "adx_period": 14,
-        "adx_threshold": 15.0,
-        "atr_period": 14,
-        "entry_atr_mult": 1.2,
-        "trailing_atr_mult": 2.5,
-        "time_stop_bars": 21,
-        "min_atr_price_ratio": 0.0008,
-        "vol_zscore_window": 10,
-        "vol_zscore_threshold": 0.9,
-        "score_threshold": 0.7,
+        "L": 21,                           # Lookback for momentum score (often matches slow EMA)
+        "ema_fast": 8,                     # Fast EMA for short-term trend
+        "ema_slow": 21,                    # Slow EMA for trend confirmation
+        "ht_ema_fast": 8,                  # Hilbert Transform EMA fast (same as EMA fast)
+        "ht_ema_slow": 21,                 # Hilbert Transform EMA slow (same as EMA slow)
+        "adx_period": 14,                  # ADX standard period for trend strength
+        "atr_period": 14,                  # ATR for volatility context
+        "min_atr_price_ratio": 0.002,      # Ensures volatility is meaningful (0.2%)
+        "vol_zscore_window": 20,           # Match EMA period for volume breakout detection
+        "vol_zscore_threshold": 1.0,       # Stricter volume confirmation for trend continuation
+        "score_threshold": 0.7             # Balanced threshold for momentum confidence
     }
 
+
     intermediate = {
-        "L": 63,
-        "ema_fast": 13,
-        "ema_slow": 34,
-        "ht_ema_fast": 8,
-        "ht_ema_slow": 21,
-        "adx_period": 14,
-        "adx_threshold": 20.0,
-        "atr_period": 14,
-        "entry_atr_mult": 1.5,
-        "trailing_atr_mult": 3.0,
-        "time_stop_bars": 63,
-        "min_atr_price_ratio": 0.001,
-        "vol_zscore_window": 20,
-        "vol_zscore_threshold": 1.0,
-        "score_threshold": 0.75,
+        **swing,
     }
 
     position = {
-        "L": 126,
-        "ema_fast": 21,
-        "ema_slow": 55,
-        "ht_ema_fast": 13,
-        "ht_ema_slow": 34,
-        "adx_period": 14,
-        "adx_threshold": 25.0,
-        "atr_period": 21,
-        "entry_atr_mult": 1.8,
-        "trailing_atr_mult": 3.5,
-        "time_stop_bars": 126,
-        "min_atr_price_ratio": 0.0015,
-        "vol_zscore_window": 40,
-        "vol_zscore_threshold": 1.2,
-        "score_threshold": 0.8,
+        **swing,
     }
 
     return {"swing": swing, "intermediate": intermediate, "position": position}

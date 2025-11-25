@@ -1,4 +1,3 @@
-from tokenize import cookie_re
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from trade_bot.data.market_data_provider import MarketDataProvider
@@ -71,42 +70,7 @@ class SectorRotationStrategy(TradingStrategy):
     def get_lookback_window(self) -> int:
         return self.look_back_days + self.rsi_period
 
-    def _compute_return_L(self, closes: List[float], L: int) -> Optional[float]:
-        if len(closes) <= L:
-            return None
-        past = closes[-L - 1]
-        curr = closes[-1]
-        if abs(past) < EPS:
-            return None
-        return curr / past - 1.0
-
-    def _extract_latest_indicator_value(
-        self, series: Optional[List[Any]], keys: List[str]
-    ) -> Optional[float]:
-        if not series:
-            return None
-        last = series[-1]
-        for k in keys:
-            try:
-                v = (
-                    getattr(last, k, None)
-                    if hasattr(last, k)
-                    else (last.get(k) if isinstance(last, dict) else None)
-                )
-            except Exception:
-                v = None
-            if v is not None:
-                try:
-                    return float(v)
-                except Exception:
-                    continue
-        return None
-
-    def _normalize(self, val: float, min_val: float, max_val: float) -> float:
-        if val is None or max_val <= min_val:
-            return 0.0
-        return (val - min_val) / (max_val - min_val)
-
+    # ---------- Helper Functions ------------
     def _detect_market_regime(self) -> Dict[str, Any]:
         spy_candles = self.provider.get_price_data("SPY", "1d", 200)
 
@@ -135,17 +99,15 @@ class SectorRotationStrategy(TradingStrategy):
             date = getattr(_candles[-1], "date")
 
             # RSI
-            rsi_series = self.provider.get_indicator(
-                "rsi", _candles, {"length": self.rsi_period}
-            )
-            rsi_val = self._extract_latest_indicator_value(rsi_series, [self.rsi_field])
+            rsi_series = self.provider.get_indicator("rsi", _candles, {"length": self.rsi_period})
+            current_rsi_val = self._extract_latest_indicator_value(rsi_series, [self.rsi_field])
 
             # Volatility (ATR ratio)
             atr_series = self.provider.get_indicator(
                 "atr", _candles, {"length": self.atr_period}
             )
-            atr_val = self._extract_latest_indicator_value(atr_series, [self.atr_field])
-            volatility = atr_val / max(abs(price), EPS) if atr_val else None
+            current_atr_val = self._extract_latest_indicator_value(atr_series, [self.atr_field])
+            volatility = current_atr_val / max(abs(price), EPS) if current_atr_val else None
 
             # Momentum
             momentum = self._compute_return_L(closes, self.look_back_days)
@@ -159,7 +121,7 @@ class SectorRotationStrategy(TradingStrategy):
             volume_trend = vols[-1] / (np.mean(vols[-20:]) if len(vols) >= 20 else 1)
 
             etf_indicators[etf] = Indicators(
-                rsi=rsi_val,
+                rsi=current_rsi_val,
                 volatility=volatility,
                 momentum=momentum,
                 avg_volume=avg_volume,
@@ -240,63 +202,3 @@ class SectorRotationStrategy(TradingStrategy):
             ),
             details=details,
         )
-
-    # def backtest(self, initial_capital: float = 100000) -> Dict[str, Any]:
-    #     """
-    #     Backtest the strategy over a dynamic historical period based on lookback window.
-    #     """
-    #     lookback_window = self.get_lookback_window()
-    #     logger.info(f"Backtest lookback window: {lookback_window} days")
-
-    #     # Fetch historical data for all ETFs using get_price_data
-    #     historical_data = {}
-    #     for sector, etf in SECTOR_ETF_LIST.items():
-    #         historical_data[etf] = self.provider.get_price_data(etf, interval="1d", lookback_days=lookback_window)
-
-    #     # Use SPY as reference for dates
-    #     spy_data = self.provider.get_price_data("SPY", interval="1d", lookback_days=lookback_window)
-    #     dates = [getattr(c, "date") for c in spy_data]
-
-    #     portfolio_value = []
-    #     allocations_history = []
-    #     current_allocations = {}
-    #     capital = initial_capital
-
-    #     for i, date in enumerate(dates):
-    #         # Generate signal for this date
-    #         candles = spy_data[:i+1]  # Pass SPY candles up to current date
-    #         signal = self.generate_signal("SPY", candles)
-
-    #         if signal.signal == "rebalance":
-    #             current_allocations = signal.details["allocations"]
-    #             allocations_history.append((date, current_allocations))
-
-    #         # Compute portfolio value
-    #         daily_value = 0
-    #         for sector, weight in current_allocations.items():
-    #             etf = SECTOR_ETF_LIST[sector]
-    #             price = float(getattr(historical_data[etf][i], "close"))
-    #             daily_value += capital * weight * (price / float(getattr(historical_data[etf][0], "close")))
-
-    #         portfolio_value.append(daily_value if daily_value > 0 else capital)
-
-    #     # Convert to DataFrame
-    #     df = pd.DataFrame({"date": dates, "portfolio_value": portfolio_value})
-    #     df.set_index("date", inplace=True)
-
-    #     # Compute metrics
-    #     returns = df["portfolio_value"].pct_change().dropna()
-    #     cagr = (df["portfolio_value"].iloc[-1] / initial_capital) ** (252 / len(df)) - 1
-    #     sharpe = returns.mean() / returns.std() * np.sqrt(252)
-    #     max_drawdown = ((df["portfolio_value"] / df["portfolio_value"].cummax()) - 1).min()
-
-    #     summary = {
-    #         "CAGR": round(cagr, 4),
-    #         "Sharpe Ratio": round(sharpe, 2),
-    #         "Max Drawdown": round(max_drawdown, 4),
-    #         "Final Value": round(df["portfolio_value"].iloc[-1], 2),
-    #         "Allocations History": allocations_history,
-    #         "Lookback Window": lookback_window
-    #     }
-
-    #     return {"performance": summary, "equity_curve": df}
