@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any, Tuple
 
-from trade_bot.strategy.trading_strategy import ExitPlanner, StrategyUtilities, TradingStrategy
+from trade_bot.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
+from trade_bot.strategy.trading_strategy import ExitPlanner, TradingStrategy
 from trade_bot.strategy.signal_model import SignalModel
 from trade_bot.logger.logger import get_logger
 
@@ -12,18 +13,18 @@ class BollingerBreakoutStrategy(TradingStrategy):
         self,
         bb_period: int = 20,
         bb_std: float = 2.0,
-        trailing_bw_window: int = 100,
+        trailing_bw_window: int = 60,
         bw_percentile_threshold: float = 30.0,  # percentile threshold (e.g. 30)
-        ema_fast: int = 13,
-        ema_slow: int = 34,
+        ema_fast: int = 8,
+        ema_slow: int = 21,
         atr_period: int = 14,
         adx_period: int = 14,
         rsi_period: Optional[int] = 14,
-        prior_swing_bars: int = 5,
+        prior_swing_bars: int = 3,
         min_atr_price_ratio: float = 0.02,  # volatility guard: ATR / price
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 2.0,
-        score_threshold: float = 0.6,
+        score_threshold: float = 0.7,
         data_provider=None,
     ):
         self.bb_period = bb_period
@@ -68,7 +69,19 @@ class BollingerBreakoutStrategy(TradingStrategy):
             )
             + 5
         )
+    
+    # Supported scoring factors
+    def support_scoring_factors(self) -> List[FactorName]:
+        return  [
+            FactorName.BREAKOUT_TRIGGER,
+            FactorName.SQUEEZE_CONFIRM,
+            FactorName.TREND_STRENGTH,
+            FactorName.VOLUME_CONFIRM,
+            FactorName.EMA_ALIGNMENT,
+            FactorName.CONFLUENCE_BONUS
+        ]
 
+    # --------- Helper Functions ---------
     def _read_provider_bandwidth(self, bb_series: Any, idx: int) -> Tuple[
         Optional[float], List[float], Optional[float], Optional[float], Optional[float]
     ]:
@@ -218,69 +231,43 @@ class BollingerBreakoutStrategy(TradingStrategy):
         }
 
         # 评分 & 生成 signal
-        score = 0.0
-        reasons = []
-        confidence = 0.0
-        signal = "hold"
-        # 强调 squeeze 和成交量的共振效应
-        if long_break or short_break:
-            # 基础突破信号
-            score += 0.25
-            reasons.append("突破触发")
-            # squeeze 强度（非线性）
-            if in_squeeze:
-                score += 0.25
-                reasons.append("Squeeze 确认")
-            # ATR 波动率过滤 and ADX 趋势强度
-            if trend_strength.signal:
-                score += 0.25
-                reasons.append("趋势强度和波动率通过")
-            # 成交量确认
-            if vol_ok:
-                score += 0.15
-                reasons.append("成交量放大")
-            # EMA 趋势方向一致
-            if (long_break and trend_long) or (short_break and trend_short):
-                score += 0.10
-                reasons.append("趋势方向一致")
-            # 共振加分
-            if trend_strength.signal and (
-                (long_break and trend_long) or (short_break and trend_short)
-            ):
-                score += 0.1
-                reasons.append("三重共振加分")
-            details["score"] = round(score, 3)
-
-            # 生成具体信号类型
-            if long_break and confidence >= self.score_threshold:
-                signal = "buy"
-            elif short_break and confidence >= self.score_threshold:
-                signal = "sell"
-            else:
-                # 未达到阈值则观望
-                signal = "hold"
-                reasons.append("突破发生但置信度不足")
-        else:
-            reasons.append("无有效突破或不在squeeze/趋势不符/波动率不足")
+        result: ScoringResult = None
+        factors = [
+            Factor(FactorName.BREAKOUT_TRIGGER, "布林带突破", 0.30, long_break or short_break),
+            Factor(FactorName.SQUEEZE_CONFIRM, "布林带Squeeze确认", 0.25, in_squeeze),
+            Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.20, trend_strength.signal),
+            Factor(FactorName.VOLUME_CONFIRM, "成交量放大", 0.15, vol_ok),
+            Factor(FactorName.EMA_ALIGNMENT, "趋势方向一致", 0.05, (long_break and trend_long) or (short_break and trend_short)),
+            Factor(FactorName.CONFLUENCE_BONUS, "趋势方向强度波动率一致", 0.05, trend_strength.signal and ((long_break and trend_long) or (short_break and trend_short))),
+        ]
+        engine = ScoringEngine(
+            base_threshold=0.7, 
+            required_factors=self.support_scoring_factors(),
+            determined_factors=[
+                FactorName.BREAKOUT_TRIGGER
+            ]
+        )
+        side = "long" if long_break else "short" if short_break else "hold"
+        result = engine.compute_score(factors, side=side)
 
         # 计算入场止损与 trailing stop
-        if signal != 'hold':
+        if result and result.signal != "hold":
             planner = ExitPlanner(
                 highs=highs,
                 lows=lows,
                 atr=current_atr_val,
                 close_price=close
             )
-            plan = planner.make_exit_plan('long' if signal == 'buy' else 'short')
+            plan = planner.make_exit_plan('long' if result.signal == 'buy' else 'short')
             details.update({"plan": plan})
 
         return SignalModel(
             symbol=symbol,
             strategy=self.get_name(),
-            signal=signal,
+            signal=result.signal,
             date=dates[-1],
-            confidence=round(min(1.0, score), 3),
-            reason=" | ".join(reasons),
+            confidence=round(min(1.0, result.signal.score), 3),
+            reason=" | ".join(result.reasons),
             details=details,
         )
 

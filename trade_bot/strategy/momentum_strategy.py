@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any
 import statistics
 
+from trade_bot.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
 from trade_bot.strategy.trading_strategy import ExitPlanner, TradingStrategy, EPS
 from trade_bot.strategy.signal_model import SignalModel
 from trade_bot.logger.logger import get_logger
@@ -76,6 +77,17 @@ class MomentumTrendStrategy(TradingStrategy):
             )
             + 10
         )
+
+    # Supported scoring factors
+    def support_scoring_factors(self) -> List[FactorName]:
+        return  [
+            FactorName.MOMENTUM_CONFIRM,
+            FactorName.TREND_STRENGTH,
+            FactorName.DAILY_TREND_CONFIRM,
+            FactorName.HIGHER_TIMEFRAME_TREND_CONFIRM,
+            FactorName.VOLUME_CONFIRM,
+            FactorName.CONFLUENCE_BONUS
+        ]
 
     # ---------- helpers ----------
     def _compute_ema_manual(self, ema_series: List[float], period: int) -> Optional[float]:
@@ -265,83 +277,45 @@ class MomentumTrendStrategy(TradingStrategy):
         )
 
         # 7) signals & scoring - 重点强调 动量 + 多周期趋势 + ADX 共振，适度降低辅助因子权重
-        score = 0.0
-        reasons = []
-        if long_cond:
-            score += 0.30
-            reasons.append("动量向上") # 是信号的核心触发条件
-            if trend_day_up:
-                score += 0.20
-                reasons.append("日线EMA向上") # 当前周期趋势确认
-            if trend_strength.signal:
-                score += 0.25
-                reasons.append("趋势强度确认") # 趋势强度决定动量是否有效
-            if ht_ema_ok and trend_ht_up:
-                score += 0.15
-                reasons.append("高周期EMA向上") # 多周期共振增强信号
-            if vol_ok:
-                score += 0.10
-                reasons.append("成交量放大") # 放量动能更可信
-            # 共振加分
-            if trend_day_up and trend_ht_up and trend_strength.trend:
-                score += 0.1
-                reasons.append("多周期趋势+ADX共振加分")
-        elif short_cond:
-            score += 0.30
-            reasons.append("动量向下")
-            if trend_day_down:
-                score += 0.20
-                reasons.append("日线EMA向下")
-            if trend_strength.signal:
-                score += 0.25
-                reasons.append("趋势强度确认") # 趋势强度决定动量是否有效
-            if ht_ema_ok and trend_ht_down:
-                score += 0.15
-                reasons.append("高周期EMA向下")
-            if vol_ok:
-                score += 0.10
-                reasons.append("成交量放大")
-            # 共振加分
-            if trend_day_down and trend_ht_down and trend_strength.trend:
-                score += 0.1
-                reasons.append("多周期趋势+ADX共振加分")
+        result: ScoringResult = None
+        factors = [
+            Factor(FactorName.MOMENTUM_CONFIRM, "动量确认", 0.3, long_cond or short_cond),
+            Factor(FactorName.TREND_STRENGTH, "趋势强度确认", 0.25, trend_strength.signal),
+            Factor(FactorName.DAILY_TREND_CONFIRM, "日线EMA确认", 0.2, trend_strength.signal),
+            Factor(FactorName.HIGHER_TIMEFRAME_TREND_CONFIRM, "高周期EMA确认", 0.15, trend_strength.signal),
+            Factor(FactorName.VOLUME_CONFIRM, "成交量放大确认", 0.05, vol_ok),
+            Factor(FactorName.CONFLUENCE_BONUS, "多周期趋势+ADX共振加分", 0.05, (trend_day_up and trend_ht_up and trend_strength.trend) or (trend_day_down and trend_ht_down and trend_strength.trend))
+        ]
 
-        confidence = min(1.0, score)
-        # decide signal based on which side has higher support (simple approach)
-        if long_cond and confidence >= self.score_threshold:
-            signal = "buy"
-        elif short_cond and confidence >= self.score_threshold:
-            signal = "sell"
-        else:
-            signal = "hold"
-            reasons.append("No momentum trend")
+        # Compute score using ScoringEngine
+        engine = ScoringEngine(
+            base_threshold=0.7, 
+            required_factors=self.support_scoring_factors(),
+            determined_factors=[
+                FactorName.BB_REVERSAL_CANDLE
+            ]
+        )
+        side = "long" if long_cond else "short" if short_cond else "hold"
+        result = engine.compute_score(factors, side=side)
 
-        # 8) position sizing suggestion (risk per trade using ATR)
-        if signal != 'hold':
+        # 8) 计算入场止损与 trailing stop
+        if result and result.signal != 'hold':
             planner = ExitPlanner(
                 highs=highs,
                 lows=lows,
                 atr=current_atr_val,
-                close_price=curr_close,
+                close_price=curr_close
             )
-            plan = planner.make_exit_plan('long' if signal == 'buy' else 'short')
+            plan = planner.make_exit_plan('long' if result.signal == 'buy' else 'short')
             details.update({"plan": plan})
-
-        details.update(
-            {
-                "signal": signal,
-                "confidence": round(confidence, 3),
-                "score": round(score, 3),
-            }
-        )
 
         return SignalModel(
             symbol=symbol,
             strategy=self.get_name(),
-            signal=signal,
+            signal=result.signal,
             date=dates[-1],
-            confidence=round(confidence, 3),
-            reason=" | ".join(reasons) if reasons else "no signal conditions met",
+            confidence=round(result.score, 3),
+            reason=" | ".join(result.reasons),
             details=details,
         )
 

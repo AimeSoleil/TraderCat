@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from trade_bot.strategy.signal_model import SignalModel
+from trade_bot.strategy.signal_scorer import FactorName
 
 EPS = 1e-9
 
@@ -41,9 +42,15 @@ class TradingStrategy(ABC):
         Returns minimum length of candle window
         """
         pass
+
+    def support_scoring_factors(self) -> List[FactorName]:
+        """
+        Returns scoring factors
+        """
+        pass
     
     # --- 指标函数 ---
-    def _momentum_confirmation(self,
+    def _MOMENTUM_CONFIRM(self,
         rsi_val_history: Optional[List[Any]],
         macd_hist_val_history: Optional[List[Any]],
         prefer: str = "bull",

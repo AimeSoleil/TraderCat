@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any
 
 from trade_bot.strategy.candle_pattern import CandlePatterns
+from trade_bot.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
 from trade_bot.strategy.trading_strategy import ExitPlanner, TradingStrategy
 from trade_bot.strategy.signal_model import SignalModel
 from trade_bot.logger.logger import get_logger
@@ -74,9 +75,20 @@ class CandlestickReversalStrategy(TradingStrategy):
         lookback = base + 3
         return int(lookback)
 
+    # Supported scoring factors
+    def support_scoring_factors(self) -> List[FactorName]:
+        return  [
+            FactorName.REVERSAL_CANDLE,
+            FactorName.VOLUME_CONFIRM,
+            FactorName.TREND_STRENGTH,
+            FactorName.TREND_DIRECTION_CONFIRM,
+            FactorName.MOMENTUM_CONFIRM,
+            FactorName.CONFLUENCE_BONUS
+        ]
+
     # ---------- 主决策逻辑 ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
-    # ---------- 数据校验 ----------
+        # ---------- 数据校验 ----------
         if not candles or len(candles) < max(self.ema_slow, self.atr_period, 3):
             return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold",
                                 date=None, reason="insufficient data", confidence=0.0)
@@ -138,49 +150,29 @@ class CandlestickReversalStrategy(TradingStrategy):
         # ---------- 动量确认 ----------
         mom_ok = False
         if found_bull or found_bear:
-            mom_ok = self._momentum_confirmation(rsi_val_history, macd_hist_val_history, prefer=bull_type if found_bull else bear_type)
+            mom_ok = self._MOMENTUM_CONFIRM(rsi_val_history, macd_hist_val_history, prefer=bull_type if found_bull else bear_type)
 
         # ---------- 评分系统 ----------
-        score = 0.0
-        reasons = []
-        if found_bull or found_bear:
-            reasons.append(f"形态:{pattern}")
-            score += 0.25
-            if vol_ok:
-                score += 0.20
-                reasons.append("成交量确认")
-            if mom_ok:
-                score += 0.15
-                reasons.append("动量确认")
-            if trend_strength.signal:
-                score += 0.15
-                reasons.append("趋势强度确认")
-            if (found_bull and trend_long) or (found_bear and trend_short):
-                score += 0.15
-                reasons.append("趋势方向一致")
-            if mom_ok and trend_strength.signal and ((found_bull and trend_long) or (found_bear and trend_short)):
-                score += 0.10
-                reasons.append("三重共振加分")
+        result: ScoringResult = None
+        factors = [
+            Factor(FactorName.REVERSAL_CANDLE, f"检测到拒绝蜡烛({pattern})", 0.35, found_bull or found_bear),
+            Factor(FactorName.VOLUME_CONFIRM, "成交量放大确认", 0.2, vol_ok),
+            Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.15, trend_strength.signal),
+            Factor(FactorName.TREND_DIRECTION_CONFIRM, "趋势方向一致", 0.15, (found_bull and trend_long) or (found_bear and trend_short)),
+            Factor(FactorName.MOMENTUM_CONFIRM, "动量确认方向确认", 0.1, mom_ok),
+            Factor(FactorName.CONFLUENCE_BONUS, "三重共振加分", 0.05, mom_ok and trend_strength.signal and ((found_bull and trend_long) or (found_bear and trend_short)))
+        ]
 
-            confidence = min(1.0, score)
-
-            # ---------- 交易方向 ----------
-            if confidence >= self.score_threshold:
-                if found_bull:
-                    signal = "buy"
-                elif found_bear:
-                    signal = "sell"
-                else:
-                    signal = "hold"
-                    reasons.append("unsupported pattern for trade")
-            else:
-                signal = "hold"
-                reasons.append("score below threshold")
-        else:
-            confidence = 0.0
-            signal = "hold"
-            reasons.append("no_pattern")
-        
+        # Compute score using ScoringEngine
+        engine = ScoringEngine(
+            base_threshold=0.7, 
+            required_factors=self.support_scoring_factors(),
+            determined_factors=[
+                FactorName.REVERSAL_CANDLE
+            ]
+        )
+        side = "long" if found_bull else "short" if found_bear else "hold"
+        result = engine.compute_score(factors, side=side)
         details = {
             "pattern": pattern,
             "ema_fast": current_ema_fast_val,
@@ -189,28 +181,27 @@ class CandlestickReversalStrategy(TradingStrategy):
             "rsi": current_rsi_val,
             "adx": current_adx_val,
             "vol_zscore": round(volume_z, 3) if volume_z is not None else None,
-            "score": round(score, 3),
-            "reasons": reasons,
+            "score": round(result.score, 3),
         }
             
         # 计算入场止损与 trailing stop
-        if signal != 'hold':
+        if result.signal != 'hold':
             planner = ExitPlanner(
                 highs=highs,
                 lows=lows,
                 atr=current_atr_val,
                 close_price=close
             )
-            plan = planner.make_exit_plan('long' if signal == 'buy' else 'short')
+            plan = planner.make_exit_plan('long' if result.signal == 'buy' else 'short')
             details.update({"plan": plan})
 
         return SignalModel(
             symbol=symbol,
             strategy=self.get_name(),
-            signal=signal,
+            signal=result.signal,
             date=dates[-1],
-            confidence=round(confidence, 3),
-            reason=" | ".join(reasons),
+            confidence=round(result.score, 3),
+            reason=" | ".join(result.reasons),
             details=details
         )
 
@@ -223,9 +214,9 @@ def make_candlestick_reversal_presets() -> Dict[str, Dict[str, Any]]:
         "adx_period": 14,                  # ADX standard period for trend strength
         "adx_threshold": 20.0,             # Lower threshold to allow reversals in weak trends
         "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD settings
-        "score_threshold": 0.65,           # Slightly relaxed threshold for reversal signals
         "vol_zscore_window": 20,           # Match BB/EMA period for volume breakout detection
-        "vol_zscore_threshold": 1.0        # Stricter volume confirmation for reversal validity
+        "vol_zscore_threshold": 1.0,       # Stricter volume confirmation for reversal validity
+        "score_threshold": 0.7,            # Slightly relaxed threshold for reversal signals
     }
 
     intermediate = {

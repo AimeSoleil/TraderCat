@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any, Tuple
 import statistics
 
+from trade_bot.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
 from trade_bot.strategy.trading_strategy import ExitPlanner, TradingStrategy, EPS
 from trade_bot.strategy.signal_model import SignalModel
 from trade_bot.logger.logger import get_logger
@@ -33,7 +34,7 @@ class DivergenceStrategy(TradingStrategy):
         adx_period: int = None,
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 1.0,
-        score_threshold: float = 0.55,
+        score_threshold: float = 0.75,
         data_provider: Any = None,
     ):
         self.swing_window = int(swing_window)
@@ -72,6 +73,16 @@ class DivergenceStrategy(TradingStrategy):
             + 5
         )
 
+    # Supported scoring factors
+    def support_scoring_factors(self) -> List[FactorName]:
+        return  [
+            FactorName.DIVERGENCE,
+            FactorName.TREND_STRENGTH,
+            FactorName.VOLUME_CONFIRM,
+            FactorName.VOLUME_CONFIRM,
+            FactorName.CONFLUENCE_BONUS
+        ]
+    
     # ---------- 主逻辑 ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
         """
@@ -133,16 +144,13 @@ class DivergenceStrategy(TradingStrategy):
                 return None
             return points[-2], points[-1]
 
-        sig = "hold"
-        score = 0.0
-        confidence = 0.0
-        reasons = []
+
         details: Dict[str, Any] = {
             "close": close,
             "atr": atr_val_history[-1],
             "vol_z": volume_z
         }
-
+        result: ScoringResult = None
         # ---- check bearish / bullish on regular & hidden using highs and lows ----
         found = False
         h2 = last_two(high_pts)
@@ -168,77 +176,68 @@ class DivergenceStrategy(TradingStrategy):
                 else:
                     indicator_failed_to_confirm = False
 
+                # Mark divergence found = True
                 if indicator_failed_to_confirm:
-                    # regular bearish detected
-                    reasons.append(
-                        "regular bearish divergence (price HH but indicator failed)"
-                    )
                     found = True
-                    # momentum confirm: prefer RSI falling or macd hist negative
-                    mom_ok = self._momentum_confirmation(
-                        rsi_val_history=rsi_val_history, 
-                        macd_hist_val_history=macd_hist_val_history, 
-                        prefer="bear"
-                    )
-                    # 趋势强度
-                    trend_strength = self._check_trend_and_volatility(
-                        atr_val_history=atr_val_history,
-                        adx_val_history=adx_val_history,
-                        close=close,
-                        window=100,
-                        atr_base_threshold=self.min_atr_price_ratio,
-                        atr_quantile=0.8,
-                        adx_quantile=0.8,
-                        mode='reversal'
-                    )
+                
+                # momentum confirm: prefer RSI falling or macd hist negative
+                mom_ok = self._MOMENTUM_CONFIRM(
+                    rsi_val_history=rsi_val_history, 
+                    macd_hist_val_history=macd_hist_val_history, 
+                    prefer="bear"
+                )
 
-                    # score
-                    # 背离触发
-                    score += 0.40
-                    reasons.append("Bearish背离触发")
-                    # 趋势强度
-                    if trend_strength.signal:
-                        score += 0.25
-                        reasons.append("趋势强度通过")
-                    # 动量确认
-                    if mom_ok:
-                        score += 0.20
-                        reasons.append("动量确认")
-                    # 成交量确认
-                    if vol_ok:
-                        score += 0.15
-                        reasons.append("成交量放大")
-                    # 共振加分
-                    if trend_strength.signal and mom_ok:
-                        score += 0.1
-                        reasons.append("三重共振加分")
+                # 趋势强度
+                trend_strength = self._check_trend_and_volatility(
+                    atr_val_history=atr_val_history,
+                    adx_val_history=adx_val_history,
+                    close=close,
+                    window=100,
+                    atr_base_threshold=self.min_atr_price_ratio,
+                    atr_quantile=0.8,
+                    adx_quantile=0.8,
+                    mode='reversal'
+                )
 
-                    confidence = min(1.0, score)
-                    # plan: short candidate
-                    details.update(
-                        {
-                            "type": "regular_bear",
-                            "swing1": (dates[i1], p1),
-                            "swing2": (dates[i2], p2),
-                            "indicator_r1": r1,
-                            "indicator_r2": r2,
-                        }
+                details.update(
+                    {
+                        "type": "regular_bear",
+                        "swing1": (dates[i1], p1),
+                        "swing2": (dates[i2], p2),
+                        "indicator_r1": r1,
+                        "indicator_r2": r2,
+                    }
+                )
+
+                # ---------- 评分系统 ----------
+                factors = [
+                    Factor(FactorName.DIVERGENCE, "Bearish背离触发", 0.4, indicator_failed_to_confirm),
+                    Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.2, trend_strength.signal),
+                    Factor(FactorName.MOMENTUM_CONFIRM, "动量确认方向确认", 0.2, mom_ok),
+                    Factor(FactorName.VOLUME_CONFIRM, "成交量放大确认", 0.15, vol_ok),
+                    Factor(FactorName.CONFLUENCE_BONUS, "三重共振加分", 0.05, mom_ok and trend_strength.signal)
+                ]
+
+                # Compute score using ScoringEngine
+                engine = ScoringEngine(
+                    base_threshold=0.7, 
+                    required_factors=self.support_scoring_factors(),
+                    determined_factors=[
+                        FactorName.DIVERGENCE
+                    ]
+                )
+                result = engine.compute_score(factors, side="short")
+
+                # 计算入场止损与 trailing stop
+                if result.signal != 'hold':
+                    planner = ExitPlanner(
+                        highs=highs,
+                        lows=lows,
+                        atr=current_atr_val,
+                        close_price=close
                     )
-                    if confidence >= self.score_threshold:
-                        sig = "sell"
-                    else:
-                        sig = "hold"
-
-                    # 计算入场止损与 trailing stop
-                    if sig != 'hold':
-                        planner = ExitPlanner(
-                            highs=highs,
-                            lows=lows,
-                            atr=current_atr_val,
-                            close_price=close
-                        )
-                        plan = planner.make_exit_plan('long' if sig == 'buy' else 'short')
-                        details.update({"plan": plan})
+                    plan = planner.make_exit_plan('long' if result.signal == 'buy' else 'short')
+                    details.update({"plan": plan})
         # Regular bullish / hidden bullish (use last two lows)
         l2 = last_two(low_pts)
         if not found and l2:
@@ -285,75 +284,70 @@ class DivergenceStrategy(TradingStrategy):
                     indicator_failed = macd2 >= macd1 - EPS
                 else:
                     indicator_failed = False
-
+                
+                # Mark divergence found = True
                 if indicator_failed:
-                    reasons.append(
-                        "regular bullish divergence (price LL but indicator failed)"
-                    )
                     found = True
+                
+                # momentum confirm: prefer RSI falling or macd hist negative
+                mom_ok = self._MOMENTUM_CONFIRM(
+                    rsi_val_history=rsi_val_history, 
+                    macd_hist_val_history=macd_hist_val_history, 
+                    prefer="bull"
+                )
 
-                    # momentum confirm: prefer RSI falling or macd hist negative
-                    mom_ok = self._momentum_confirmation(
-                        rsi_val_history=rsi_val_history, 
-                        macd_hist_val_history=macd_hist_val_history, 
-                        prefer="bull"
-                    )
-                    # 趋势强度
-                    trend_strength = self._check_trend_and_volatility(
-                        atr_val_history=atr_val_history,
-                        adx_val_history=adx_val_history,
-                        close=close,
-                        window=100,
-                        atr_base_threshold=self.min_atr_price_ratio,
-                        atr_quantile=0.8,
-                        adx_quantile=0.8,
-                        mode='reversal'
-                    )
+                # 趋势强度
+                trend_strength = self._check_trend_and_volatility(
+                    atr_val_history=atr_val_history,
+                    adx_val_history=adx_val_history,
+                    close=close,
+                    window=100,
+                    atr_base_threshold=self.min_atr_price_ratio,
+                    atr_quantile=0.8,
+                    adx_quantile=0.8,
+                    mode='reversal'
+                )
 
-                    # 背离触发
-                    score += 0.40
-                    reasons.append("Bullish背离触发")
-                    # 动量确认
-                    if mom_ok:
-                        score += 0.20
-                        reasons.append("动量确认")
-                    # 成交量确认
-                    if vol_ok:
-                        score += 0.15
-                        reasons.append("成交量放大")
-                    # 趋势强度
-                    if trend_strength.signal:
-                        score += 0.25
-                        reasons.append("趋势强度通过")
-                    # 共振加分
-                    if trend_strength.signal and mom_ok:
-                        score += 0.1
-                        reasons.append("三重共振加分")
-                    confidence = min(1.0, score)
-                    details.update(
-                        {
-                            "type": "regular_bull",
-                            "swing1": (dates[j1], q1),
-                            "swing2": (dates[j2], q2),
-                            "indicator_r1": r1,
-                            "indicator_r2": r2,
-                        }
-                    )
-                    if confidence >= self.score_threshold:
-                        sig = "buy"
-                    else:
-                        sig = "hold"
+                details.update(
+                    {
+                        "type": "regular_bull",
+                        "swing1": (dates[j1], q1),
+                        "swing2": (dates[j2], q2),
+                        "indicator_r1": r1,
+                        "indicator_r2": r2,
+                    }
+                )
+                
+                # ---------- 评分系统 ----------
+                result: ScoringResult = None
+                factors = [
+                    Factor(FactorName.DIVERGENCE, "Bullish背离触发", 0.4, indicator_failed),
+                    Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.2, trend_strength.signal),
+                    Factor(FactorName.MOMENTUM_CONFIRM, "动量确认方向确认", 0.2, mom_ok),
+                    Factor(FactorName.VOLUME_CONFIRM, "成交量放大确认", 0.15, vol_ok),
+                    Factor(FactorName.CONFLUENCE_BONUS, "三重共振加分", 0.05, mom_ok and trend_strength.signal)
+                ]
 
-                    # 计算入场止损与 trailing stop
-                    if sig != 'hold':
-                        planner = ExitPlanner(
-                            highs=highs,
-                            lows=lows,
-                            atr=current_atr_val,
-                            close_price=close,
-                        )
-                        plan = planner.make_exit_plan('long' if sig == 'buy' else 'short')
-                        details.update({"plan": plan})
+                # Compute score using ScoringEngine
+                engine = ScoringEngine(
+                    base_threshold=0.7, 
+                    required_factors=self.support_scoring_factors(),
+                    determined_factors=[
+                        FactorName.DIVERGENCE
+                    ]
+                )
+                result = engine.compute_score(factors, side="long")
+
+                # 计算入场止损与 trailing stop
+                if result.signal != 'hold':
+                    planner = ExitPlanner(
+                        highs=highs,
+                        lows=lows,
+                        atr=current_atr_val,
+                        close_price=close
+                    )
+                    plan = planner.make_exit_plan('long' if result.signal == 'buy' else 'short')
+                    details.update({"plan": plan})
         # Hidden divergences: detect trend continuation signals
         if not found:
             # Hidden bullish: price makes higher-low (HL) while indicator makes lower-low
@@ -374,71 +368,67 @@ class DivergenceStrategy(TradingStrategy):
                         indicator_lower = r2 < r1 - EPS
                     elif macd1 is not None and macd2 is not None:
                         indicator_lower = macd2 < macd1 - EPS
+                    
+                    # Mark divergence found = True
                     if indicator_lower:
-                        reasons.append(
-                            "hidden bullish divergence (price HL but indicator lower-low) -> trend continuation"
-                        )
                         found = True
-                        
-                        # momentum confirm: prefer RSI falling or macd hist negative
-                        mom_ok = self._momentum_confirmation(
-                            rsi_val_history=rsi_val_history, 
-                            macd_hist_val_history=macd_hist_val_history, 
-                            prefer="bear"
-                        )
-                        # 趋势强度
-                        trend_strength = self._check_trend_and_volatility(
-                            atr_val_history=atr_val_history,
-                            adx_val_history=adx_val_history,
-                            close=close,
-                            window=100,
-                            atr_base_threshold=self.min_atr_price_ratio,
-                            atr_quantile=0.8,
-                            adx_quantile=0.8,
-                            mode='trend'
-                        )
+                    
+                    # momentum confirm: prefer RSI falling or macd hist negative
+                    mom_ok = self._MOMENTUM_CONFIRM(
+                        rsi_val_history=rsi_val_history, 
+                        macd_hist_val_history=macd_hist_val_history, 
+                        prefer="bear"
+                    )
+                    # 趋势强度
+                    trend_strength = self._check_trend_and_volatility(
+                        atr_val_history=atr_val_history,
+                        adx_val_history=adx_val_history,
+                        close=close,
+                        window=100,
+                        atr_base_threshold=self.min_atr_price_ratio,
+                        atr_quantile=0.8,
+                        adx_quantile=0.8,
+                        mode='trend'
+                    )
 
-                        # 背离触发
-                        score += 0.35
-                        reasons.append("隐藏Bullish背离触发")
-                        # 趋势强度
-                        if trend_strength.signal:
-                            score += 0.25
-                            reasons.append("趋势强度通过")
-                        # 成交量确认
-                        if vol_ok:
-                            score += 0.15
-                            reasons.append("成交量放大")
-                        # 动量确认
-                        if mom_ok:
-                            score += 0.15
-                            reasons.append("动量确认")
-                        # 共振加分
-                        if trend_strength.signal and mom_ok:
-                            score += 0.1
-                            reasons.append("三重共振加分")
+                    details.update(
+                        {
+                            "type": "hidden_bull",
+                            "swing_prev": (dates[a_idx], a_val),
+                            "swing_latest": (dates[b_idx], b_val),
+                        }
+                    )
 
-                        confidence = min(1.0, score)
-                        details.update(
-                            {
-                                "type": "hidden_bull",
-                                "swing_prev": (dates[a_idx], a_val),
-                                "swing_latest": (dates[b_idx], b_val),
-                            }
+                    # ---------- 评分系统 ----------
+                    result: ScoringResult = None
+                    factors = [
+                        Factor(FactorName.DIVERGENCE, "隐藏Bullish背离触发", 0.3, indicator_lower),
+                        Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.25, trend_strength.signal),
+                        Factor(FactorName.MOMENTUM_CONFIRM, "动量确认方向确认", 0.2, mom_ok),
+                        Factor(FactorName.VOLUME_CONFIRM, "成交量放大确认", 0.15, vol_ok),
+                        Factor(FactorName.CONFLUENCE_BONUS, "三重共振加分", 0.1, mom_ok and trend_strength.signal)
+                    ]
+
+                    # Compute score using ScoringEngine
+                    engine = ScoringEngine(
+                        base_threshold=0.7, 
+                        required_factors=self.support_scoring_factors(),
+                        determined_factors=[
+                            FactorName.DIVERGENCE
+                        ]
+                    )
+                    result = engine.compute_score(factors, side="long")
+
+                    # 计算入场止损与 trailing stop
+                    if result.signal != 'hold':
+                        planner = ExitPlanner(
+                            highs=highs,
+                            lows=lows,
+                            atr=current_atr_val,
+                            close_price=close
                         )
-                        if confidence >= self.score_threshold:
-                            sig = "buy"
-
-                        # 计算入场止损与 trailing stop
-                        if sig != 'hold':
-                            planner = ExitPlanner(
-                                highs=highs,
-                                lows=lows,
-                                atr=current_atr_val,
-                                close_price=close,
-                            )
-                            plan = planner.make_exit_plan('long' if sig == 'buy' else 'short')
-                            details.update({"plan": plan})
+                        plan = planner.make_exit_plan('long' if result.signal == 'buy' else 'short')
+                        details.update({"plan": plan})
             # Hidden bearish
             if not found and len(high_pts) >= 2:
                 (a_idx, a_val), (b_idx, b_val) = high_pts[-2], high_pts[-1]
@@ -456,84 +446,84 @@ class DivergenceStrategy(TradingStrategy):
                         indicator_higher = r2 > r1 + EPS
                     elif macd1 is not None and macd2 is not None:
                         indicator_higher = macd2 > macd1 + EPS
+                    
+                    # Mark divergence found = True
                     if indicator_higher:
-                        reasons.append(
-                            "hidden bearish divergence (price LH but indicator higher-high) -> trend continuation down"
-                        )
                         found = True
-                        
-                        # momentum confirm: prefer RSI falling or macd hist negative
-                        mom_ok = self._momentum_confirmation(
-                            rsi_val_history=rsi_val_history, 
-                            macd_hist_val_history=macd_hist_val_history, 
-                            prefer="bear"
-                        )
-                        # 趋势强度
-                        trend_strength = self._check_trend_and_volatility(
-                            atr_val_history=atr_val_history,
-                            adx_val_history=adx_val_history,
-                            close=close,
-                            window=100,
-                            atr_base_threshold=self.min_atr_price_ratio,
-                            atr_quantile=0.8,
-                            adx_quantile=0.8,
-                            mode='trend'
-                        )
 
-                        # 背离触发
-                        score += 0.35
-                        reasons.append("隐藏Bearish背离触发")
-                        # 趋势强度
-                        if trend_strength.signal:
-                            score += 0.25
-                            reasons.append("趋势强度通过")
-                        # 成交量确认
-                        if vol_ok:
-                            score += 0.15
-                            reasons.append("成交量放大")
-                        # 动量确认
-                        if mom_ok:
-                            score += 0.15
-                            reasons.append("动量确认")
-                        # 共振加分
-                        if trend_strength.signal and mom_ok:
-                            score += 0.1
-                            reasons.append("三重共振加分")
-                        confidence = min(1.0, score)
-                        details.update(
-                            {
-                                "type": "hidden_bear",
-                                "swing_prev": (dates[a_idx], a_val),
-                                "swing_latest": (dates[b_idx], b_val),
-                            }
-                        )
-                        if confidence >= self.score_threshold:
-                            sig = "sell"
-                        else:
-                            sig = "hold"
+                    # momentum confirm: prefer RSI falling or macd hist negative
+                    mom_ok = self._MOMENTUM_CONFIRM(
+                        rsi_val_history=rsi_val_history, 
+                        macd_hist_val_history=macd_hist_val_history, 
+                        prefer="bear"
+                    )
+                    # 趋势强度
+                    trend_strength = self._check_trend_and_volatility(
+                        atr_val_history=atr_val_history,
+                        adx_val_history=adx_val_history,
+                        close=close,
+                        window=100,
+                        atr_base_threshold=self.min_atr_price_ratio,
+                        atr_quantile=0.8,
+                        adx_quantile=0.8,
+                        mode='trend'
+                    )
 
-                        # 计算入场止损与 trailing stop
-                        if sig != 'hold':
-                            planner = ExitPlanner(
-                                highs=highs,
-                                lows=lows,
-                                atr=current_atr_val,
-                                close_price=close,
-                            )
-                            plan = planner.make_exit_plan('long' if sig == 'buy' else 'short')
-                            details.update({"plan": plan})
+                    details.update(
+                        {
+                            "type": "hidden_bear",
+                            "swing_prev": (dates[a_idx], a_val),
+                            "swing_latest": (dates[b_idx], b_val),
+                        }
+                    )
+
+                    # ---------- 评分系统 ----------
+                    result: ScoringResult = None
+                    factors = [
+                        Factor(FactorName.DIVERGENCE, "隐藏Bearish背离触发", 0.3, indicator_higher),
+                        Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.25, trend_strength.signal),
+                        Factor(FactorName.MOMENTUM_CONFIRM, "动量确认方向确认", 0.2, mom_ok),
+                        Factor(FactorName.VOLUME_CONFIRM, "成交量放大确认", 0.15, vol_ok),
+                        Factor(FactorName.CONFLUENCE_BONUS, "三重共振加分", 0.1, mom_ok and trend_strength.signal)
+                    ]
+
+                    # Compute score using ScoringEngine
+                    engine = ScoringEngine(
+                        base_threshold=0.7, 
+                        required_factors=self.support_scoring_factors(),
+                        determined_factors=[
+                            FactorName.DIVERGENCE
+                        ]
+                    )
+                    result = engine.compute_score(factors, side="short")
+
+                    # 计算入场止损与 trailing stop
+                    if result.signal != 'hold':
+                        planner = ExitPlanner(
+                            highs=highs,
+                            lows=lows,
+                            atr=current_atr_val,
+                            close_price=close
+                        )
+                        plan = planner.make_exit_plan('long' if result.signal == 'buy' else 'short')
+                        details.update({"plan": plan})
         # usage notes & failsafe
         details.setdefault(
             "notes",
-            "常规背离用于反转；隐藏背离用于趋势延续。建议结合多周期确认与新闻/流动性过滤；入场后使用 ATR 止损与 time-stop。",
+            "常规背离用于反转；隐藏背离用于趋势延续。建议结合多周期确认与新闻/流动性过滤；",
         )
+        if not found:
+            result = ScoringResult(
+                score=0.0, threshold=self.score_threshold, signal="hold", reasons=["未检测到背离"]
+            )
+            
         return SignalModel(
             symbol=symbol,
             strategy=self.get_name(),
-            signal=sig,
+            signal=result.signal,
             date=dates[-1],
-            confidence=round(confidence, 3),
-            reason=" | ".join(reasons) if reasons else "no divergence found",
+            confidence=round(result.score, 3),
+            reason=" | ".join(result.reasons),
             details=details,
         )
 

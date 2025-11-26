@@ -2,6 +2,7 @@ from typing import List, Optional, Dict, Any, Tuple
 import math
 import statistics
 
+from trade_bot.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
 from trade_bot.strategy.trading_strategy import ExitPlanner, TradingStrategy, EPS
 from trade_bot.strategy.signal_model import SignalModel
 from trade_bot.logger.logger import get_logger
@@ -79,6 +80,17 @@ class FibonacciRetracementStrategy(TradingStrategy):
             )
             + 10
         )
+
+    # Supported scoring factors
+    def support_scoring_factors(self) -> List[FactorName]:
+        return  [
+            FactorName.FIB_ZONE_CONFIRM,
+            FactorName.TREND_STRENGTH,
+            FactorName.VOLUME_CONFIRM,
+            FactorName.MOMENTUM_CONFIRM,
+            FactorName.TREND_DIRECTION_CONFIRM,
+            FactorName.CONFLUENCE_BONUS
+        ]
 
     # -------------- Helper Functions --------------
     def _select_fib_zone(
@@ -209,11 +221,6 @@ class FibonacciRetracementStrategy(TradingStrategy):
 
         # convert local indices to global (relative to full candles)
         # pick most recent impulse: last pair of opposite swing (e.g., low->high for bullish impulse)
-        signal = "hold"
-        confidence = 0.0
-        reasons: List[str] = []
-        details: Dict[str, Any] = {"date": dates[-1], "curr_close": curr_close}
-
         if not swings_highs and not swings_lows:
             return SignalModel(
                 symbol=symbol,
@@ -222,7 +229,6 @@ class FibonacciRetracementStrategy(TradingStrategy):
                 date=dates[-1],
                 confidence=0.0,
                 reason="no swing points",
-                details=details,
             )
 
         # default: treat impulse as high->low or low->high depending on which is more recent
@@ -283,6 +289,8 @@ class FibonacciRetracementStrategy(TradingStrategy):
         vol_ok, volume_z = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
 
         # evaluate long candidate
+        details = {}
+        result: ScoringResult = None
         if chosen:
             if chosen == "long_candidate":
                 swing_low_idx, swing_low_val, swing_high_idx, swing_high_val = (
@@ -321,84 +329,72 @@ class FibonacciRetracementStrategy(TradingStrategy):
                 curr_close < swing_low_val + EPS
             )
 
-            # Scoring
-            score = 0.0
-            reasons = []
-            # 回撤区间确认
-            if in_zone:
-                score += 0.3
-                reasons.append("回撤区间确认（价格在Fibonacci区间内）")
-            elif breakout_up_confirm:
-                score += 0.35
-                reasons.append("向上突破区间确认（价格突破Fibonacci区间）")
-            elif breakout_down_confirm:
-                score += 0.35
-                reasons.append("向下突破区间确认（价格突破Fibonacci区间）")
-            # 趋势强度
-            if trend_strength.signal:
-                score += 0.2
-                reasons.append("趋势强度确认")
-            # 成交量确认
-            if vol_ok:
-                score += 0.15
-                reasons.append("成交量放大")
             # 动量确认
             mom_ok = None
             if breakout_up_confirm or in_zone:
-                mom_ok = self._momentum_confirmation(
+                mom_ok = self._MOMENTUM_CONFIRM(
                     rsi_val_history, macd_hist_val_history, prefer="bull"
                 )
             elif breakout_down_confirm:
-                mom_ok = self._momentum_confirmation(
-                    rsi_val_history, macd_hist_val_history, prefer="bull"
+                mom_ok = self._MOMENTUM_CONFIRM(
+                    rsi_val_history, macd_hist_val_history, prefer="bear"
                 )
-            if mom_ok:
-                score += 0.15
-                reasons.append("动量确认")
-            # EMA 趋势方向一致
-            if (in_zone and breakout_up_confirm and trend_up) or (breakout_down_confirm and trend_down):
-                score += 0.1
-                reasons.append("趋势方向一致")
-            # 共振加分
-            if trend_strength.signal and mom_ok:
-                score += 0.1
-                reasons.append("三重共振加分")
 
-            confidence = min(1.0, score)
-            if confidence >= self.score_threshold and (in_zone or breakout_up_confirm):
-                signal = "buy"
-                reasons.append("价格突破高区间或在区间内")
-            elif confidence >= self.score_threshold and breakout_down_confirm:
-                signal = "sell"
-                reasons.append("价格突破低区间")
-            else:
-                signal = "hold"
-                if not in_zone or not breakout_up_confirm or not breakout_down_confirm:
-                    # reasons.append("not in fib zone or no breakout_up_confirm or no breakout_down_confirm")
-                    reasons.append("未突破区间或不在回撤区间内")
-                else:
-                    reasons.append("信心分数不足")
+            # 评分 & 生成 signal
+            factors: List[Factor] = []
+            if in_zone:
+                factors.append(Factor(FactorName.FIB_ZONE_CONFIRM, "回撤区间确认(价格在Fibonacci区间内)", 0.25, in_zone))
+            elif breakout_up_confirm:
+                factors.append(Factor(FactorName.FIB_ZONE_CONFIRM, "向上突破区间确认(价格突破Fibonacci区间)", 0.35, breakout_up_confirm))
+            elif breakout_down_confirm:
+                factors.append(Factor(FactorName.FIB_ZONE_CONFIRM, "向下突破区间确认(价格突破Fibonacci区间)", 0.35, breakout_down_confirm))
+            factors.append(
+                Factor(FactorName.TREND_STRENGTH, "趋势强度确认", 0.15, trend_strength.signal)
+            )
+            factors.append(
+                Factor(FactorName.VOLUME_CONFIRM, "成交量放大", 0.1, vol_ok)
+            )
+            factors.append(
+                Factor(FactorName.MOMENTUM_CONFIRM, "动量确认", 0.15, mom_ok)
+            )
+            factors.append(
+                Factor(FactorName.TREND_DIRECTION_CONFIRM, "趋势方向一致", 0.1, (in_zone and breakout_up_confirm and trend_up) or (breakout_down_confirm and trend_down))
+            )
+            factors.append(
+                Factor(FactorName.CONFLUENCE_BONUS, "三重共振加分", 0.05, trend_strength.signal and mom_ok)
+            )
+            engine = ScoringEngine(
+                base_threshold=0.7, 
+                required_factors=self.support_scoring_factors(),
+                determined_factors=[
+                    FactorName.FIB_ZONE_CONFIRM
+                ]
+            )
+            side = "long" if (in_zone or breakout_up_confirm) else "short" if breakout_down_confirm else "hold"
+            result = engine.compute_score(factors, side=side)
 
             # 计算入场止损与 trailing stop
-            if signal != 'hold':
+            if result and result.signal != 'hold':
                 planner = ExitPlanner(
                     highs=highs,
                     lows=lows,
                     atr=current_atr_val,
                     close_price=curr_close,
                 )
-                plan = planner.make_exit_plan('long' if signal == 'buy' else 'short')
+                plan = planner.make_exit_plan('long' if result.signal == 'buy' else 'short')
                 details.update({"plan": plan})
         else:
-            reasons.append("无有效高低波摆动点检测")
+            result = ScoringResult(
+                score=0.0, threshold=self.score_threshold, signal="hold", reasons=["无有效高低波摆动点检测"]
+            )
 
         return SignalModel(
             symbol=symbol,
             strategy=self.get_name(),
-            signal=signal,
+            signal=result.signal,
             date=dates[-1],
-            confidence=round(confidence, 3),
-            reason=" | ".join(reasons),
+            confidence=round(result.score, 3),
+            reason=" | ".join(result.reasons),
             details=details,
         )
 
@@ -422,7 +418,7 @@ def make_fibonacci_presets() -> Dict[str, Dict[str, Any]]:
         "min_atr_price_ratio": 0.002,        # Ensures volatility is meaningful (0.2%)
         "vol_zscore_window": 20,             # Match EMA/BB period for volume breakout detection
         "vol_zscore_threshold": 1.0,         # Stricter volume confirmation for breakout
-        "score_threshold": 0.65              # Balanced threshold for breakout confidence
+        "score_threshold": 0.7              # Balanced threshold for breakout confidence
     }
 
     intermediate = {

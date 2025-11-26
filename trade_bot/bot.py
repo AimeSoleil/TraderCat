@@ -79,7 +79,7 @@ class TradeBot:
         )
 
         signals = [
-            strategy.generate_signal(self.symbol, candles)
+            strategy.generate_signal(self.symbol, candles=candles[-strategy.get_lookback_window():])
             for strategy in strategies_per_symbol
         ]
         final_signal_list = self.aggregate_signals(signals)
@@ -104,11 +104,17 @@ class GlobalTradeBot:
         data_provider = OpenBBProvider()
 
         # Initialize strategies with the data provider and support adding more strategies per need
-        strategies = [
+        global_strategies = [
             SectorRotationStrategy(data_provider=data_provider),
         ]
+        max_lookback = max(
+            strategy.get_lookback_window() for strategy in global_strategies
+        )
+        candles = data_provider.get_price_data(
+            self.symbol, interval="1d", lookback=max_lookback
+        )
 
-        signals = [strategy.generate_signal() for strategy in strategies]
+        signals = [strategy.generate_signal(candles=candles[-strategy.get_lookback_window():]) for strategy in global_strategies]
         final_signal_list = self.aggregate_signals(signals)
 
         # self.executor.execute_trade(final_signal_list, self.symbol)

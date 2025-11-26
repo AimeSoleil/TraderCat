@@ -91,6 +91,7 @@ class SectorRotationStrategy(TradingStrategy):
         bull_regime = regime["bull_regime"]
 
         # Collect data for all sectors
+        _candles = candles
         for sector, etf in SECTOR_ETF_LIST.items():
             _candles = self.provider.get_price_data(etf, interval="1d", lookback=self.get_lookback_window())
             closes = [float(getattr(c, "close")) for c in _candles]
