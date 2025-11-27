@@ -86,8 +86,7 @@ class BBandsReversalStrategy(TradingStrategy):
             FactorName.BB_REVERSAL_CANDLE,
             FactorName.TREND_STRENGTH,
             FactorName.VOLUME_CONFIRM,
-            FactorName.MOMENTUM_CONFIRM,
-            FactorName.CONFLUENCE_BONUS
+            FactorName.MOMENTUM_CONFIRM
         ]
 
     # ---------- 主逻辑 ----------
@@ -180,7 +179,7 @@ class BBandsReversalStrategy(TradingStrategy):
         # 动量确认（若启用）
         momentum_ok = False
         if near_upper or near_upper:
-            self._MOMENTUM_CONFIRM(rsi_val_history=rsi_val_history, macd_hist_val_history=macd_hist_val_history, prefer=pattern_type)
+            self._momentum_confirm(rsi_val_history=rsi_val_history, macd_hist_val_history=macd_hist_val_history, prefer=pattern_type)
 
         details: Dict[str, Any] = {
             "close": close,
@@ -221,7 +220,8 @@ class BBandsReversalStrategy(TradingStrategy):
             required_factors=self.support_scoring_factors(),
             determined_factors=[
                 FactorName.BB_REVERSAL_CANDLE
-            ]
+            ],
+            is_volatility_ok=trend_strength.volatility.signal
         )
         side = "long" if candidate_buy else "short" if candidate_sell else "hold"
         result = engine.compute_score(factors, side=side)

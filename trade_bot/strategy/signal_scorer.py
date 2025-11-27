@@ -3,6 +3,7 @@ from typing import List, Literal
 from enum import Enum
 
 from trade_bot.logger.logger import get_logger
+from trade_bot.strategy.trading_strategy import EPS
 
 logger = get_logger(__name__)
 
@@ -33,8 +34,8 @@ class FactorName(Enum):
     TREND_STRENGTH = "trend_strength"
     VOLUME_CONFIRM = "volume_confirm"
     EMA_ALIGNMENT = "ema_alignment"
-    CONFLUENCE_BONUS = "confluence_bonus"
     MOMENTUM_CONFIRM = "momentum_confirm"
+    CONFLUENCE_BONUS = "confluence_bonus"
 
 
 # ---------------- DATA CLASSES ----------------
@@ -67,14 +68,6 @@ class Factor:
     weight: float
     condition: bool
 
-    # def effective_weight(self, vol_spike: bool, atr_high: bool) -> float:
-    #     adaptive_weight = self.weight
-    #     if vol_spike and self.name == FactorName.VOLUME_CONFIRM:
-    #         adaptive_weight += 0.05
-    #     if atr_high and self.name == FactorName.VOLATILITY_FILTER:
-    #         adaptive_weight += 0.05
-    #     return adaptive_weight
-
 # ---------------- SCORING ENGINE ----------------
 class ScoringEngine:
     def __init__(
@@ -82,10 +75,12 @@ class ScoringEngine:
         required_factors: List[FactorName],
         determined_factors: List[FactorName] = None,
         base_threshold: float = 0.7,
+        is_volatility_ok: bool = False,
     ):
         self.base_threshold = base_threshold
         self.required_factors = required_factors
-        self.determined_factors = determined_factors
+        self.determined_factors = determined_factors or []
+        self.is_volatility_ok = is_volatility_ok
 
     def _validate_factors(self, factors: List[Factor]) -> List[str]:
         if not self.required_factors:
@@ -99,6 +94,10 @@ class ScoringEngine:
         ]
         if missing:
             raise ValueError(f"Missing factors: {missing}")
+    
+    def _adaptive_threshold(self) -> float:
+        # increase threshold in high volatility
+        return self.base_threshold + (0.05 if self.is_volatility_ok else 0.0)
 
     def compute_score(
         self, 
@@ -109,35 +108,39 @@ class ScoringEngine:
         self._validate_factors(factors)
 
         # Scoring Logic
-        score = 0.0
+        # Normalize weights
+        total_weight = sum(f.weight for f in factors)
+        normalized_score = 0.0
         reasons = []
 
         for factor in factors:
             if factor.condition:
-                score += factor.weight
-                reasons.append(f"{factor.name.value} (+{factor.weight:.2f}) {factor.description}")
+                contribution = factor.weight / (total_weight if total_weight > EPS else 1.0)
+                normalized_score += contribution
+                reasons.append(f"{factor.description(side)} (+{contribution:.2f})")
 
-        score = min(1.0, score)
+        # Determine signal
+        normalized_score = min(1.0, normalized_score)
+        threshold = self.adaptive_threshold()
         signal = "hold"
         if side != "hold":
-            if score >= self.base_threshold:
+            if normalized_score >= threshold:
                 if self.determined_factors:
-                    filtered_factors = [f for f in factors if f.name in self.determined_factors]
-                    if all(f.condition for f in filtered_factors):
-                        if side == "long":
-                            signal = "buy"
-                        else:
-                            signal = "sell"
-                else:
-                    if side == "long":
-                        signal = "buy"
+                    filtered = [f for f in factors if f.name in self.determined_factors]
+                    if all(f.condition for f in filtered):
+                        signal = "buy" if side == "long" else "sell"
                     else:
-                        signal = "sell"
+                        reasons.append("关键确认因子未全部满足")
+                else:
+                    signal = "buy" if side == "long" else "sell"
             else:
-                reasons.append(f'scoring ({score}) not exceeds threshold ({self.base_threshold})')
+                reasons.append(f"得分 ({normalized_score:.2f}) 未超过阈值 ({threshold:.2f})")
         else:
-            reasons.append(f'side is {side}')
+            reasons.append("hold - 暂时没有明确的方向")
 
         return ScoringResult(
-            score=round(score, 3), threshold=self.base_threshold, signal=signal, reasons=reasons
+            score=round(normalized_score, 3),
+            threshold=threshold,
+            signal=signal,
+            reasons=reasons
         )

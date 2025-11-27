@@ -50,7 +50,7 @@ class TradingStrategy(ABC):
         pass
     
     # --- 指标函数 ---
-    def _MOMENTUM_CONFIRM(self,
+    def _momentum_confirm(self,
         rsi_val_history: Optional[List[Any]],
         macd_hist_val_history: Optional[List[Any]],
         prefer: str = "bull",

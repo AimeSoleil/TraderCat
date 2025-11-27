@@ -181,7 +181,7 @@ class DivergenceStrategy(TradingStrategy):
                     found = True
                 
                 # momentum confirm: prefer RSI falling or macd hist negative
-                mom_ok = self._MOMENTUM_CONFIRM(
+                mom_ok = self._momentum_confirm(
                     rsi_val_history=rsi_val_history, 
                     macd_hist_val_history=macd_hist_val_history, 
                     prefer="bear"
@@ -224,7 +224,8 @@ class DivergenceStrategy(TradingStrategy):
                     required_factors=self.support_scoring_factors(),
                     determined_factors=[
                         FactorName.DIVERGENCE
-                    ]
+                    ],
+                    is_volatility_ok=trend_strength.volatility.signal
                 )
                 result = engine.compute_score(factors, side="short")
 
@@ -290,7 +291,7 @@ class DivergenceStrategy(TradingStrategy):
                     found = True
                 
                 # momentum confirm: prefer RSI falling or macd hist negative
-                mom_ok = self._MOMENTUM_CONFIRM(
+                mom_ok = self._momentum_confirm(
                     rsi_val_history=rsi_val_history, 
                     macd_hist_val_history=macd_hist_val_history, 
                     prefer="bull"
@@ -334,7 +335,8 @@ class DivergenceStrategy(TradingStrategy):
                     required_factors=self.support_scoring_factors(),
                     determined_factors=[
                         FactorName.DIVERGENCE
-                    ]
+                    ],
+                    is_volatility_ok=trend_strength.volatility.signal
                 )
                 result = engine.compute_score(factors, side="long")
 
@@ -374,7 +376,7 @@ class DivergenceStrategy(TradingStrategy):
                         found = True
                     
                     # momentum confirm: prefer RSI falling or macd hist negative
-                    mom_ok = self._MOMENTUM_CONFIRM(
+                    mom_ok = self._momentum_confirm(
                         rsi_val_history=rsi_val_history, 
                         macd_hist_val_history=macd_hist_val_history, 
                         prefer="bear"
@@ -415,7 +417,8 @@ class DivergenceStrategy(TradingStrategy):
                         required_factors=self.support_scoring_factors(),
                         determined_factors=[
                             FactorName.DIVERGENCE
-                        ]
+                        ],
+                        is_volatility_ok=trend_strength.volatility.signal
                     )
                     result = engine.compute_score(factors, side="long")
 
@@ -452,7 +455,7 @@ class DivergenceStrategy(TradingStrategy):
                         found = True
 
                     # momentum confirm: prefer RSI falling or macd hist negative
-                    mom_ok = self._MOMENTUM_CONFIRM(
+                    mom_ok = self._momentum_confirm(
                         rsi_val_history=rsi_val_history, 
                         macd_hist_val_history=macd_hist_val_history, 
                         prefer="bear"
@@ -493,7 +496,8 @@ class DivergenceStrategy(TradingStrategy):
                         required_factors=self.support_scoring_factors(),
                         determined_factors=[
                             FactorName.DIVERGENCE
-                        ]
+                        ],
+                        is_volatility_ok=trend_strength.volatility.signal
                     )
                     result = engine.compute_score(factors, side="short")
 

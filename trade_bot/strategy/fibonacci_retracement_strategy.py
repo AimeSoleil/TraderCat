@@ -332,11 +332,11 @@ class FibonacciRetracementStrategy(TradingStrategy):
             # 动量确认
             mom_ok = None
             if breakout_up_confirm or in_zone:
-                mom_ok = self._MOMENTUM_CONFIRM(
+                mom_ok = self._momentum_confirm(
                     rsi_val_history, macd_hist_val_history, prefer="bull"
                 )
             elif breakout_down_confirm:
-                mom_ok = self._MOMENTUM_CONFIRM(
+                mom_ok = self._momentum_confirm(
                     rsi_val_history, macd_hist_val_history, prefer="bear"
                 )
 
@@ -368,7 +368,8 @@ class FibonacciRetracementStrategy(TradingStrategy):
                 required_factors=self.support_scoring_factors(),
                 determined_factors=[
                     FactorName.FIB_ZONE_CONFIRM
-                ]
+                ],
+                is_volatility_ok=trend_strength.volatility.signal
             )
             side = "long" if (in_zone or breakout_up_confirm) else "short" if breakout_down_confirm else "hold"
             result = engine.compute_score(factors, side=side)

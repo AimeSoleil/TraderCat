@@ -150,7 +150,7 @@ class CandlestickReversalStrategy(TradingStrategy):
         # ---------- 动量确认 ----------
         mom_ok = False
         if found_bull or found_bear:
-            mom_ok = self._MOMENTUM_CONFIRM(rsi_val_history, macd_hist_val_history, prefer=bull_type if found_bull else bear_type)
+            mom_ok = self._momentum_confirm(rsi_val_history, macd_hist_val_history, prefer=bull_type if found_bull else bear_type)
 
         # ---------- 评分系统 ----------
         result: ScoringResult = None
@@ -169,7 +169,8 @@ class CandlestickReversalStrategy(TradingStrategy):
             required_factors=self.support_scoring_factors(),
             determined_factors=[
                 FactorName.REVERSAL_CANDLE
-            ]
+            ],
+            is_volatility_ok=trend_strength.volatility.signal
         )
         side = "long" if found_bull else "short" if found_bear else "hold"
         result = engine.compute_score(factors, side=side)

@@ -248,7 +248,8 @@ class BollingerBreakoutStrategy(TradingStrategy):
             required_factors=self.support_scoring_factors(),
             determined_factors=[
                 FactorName.BREAKOUT_TRIGGER
-            ]
+            ],
+            is_volatility_ok=trend_strength.volatility.signal
         )
         side = "long" if long_break else "short" if short_break else "hold"
         result = engine.compute_score(factors, side=side)
@@ -296,7 +297,7 @@ def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
         "min_atr_price_ratio": 0.002,   # Ensures volatility is meaningful (0.2%)
         "vol_zscore_window": 20,        # Match BB period for volume z-score
         "vol_zscore_threshold": 1.0,    # Slightly stricter volume breakout confirmation
-        "score_threshold": 0.55          # Composite score threshold for signal validation
+        "score_threshold": 0.6          # Composite score threshold for signal validation
     }
 
     intermediate = {
