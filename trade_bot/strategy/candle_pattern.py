@@ -434,7 +434,7 @@ class CandlePatterns:
         按优先级依次检测单根、双根、三根组合形态
         """
         # Adaptive Based on ATR (Best Practice)
-        tolerance = (atr / closes[-1]) if atr else 0.001
+        tolerance = max(0.001, (atr / closes[-1]) if atr else 0.001)
         if idx >= 0:
             for func in [
                 CandlePatterns._is_hammer,
@@ -498,7 +498,7 @@ class CandlePatterns:
         按优先级依次检测单根、双根、三根组合形态
         """
         # Adaptive Based on ATR (Best Practice)
-        tolerance = (atr / closes[-1]) if atr else 0.001
+        tolerance = max(0.001, (atr / closes[-1]) if atr else 0.001)
         if idx >= 0:
             for func in [
                 CandlePatterns._is_shooting_star,
