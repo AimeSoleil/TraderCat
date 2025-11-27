@@ -3,9 +3,10 @@ from typing import List, Literal
 from enum import Enum
 
 from trade_bot.logger.logger import get_logger
-from trade_bot.strategy.trading_strategy import EPS
 
 logger = get_logger(__name__)
+
+EPS = 1e-9
 
 # ---------------- ENUM FOR FACTOR NAMES ----------------
 class FactorName(Enum):
@@ -117,11 +118,11 @@ class ScoringEngine:
             if factor.condition:
                 contribution = factor.weight / (total_weight if total_weight > EPS else 1.0)
                 normalized_score += contribution
-                reasons.append(f"{factor.description(side)} (+{contribution:.2f})")
+                reasons.append(f"{factor.description} (+{contribution:.2f})")
 
         # Determine signal
         normalized_score = min(1.0, normalized_score)
-        threshold = self.adaptive_threshold()
+        threshold = self._adaptive_threshold()
         signal = "hold"
         if side != "hold":
             if normalized_score >= threshold:

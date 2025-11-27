@@ -249,7 +249,7 @@ class BollingerBreakoutStrategy(TradingStrategy):
             determined_factors=[
                 FactorName.BREAKOUT_TRIGGER
             ],
-            is_volatility_ok=trend_strength.volatility.signal
+            is_volatility_ok=trend_strength.volatility['signal']
         )
         side = "long" if long_break else "short" if short_break else "hold"
         result = engine.compute_score(factors, side=side)

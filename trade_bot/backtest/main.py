@@ -47,9 +47,9 @@ CONFIG = {
         #     "position"
         # ],
         
-        # "BBBreakout": [
-        #     "swing",
-        # ],
+        "BBBreakout": [
+            "swing",
+        ],
         # "BBReversal": [
         #     "swing",
         # ],
@@ -59,9 +59,9 @@ CONFIG = {
         # "Divergence": [
         #     "swing",
         # ],
-        "Fibonacci": [
-            "swing",
-        ],
+        # "Fibonacci": [
+        #     "swing",
+        # ],
         # "Momentum": [
         #     "swing",
         # ],
@@ -165,7 +165,7 @@ def print_total_results(total_results):
     logger.info(f"\n{tabulate(table, headers=headers, tablefmt="pretty")}")
 
 def animate_progress_bar(stop_event, prefix='Progress', total=100):
-    with tqdm(total=total, desc=prefix, bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}\n", ncols=70) as p_bar:
+    with tqdm(total=total, desc=prefix, bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}", ncols=70) as p_bar:
         while not stop_event.is_set():
             time.sleep(0.5) # Adjust the sleep time as needed   
             p_bar.update(1)
