@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from math import isinf, isnan
 import math
 import statistics
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 
@@ -65,11 +65,13 @@ class TradingStrategy(ABC):
             if macd_hist_latest is not None and macd_hist_latest > 0:
                 return True
             return False
-        else:
+        elif prefer == "bear":
             if r_latest is not None and r_latest < 70:
                 return True
             if macd_hist_latest is not None and macd_hist_latest < 0:
                 return True
+            return False
+        else:
             return False
         
     def _check_volume_zscore(self, vols, window=20, threshold=2.0):
@@ -158,7 +160,6 @@ class TradingStrategy(ABC):
                                 atr_quantile=0.8, adx_quantile=0.8, mode="trend") -> TrendStrength:
         """
         综合判断市场状态：趋势跟随或反转
-        返回 MarketSignalResult 数据类实例
         """
         vol_info = self._check_volatility(atr_val_history, close, window, atr_base_threshold, atr_quantile)
         trend_info = self._check_trend_strength(adx_val_history, window, adx_quantile)

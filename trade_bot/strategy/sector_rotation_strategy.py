@@ -203,3 +203,56 @@ class SectorRotationStrategy(TradingStrategy):
             ),
             details=details,
         )
+
+def make_sector_rotation_presets() -> Dict[str, Dict[str, Any]]:
+    """
+    Sector Rotation Strategy presets based on algo trading best practices:
+    - swing: Short-term (1–2 weeks), aggressive momentum weighting, tighter volatility filter.
+    - intermediate: Medium-term (2–6 weeks), balanced parameters.
+    - position: Long-term (1–3 months), conservative, stricter filters.
+    """
+
+    # ---------------- SWING ----------------
+    swing = {
+        "look_back_days": 30,                # Short lookback for recent momentum.
+        "num_sectors_to_select": 4,          # More sectors for diversification in short-term.
+        "rsi_period": 14,                    # Standard RSI.
+        "atr_period": 14,                    # ATR for volatility context.
+        "weights": {
+            "momentum": 0.6,                 # Momentum dominates short-term rotation.
+            "rsi": 0.25,                     # RSI secondary filter.
+            "volume_trend": 0.15,            # Volume trend less critical for quick rotations.
+        }
+    }
+
+    # ---------------- INTERMEDIATE ----------------
+    intermediate = {
+        "look_back_days": 60,                # Longer lookback for medium-term momentum.
+        "num_sectors_to_select": 3,          # Balanced diversification.
+        "rsi_period": 14,
+        "atr_period": 14,
+        "weights": {
+            "momentum": 0.5,                 # Balanced momentum weight.
+            "rsi": 0.3,                      # RSI more important for medium-term.
+            "volume_trend": 0.2,             # Volume trend matters more.
+        }
+    }
+
+    # ---------------- POSITION ----------------
+    position = {
+        "look_back_days": 90,                # Very long lookback for sustained trends.
+        "num_sectors_to_select": 2,          # Fewer sectors for concentrated bets.
+        "rsi_period": 14,
+        "atr_period": 14,
+        "weights": {
+            "momentum": 0.4,                 # Momentum still important but less dominant.
+            "rsi": 0.35,                     # RSI more critical for long-term positioning.
+            "volume_trend": 0.25,            # Volume trend strongly considered.
+        }
+    }
+
+    return {
+        "swing": swing,
+        "intermediate": intermediate,
+        "position": position
+    }

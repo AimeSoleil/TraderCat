@@ -275,37 +275,70 @@ class BollingerBreakoutStrategy(TradingStrategy):
             details=details,
         )
 
-
 def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
     """
-    预设：便于在不同持仓周期间快速切换（基于资深 algo trader 的经验调优）
-    - swing: 短波段（1-2周），更灵敏的入场、更短的历史窗口、更低的成交量 z-score 阈值
-    - intermediate: 中波段（2-6周），平衡的参数（回测默认）
-    - position: 中长线（1-3月），更保守、更严格的趋势/成交量/波动性门槛
+    Bollinger Band breakout strategy presets based on algo trading best practices:
+    - swing: Short-term (1–2 weeks), aggressive entry, tighter thresholds.
+    - intermediate: Medium-term (2–6 weeks), balanced parameters.
+    - position: Long-term (1–3 months), conservative, stricter filters.
     """
+
+    # ---------------- SWING TRADING ----------------
     swing = {
-        "bb_period": 20,                # Standard Bollinger Band period (20 bars)
-        "bb_std": 2.0,                  # Classic BB width (2 standard deviations)
-        "trailing_bw_window": 60,       # Longer window for squeeze detection (3× BB period)
-        "bw_percentile_threshold": 20.0,# 20th percentile = strict squeeze condition
-        "ema_fast": 8,                  # Fast EMA for short-term trend
-        "ema_slow": 21,                 # Slow EMA for trend confirmation
-        "atr_period": 14,               # ATR period for volatility context
-        "adx_period": 14,               # ADX standard period for trend strength
-        "rsi_period": 14,               # RSI standard period for momentum
-        "prior_swing_bars": 3,          # Minimum bars to confirm swing pivot
-        "min_atr_price_ratio": 0.002,   # Ensures volatility is meaningful (0.2%)
-        "vol_zscore_window": 20,        # Match BB period for volume z-score
-        "vol_zscore_threshold": 1.0,    # Slightly stricter volume breakout confirmation
-        "score_threshold": 0.6          # Composite score threshold for signal validation
+        "bb_period": 20,                # Standard BB period for short-term volatility.
+        "bb_std": 2.0,                  # Classic BB width (2 std dev).
+        "trailing_bw_window": 60,       # 3× BB period for squeeze detection.
+        "bw_percentile_threshold": 20.0,# Strict squeeze condition (20th percentile).
+        "ema_fast": 8,                  # Fast EMA for short-term trend.
+        "ema_slow": 21,                 # Slow EMA for trend confirmation.
+        "atr_period": 14,               # ATR for volatility context.
+        "adx_period": 14,               # ADX for trend strength.
+        "rsi_period": 14,               # RSI for momentum filter.
+        "prior_swing_bars": 3,          # Minimum pivot bars for swing confirmation.
+        "min_atr_price_ratio": 0.002,   # ATR ≥ 0.2% of price ensures meaningful breakout.
+        "vol_zscore_window": 20,        # Volume z-score window matches BB period.
+        "vol_zscore_threshold": 1.5,    # Volume spike confirmation (2σ).
+        "score_threshold": 0.6          # Slightly lenient for swing entries.
     }
 
+    # ---------------- INTERMEDIATE TERM ----------------
     intermediate = {
-        **swing,
+        "bb_period": 20,                # Same BB period (20 bars).
+        "bb_std": 2.0,                  # Standard deviation remains classic.
+        "trailing_bw_window": 80,       # Longer squeeze window for stability.
+        "bw_percentile_threshold": 25.0,# Slightly relaxed squeeze threshold.
+        "ema_fast": 13,                 # Moderate EMA for trend detection.
+        "ema_slow": 34,                 # Slower EMA for confirmation.
+        "atr_period": 14,               # ATR standard.
+        "adx_period": 14,               # ADX standard.
+        "rsi_period": 14,               # RSI standard.
+        "prior_swing_bars": 5,          # More bars for stronger pivot confirmation.
+        "min_atr_price_ratio": 0.003,   # ATR ≥ 0.3% of price for breakout validity.
+        "vol_zscore_window": 30,        # Longer volume window for medium-term.
+        "vol_zscore_threshold": 2.5,    # Stricter volume confirmation.
+        "score_threshold": 0.7          # Balanced threshold for intermediate trades.
     }
 
+    # ---------------- POSITION TRADING ----------------
     position = {
-        **swing,
+        "bb_period": 20,                # BB period remains standard.
+        "bb_std": 2.0,                  # Classic BB width.
+        "trailing_bw_window": 100,      # Very long squeeze window for position trades.
+        "bw_percentile_threshold": 30.0,# Relaxed squeeze threshold for long-term setups.
+        "ema_fast": 21,                 # Slow EMA for position trend.
+        "ema_slow": 55,                 # Very slow EMA for strong trend confirmation.
+        "atr_period": 14,               # ATR standard.
+        "adx_period": 14,               # ADX standard.
+        "rsi_period": 14,               # RSI standard.
+        "prior_swing_bars": 7,          # Strong pivot confirmation for position trades.
+        "min_atr_price_ratio": 0.004,   # ATR ≥ 0.4% of price for breakout validity.
+        "vol_zscore_window": 40,        # Longer volume window for position trades.
+        "vol_zscore_threshold": 3.0,    # Very strict volume confirmation.
+        "score_threshold": 0.8          # High threshold for position entries.
     }
 
-    return {"swing": swing, "intermediate": intermediate, "position": position}
+    return {
+        "swing": swing,
+        "intermediate": intermediate,
+        "position": position
+    }

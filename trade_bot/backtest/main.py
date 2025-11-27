@@ -19,52 +19,28 @@ logger = get_logger(__name__)
 
 # 🔧 Configuration
 CONFIG = {
-    "symbols": ["TSLA"],  # Add more tickers as needed
+    "symbols": ["PLTR"],  # Add more tickers as needed
     "strategies": { # Strategy name to list of preset names
-        # "BBBreakout": [
-        #     "swing",
-        #     "intermediate"
-        #     "position"
-        # ],
-        # "BBReversal": [
-        #     "swing",
-        #     "intermediate"
-        #     "position"
-        # ],
-        # "Divergence": [
-        #     "swing",
-        #     "intermediate"
-        #     "position"
-        # ],
-        # "Fibonacci": [
-        #     "swing",
-        #     "intermediate"
-        #     "position"
-        # ],
-        # "Momentum": [
-        #     "swing",
-        #     "intermediate"
-        #     "position"
-        # ],
-        
-        "BBBreakout": [
-            "swing",
-        ],
-        # "BBReversal": [
-        #     "swing",
-        # ],
-        # "ReversalCandle": [
-        #     "swing",
-        # ],
-        # "Divergence": [
-        #     "swing",
-        # ],
-        # "Fibonacci": [
-        #     "swing",
-        # ],
-        # "Momentum": [
-        #     "swing",
-        # ],
+        # "BBBreakout": ["swing"],
+        "BBReversal": ["swing"],
+        # "ReversalCandle": ["swing"],
+        # "Divergence": ["swing"],
+        # "Fibonacci": ["swing"],
+        # "Momentum": ["swing"],
+
+        # "BBBreakout": ["intermediate"],
+        # "BBReversal": ["intermediate"],
+        # "ReversalCandle": ["intermediate"],
+        # "Divergence": ["intermediate"],
+        # "Fibonacci": ["intermediate"],
+        # "Momentum": ["intermediate"],
+
+        # "BBBreakout": ["position"],
+        # "BBReversal": ["position"],
+        # "ReversalCandle": ["position"],
+        # "Divergence": ["position"],
+        # "Fibonacci": ["position"],
+        # "Momentum": ["position"]
     },
     "interval": "1d",
     "initial_cash": 100000,

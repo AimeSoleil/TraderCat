@@ -23,11 +23,10 @@ class CandlestickReversalStrategy(TradingStrategy):
         atr_period: int = 14,
         rsi_period: int = 14,
         adx_period: int = 14,
-        adx_threshold: float = 25.0,
         macd_params: Optional[Dict[str,int]] = None,
         min_atr_price_ratio: float = 0.02,
         vol_zscore_window: int = 20,
-        vol_zscore_threshold: float = 1.0,
+        vol_zscore_threshold: float = 2.0,
         score_threshold: float = 0.6,
         data_provider: Any = None
     ):
@@ -36,7 +35,6 @@ class CandlestickReversalStrategy(TradingStrategy):
         self.atr_period = int(atr_period)
         self.rsi_period = int(rsi_period)
         self.adx_period = adx_period
-        self.adx_threshold = adx_threshold
         self.macd_params = macd_params or {"fast": 12, "slow": 26, "signal": 9}
         self.min_atr_price_ratio = min_atr_price_ratio
         self.vol_zscore_window = int(vol_zscore_window)
@@ -121,15 +119,20 @@ class CandlestickReversalStrategy(TradingStrategy):
         current_ema_fast_val = ema_fast_history[-1]
         current_ema_slow_val = ema_slow_history[-1]
 
-        # ---------- 烛形检测 (使用 CandlePatterns) ----------
-        idx = len(candles) - 1
-        found_bull, bull_pattern, bull_type = CandlePatterns.detect_bullish_pattern(opens, highs, lows, closes, idx)
-        found_bear, bear_pattern, bear_type = CandlePatterns.detect_bearish_pattern(opens, highs, lows, closes, idx)
-        pattern = bull_pattern if found_bull else (bear_pattern if found_bear else None)
-
         # ---------- 趋势判断 ----------
         trend_long = (current_ema_fast_val is not None and current_ema_slow_val is not None and current_ema_fast_val > current_ema_slow_val)
         trend_short = (current_ema_fast_val is not None and current_ema_slow_val is not None and current_ema_fast_val < current_ema_slow_val)
+
+        # ---------- 烛形检测 (使用 CandlePatterns) ----------
+        idx = len(candles) - 1
+        found_bull, bull_pattern, bull_type = CandlePatterns.detect_bullish_pattern(opens, highs, lows, closes, idx, current_atr_val)
+        found_bear, bear_pattern, bear_type = CandlePatterns.detect_bearish_pattern(opens, highs, lows, closes, idx, current_atr_val)
+        pattern = bull_pattern if found_bull else (bear_pattern if found_bear else None)
+        side = "neutral"
+        if bull_type == "neutral" and trend_long:
+            bull_type == "bull"
+        if bear_type == "neutral" and trend_short:
+            bear_type == "bear"
 
         # ---------- 趋势强度和波动率 -----------
         trend_strength = self._check_trend_and_volatility(
@@ -150,7 +153,7 @@ class CandlestickReversalStrategy(TradingStrategy):
         # ---------- 动量确认 ----------
         mom_ok = False
         if found_bull or found_bear:
-            mom_ok = self._momentum_confirm(rsi_val_history, macd_hist_val_history, prefer=bull_type if found_bull else bear_type)
+            mom_ok = self._momentum_confirm(rsi_val_history, macd_hist_val_history, prefer=side)
 
         # ---------- 评分系统 ----------
         result: ScoringResult = None
@@ -207,25 +210,54 @@ class CandlestickReversalStrategy(TradingStrategy):
         )
 
 def make_candlestick_reversal_presets() -> Dict[str, Dict[str, Any]]:
+    """
+    Candlestick reversal strategy presets based on algo trading best practices:
+    - swing: Short-term (1–2 weeks), aggressive entry, tighter trend filters.
+    - intermediate: Medium-term (2–6 weeks), balanced thresholds.
+    - position: Long-term (1–3 months), conservative, stricter trend and volume filters.
+    """
+
+    # ---------------- SWING ----------------
     swing = {
-        "ema_fast": 8,                     # Fast EMA for short-term trend
-        "ema_slow": 21,                    # Slow EMA for trend confirmation
-        "atr_period": 14,                  # ATR for volatility context
-        "rsi_period": 14,                  # Standard RSI for reversal confirmation
-        "adx_period": 14,                  # ADX standard period for trend strength
-        "adx_threshold": 20.0,             # Lower threshold to allow reversals in weak trends
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD settings
-        "vol_zscore_window": 20,           # Match BB/EMA period for volume breakout detection
-        "vol_zscore_threshold": 1.0,       # Stricter volume confirmation for reversal validity
-        "score_threshold": 0.7,            # Slightly relaxed threshold for reversal signals
+        "ema_fast": 8,                     # Fast EMA for short-term trend alignment.
+        "ema_slow": 21,                    # Slow EMA for trend confirmation.
+        "atr_period": 14,                  # ATR for volatility context.
+        "rsi_period": 14,                  # RSI for momentum reversal confirmation.
+        "adx_period": 14,                  # ADX for trend strength.
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD settings.
+        "vol_zscore_window": 20,           # Volume z-score window matches EMA period.
+        "vol_zscore_threshold": 1.5,       # Moderate volume spike confirmation for swing trades.
+        "score_threshold": 0.65,           # Slightly lenient threshold for short-term reversals.
     }
 
+    # ---------------- INTERMEDIATE ----------------
     intermediate = {
-        **swing,
+        "ema_fast": 13,                    # Slightly slower EMA for medium-term trend.
+        "ema_slow": 34,                    # Slower EMA for confirmation.
+        "atr_period": 14,
+        "rsi_period": 14,
+        "adx_period": 14,
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+        "vol_zscore_window": 30,           # Longer volume window for stability.
+        "vol_zscore_threshold": 2.0,       # Stricter volume confirmation.
+        "score_threshold": 0.7,            # Balanced confidence threshold.
     }
 
+    # ---------------- POSITION ----------------
     position = {
-        **swing,
+        "ema_fast": 21,                    # Slow EMA for position trend.
+        "ema_slow": 55,                    # Very slow EMA for strong trend confirmation.
+        "atr_period": 14,
+        "rsi_period": 14,
+        "adx_period": 14,
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+        "vol_zscore_window": 40,           # Long volume window for position trades.
+        "vol_zscore_threshold": 2.5,       # Very strict volume confirmation.
+        "score_threshold": 0.8,            # High confidence threshold for position entries.
     }
 
-    return {"swing": swing, "intermediate": intermediate, "position": position}
+    return {
+        "swing": swing,
+        "intermediate": intermediate,
+        "position": position
+    }

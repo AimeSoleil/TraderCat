@@ -399,35 +399,67 @@ class FibonacciRetracementStrategy(TradingStrategy):
             details=details,
         )
 
-
 def make_fibonacci_presets() -> Dict[str, Dict[str, Any]]:
     """
-    为 FibonacciRetracementStrategy 设计的专业预设（swing / intermediate / position）
-    说明：
-        - 值基于经验与风险管理最佳实践，便于快速在不同周期间切换和回测比较。
+    Fibonacci retracement strategy presets based on algo trading best practices:
+    - swing: Short-term (1–2 weeks), aggressive entry, tighter retracement zone.
+    - intermediate: Medium-term (2–6 weeks), balanced parameters.
+    - position: Long-term (1–3 months), conservative, stricter filters.
     """
+
+    # ---------------- SWING ----------------
     swing = {
-        "lookback_swings": 20,               # Look back for swing highs/lows
-        "swing_window": 5,                   # Minimum bars to confirm a swing pivot
-        "fib_zone": (0.382, 0.618),          # Golden zone for retracement entries
-        "ema_fast": 8,                       # Fast EMA for short-term trend
-        "ema_slow": 21,                      # Slow EMA for trend confirmation
-        "atr_period": 14,                    # ATR for volatility context
-        "rsi_period": 14,                    # Standard RSI for momentum confirmation
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD settings
-        "adx_period": 14,                    # ADX for trend strength filter
-        "min_atr_price_ratio": 0.002,        # Ensures volatility is meaningful (0.2%)
-        "vol_zscore_window": 20,             # Match EMA/BB period for volume breakout detection
-        "vol_zscore_threshold": 1.0,         # Stricter volume confirmation for breakout
-        "score_threshold": 0.7              # Balanced threshold for breakout confidence
+        "lookback_swings": 20,               # Short lookback for recent swings.
+        "swing_window": 5,                   # Minimum bars for pivot confirmation.
+        "fib_zone": (0.382, 0.618),          # Golden zone for retracement entries.
+        "ema_fast": 8,                       # Fast EMA for short-term trend.
+        "ema_slow": 21,                      # Slow EMA for trend confirmation.
+        "atr_period": 14,                    # ATR for volatility context.
+        "rsi_period": 14,                    # RSI for momentum filter.
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD.
+        "adx_period": 14,                    # ADX for trend strength.
+        "min_atr_price_ratio": 0.002,        # ATR ≥ 0.2% of price ensures meaningful move.
+        "vol_zscore_window": 20,             # Volume z-score window matches EMA period.
+        "vol_zscore_threshold": 1.5,         # Moderate volume spike confirmation.
+        "score_threshold": 0.65              # Slightly lenient threshold for swing entries.
     }
 
+    # ---------------- INTERMEDIATE ----------------
     intermediate = {
-        **swing
+        "lookback_swings": 40,               # Longer lookback for medium-term swings.
+        "swing_window": 7,                   # More bars for stronger pivot confirmation.
+        "fib_zone": (0.382, 0.618),          # Golden zone remains standard.
+        "ema_fast": 13,                      # Slightly slower EMA for medium-term trend.
+        "ema_slow": 34,                      # Slower EMA for confirmation.
+        "atr_period": 14,
+        "rsi_period": 14,
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+        "adx_period": 14,
+        "min_atr_price_ratio": 0.003,        # ATR ≥ 0.3% of price.
+        "vol_zscore_window": 30,             # Longer volume window for stability.
+        "vol_zscore_threshold": 2.0,         # Stricter volume confirmation.
+        "score_threshold": 0.75              # Balanced confidence threshold.
     }
 
+    # ---------------- POSITION ----------------
     position = {
-        **swing
+        "lookback_swings": 80,               # Very long lookback for major trend retracements.
+        "swing_window": 9,                   # Strong pivot confirmation for position trades.
+        "fib_zone": (0.382, 0.618),          # Golden zone remains standard.
+        "ema_fast": 21,                      # Slow EMA for position trend.
+        "ema_slow": 55,                      # Very slow EMA for strong trend confirmation.
+        "atr_period": 14,
+        "rsi_period": 14,
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+        "adx_period": 14,
+        "min_atr_price_ratio": 0.004,        # ATR ≥ 0.4% of price.
+        "vol_zscore_window": 40,             # Long volume window for position trades.
+        "vol_zscore_threshold": 2.5,         # Very strict volume confirmation.
+        "score_threshold": 0.85              # High confidence threshold for position entries.
     }
 
-    return {"swing": swing, "intermediate": intermediate, "position": position}
+    return {
+        "swing": swing,
+        "intermediate": intermediate,
+        "position": position
+    }

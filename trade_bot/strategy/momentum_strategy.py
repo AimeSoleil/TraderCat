@@ -322,32 +322,59 @@ class MomentumTrendStrategy(TradingStrategy):
 
 def make_momentum_presets() -> Dict[str, Dict[str, Any]]:
     """
-    MomentumTrend 策略预设（资深 algo trader 推荐）
-    - swing：短波段（更快响应），较低门槛与较小止损
-    - intermediate：中波段（平衡），回测默认
-    - position：中长线（更严格确认），更高门槛与更大止损
+    MomentumTrend strategy presets based on algo trading best practices:
+    - swing: Short-term (1–2 weeks), aggressive entry, tighter thresholds.
+    - intermediate: Medium-term (2–6 weeks), balanced parameters.
+    - position: Long-term (1–3 months), conservative, stricter filters.
     """
+
+    # ---------------- SWING ----------------
     swing = {
-        "L": 21,                           # Lookback for momentum score (often matches slow EMA)
-        "ema_fast": 8,                     # Fast EMA for short-term trend
-        "ema_slow": 21,                    # Slow EMA for trend confirmation
-        "ht_ema_fast": 8,                  # Hilbert Transform EMA fast (same as EMA fast)
-        "ht_ema_slow": 21,                 # Hilbert Transform EMA slow (same as EMA slow)
-        "adx_period": 14,                  # ADX standard period for trend strength
-        "atr_period": 14,                  # ATR for volatility context
-        "min_atr_price_ratio": 0.002,      # Ensures volatility is meaningful (0.2%)
-        "vol_zscore_window": 20,           # Match EMA period for volume breakout detection
-        "vol_zscore_threshold": 1.0,       # Stricter volume confirmation for trend continuation
-        "score_threshold": 0.7             # Balanced threshold for momentum confidence
+        "L": 21,                           # Lookback for momentum score (matches slow EMA).
+        "ema_fast": 8,                     # Fast EMA for short-term trend.
+        "ema_slow": 21,                    # Slow EMA for trend confirmation.
+        "ht_ema_fast": 8,                  # Hilbert Transform EMA fast.
+        "ht_ema_slow": 21,                 # Hilbert Transform EMA slow.
+        "adx_period": 14,                  # ADX for trend strength.
+        "atr_period": 14,                  # ATR for volatility context.
+        "min_atr_price_ratio": 0.002,      # ATR ≥ 0.2% of price ensures meaningful move.
+        "vol_zscore_window": 20,           # Volume z-score window matches EMA period.
+        "vol_zscore_threshold": 1.5,       # Moderate volume spike confirmation.
+        "score_threshold": 0.65            # Slightly lenient threshold for swing entries.
     }
 
-
+    # ---------------- INTERMEDIATE ----------------
     intermediate = {
-        **swing,
+        "L": 34,                           # Longer lookback for momentum score.
+        "ema_fast": 13,                    # Slightly slower EMA for medium-term trend.
+        "ema_slow": 34,                    # Slower EMA for confirmation.
+        "ht_ema_fast": 13,
+        "ht_ema_slow": 34,
+        "adx_period": 14,
+        "atr_period": 14,
+        "min_atr_price_ratio": 0.003,      # ATR ≥ 0.3% of price.
+        "vol_zscore_window": 30,           # Longer volume window for stability.
+        "vol_zscore_threshold": 2.0,       # Stricter volume confirmation.
+        "score_threshold": 0.75            # Balanced confidence threshold.
     }
 
+    # ---------------- POSITION ----------------
     position = {
-        **swing,
+        "L": 55,                           # Very long lookback for momentum score.
+        "ema_fast": 21,                    # Slow EMA for position trend.
+        "ema_slow": 55,                    # Very slow EMA for strong trend confirmation.
+        "ht_ema_fast": 21,
+        "ht_ema_slow": 55,
+        "adx_period": 14,
+        "atr_period": 14,
+        "min_atr_price_ratio": 0.004,      # ATR ≥ 0.4% of price.
+        "vol_zscore_window": 40,           # Long volume window for position trades.
+        "vol_zscore_threshold": 2.5,       # Very strict volume confirmation.
+        "score_threshold": 0.85            # High confidence threshold for position entries.
     }
 
-    return {"swing": swing, "intermediate": intermediate, "position": position}
+    return {
+        "swing": swing,
+        "intermediate": intermediate,
+        "position": position
+    }

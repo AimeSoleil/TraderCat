@@ -533,31 +533,56 @@ class DivergenceStrategy(TradingStrategy):
 
 def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Divergence 策略预设（资深 algo trader 推荐）
-    说明（统一三档/四档可选）：
-        - swing: 短波段（1-2 周），更灵敏的背离检测、较低成交量阈值与较短确认窗口
-        - intermediate: 中波段（2-6 周），平衡参数（回测默认）
-        - position/long_term: 中长线（1-3 月），更严格的过滤、更长的回溯与更高成交量阈值
+    Divergence strategy presets based on algo trading best practices:
+    - swing: Short-term (1–2 weeks), sensitive detection, quick confirmation.
+    - intermediate: Medium-term (2–6 weeks), balanced parameters.
+    - position: Long-term (1–3 months), stricter filters, longer lookback.
     """
+
+    # ---------------- SWING ----------------
     swing = {
-        "swing_window": 4,                  # Minimum bars to confirm a swing high/low
-        "lookback_swings": 30,              # Look back for divergence detection (30 swings)
-        "rsi_period": 14,                   # Standard RSI for momentum divergence
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD for trend/momentum
-        "atr_period": 14,                   # ATR for volatility context
-        "min_atr_price_ratio": 0.002,       # Ensures volatility is meaningful (0.2%)
-        "adx_period": 14,                   # ADX for trend strength filter
-        "vol_zscore_window": 20,            # Match ATR/BB period for volume confirmation
-        "vol_zscore_threshold": 1.0,        # Stricter volume breakout confirmation
-        "score_threshold": 0.75             # Higher threshold for divergence confidence
+        "swing_window": 4,                  # Minimum bars for swing pivot → quick detection.
+        "lookback_swings": 30,              # Look back for divergence detection → short-term context.
+        "rsi_period": 14,                   # RSI for momentum divergence.
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD.
+        "atr_period": 14,                   # ATR for volatility context.
+        "min_atr_price_ratio": 0.002,       # ATR ≥ 0.2% of price ensures meaningful move.
+        "adx_period": 14,                   # ADX for trend strength filter.
+        "vol_zscore_window": 20,            # Volume z-score window matches ATR period.
+        "vol_zscore_threshold": 1.5,        # Moderate volume spike confirmation.
+        "score_threshold": 0.75             # Higher threshold for divergence confidence.
     }
 
+    # ---------------- INTERMEDIATE ----------------
     intermediate = {
-        **swing,
+        "swing_window": 6,                  # More bars for stronger pivot confirmation.
+        "lookback_swings": 50,              # Longer lookback for medium-term divergence.
+        "rsi_period": 14,
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+        "atr_period": 14,
+        "min_atr_price_ratio": 0.003,       # ATR ≥ 0.3% of price.
+        "adx_period": 14,
+        "vol_zscore_window": 30,            # Longer volume window for stability.
+        "vol_zscore_threshold": 2.0,        # Stricter volume confirmation.
+        "score_threshold": 0.8              # Balanced confidence threshold.
     }
 
+    # ---------------- POSITION ----------------
     position = {
-        **swing,
+        "swing_window": 8,                  # Strong pivot confirmation for position trades.
+        "lookback_swings": 80,              # Very long lookback for major trend reversals.
+        "rsi_period": 14,
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+        "atr_period": 14,
+        "min_atr_price_ratio": 0.004,       # ATR ≥ 0.4% of price.
+        "adx_period": 14,
+        "vol_zscore_window": 40,            # Long volume window for position trades.
+        "vol_zscore_threshold": 2.5,        # Very strict volume confirmation.
+        "score_threshold": 0.85             # High confidence threshold for position entries.
     }
 
-    return {"swing": swing, "intermediate": intermediate, "position": position}
+    return {
+        "swing": swing,
+        "intermediate": intermediate,
+        "position": position
+    }

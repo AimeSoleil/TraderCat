@@ -160,26 +160,30 @@ class BBandsReversalStrategy(TradingStrategy):
             abs(close - m_curr) / (m_curr if abs(m_curr) > EPS else 1.0) <= self.touch_pct
         )
 
-
         # 检测拒绝蜡烛（以最近 self.max_time_bars 根内的任意一根作为确认）
         rejection_found = False
         rejection_type, pattern_type, reject_idx = None, None, None
         start = max(0, idx - self.max_time_bars + 1)
+        side = "neutral"
         for i in range(start, idx + 1):
             if near_lower:
-                rejection_found, rejection_type, pattern_type = CandlePatterns.detect_bullish_pattern(opens, highs, lows, closes, i)
+                rejection_found, rejection_type, pattern_type = CandlePatterns.detect_bullish_pattern(opens, highs, lows, closes, i, atr_val_history[i])
                 reject_idx = i
+                if pattern_type == "neutral":
+                    side = "bull"
                 break
             # 看空候选（接近上轨）
             if near_upper:
-                rejection_found, rejection_type, pattern_type = CandlePatterns.detect_bearish_pattern(opens, highs, lows, closes, i)
+                rejection_found, rejection_type, pattern_type = CandlePatterns.detect_bearish_pattern(opens, highs, lows, closes, i, atr_val_history[i])
                 reject_idx = i
+                if pattern_type == "neutral":
+                    side = "bear"
                 break
 
         # 动量确认（若启用）
         momentum_ok = False
         if near_upper or near_upper:
-            self._momentum_confirm(rsi_val_history=rsi_val_history, macd_hist_val_history=macd_hist_val_history, prefer=pattern_type)
+            self._momentum_confirm(rsi_val_history=rsi_val_history, macd_hist_val_history=macd_hist_val_history, prefer=side)
 
         details: Dict[str, Any] = {
             "close": close,
@@ -188,6 +192,7 @@ class BBandsReversalStrategy(TradingStrategy):
             "mid": m_curr,
             "atr": round(current_atr_val, 6),
             "adx": round(current_adx_val, 3),
+            "candle_pattern": rejection_type,
             "vol_zscore": round(volume_z, 3) if volume_z is not None else None,
             "trend_volatility_ok": trend_strength.signal,
             "trend_info": trend_strength.trend,
@@ -249,29 +254,62 @@ class BBandsReversalStrategy(TradingStrategy):
 
 def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
     """
-    依据实战与最佳实践的预设（swing/intermediate/position）
+    Bollinger Band reversal strategy presets based on algo trading best practices:
+    - swing: Short-term (1–2 weeks), tighter band touch, quick confirmation.
+    - intermediate: Medium-term (2–6 weeks), balanced thresholds.
+    - position: Long-term (1–3 months), looser band touch, stricter confirmation.
     """
+
+    # ---------------- SWING ----------------
     swing = {
-        "bb_period": 20,                # Standard BB period for swing trading
-        "bb_std": 2.0,                  # Classic BB width (2 standard deviations)
-        "touch_pct": 0.05,              # Price must be within 5% of band to count as a touch
-        "rsi_period": 14,               # RSI standard period for reversal confirmation
-        "atr_period": 14,               # ATR for volatility context
-        "adx_period": 14,               # ADX standard period for trend strength
-        "max_time_bars": 3,             # Signal must trigger within 3 bars after band touch
-        "min_atr_price_ratio": 0.002,   # Ensures volatility is meaningful (0.2%)
-        "vol_zscore_window": 20,        # Match BB period for volume breakout detection
-        "vol_zscore_threshold": 1.0,    # Slightly stricter volume confirmation
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD settings
-        "score_threshold": 0.55          # Slightly higher threshold for reversal confidence
+        "bb_period": 20,                # Standard BB period for volatility context.
+        "bb_std": 2.0,                  # Classic BB width (2 std dev).
+        "touch_pct": 0.02,              # Price within 2% of band → tighter for short-term reversals.
+        "rsi_period": 14,               # RSI standard for momentum reversal.
+        "atr_period": 14,               # ATR for volatility filter.
+        "adx_period": 14,               # ADX for trend strength.
+        "max_time_bars": 3,             # Quick reversal confirmation (within 3 bars).
+        "min_atr_price_ratio": 0.002,   # ATR ≥ 0.2% of price ensures meaningful move.
+        "vol_zscore_window": 20,        # Volume z-score window matches BB period.
+        "vol_zscore_threshold": 1.5,    # Moderate volume spike confirmation.
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD.
+        "score_threshold": 0.6          # Slightly higher threshold for reversal confidence.
     }
 
+    # ---------------- INTERMEDIATE ----------------
     intermediate = {
-        **swing,
+        "bb_period": 20,
+        "bb_std": 2.0,
+        "touch_pct": 0.03,              # Looser band touch for medium-term reversals.
+        "rsi_period": 14,
+        "atr_period": 14,
+        "adx_period": 14,
+        "max_time_bars": 5,             # Allow more bars for confirmation.
+        "min_atr_price_ratio": 0.003,   # ATR ≥ 0.3% of price.
+        "vol_zscore_window": 30,        # Longer volume window for stability.
+        "vol_zscore_threshold": 2.0,    # Stricter volume confirmation.
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+        "score_threshold": 0.7          # Balanced confidence threshold.
     }
 
+    # ---------------- POSITION ----------------
     position = {
-        **swing,
+        "bb_period": 20,
+        "bb_std": 2.0,
+        "touch_pct": 0.05,              # Loosest band touch for long-term reversals.
+        "rsi_period": 14,
+        "atr_period": 14,
+        "adx_period": 14,
+        "max_time_bars": 7,             # More bars allowed for confirmation.
+        "min_atr_price_ratio": 0.004,   # ATR ≥ 0.4% of price.
+        "vol_zscore_window": 40,        # Long volume window for position trades.
+        "vol_zscore_threshold": 2.5,    # Very strict volume confirmation.
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+        "score_threshold": 0.8          # High confidence threshold for position entries.
     }
 
-    return {"swing": swing, "intermediate": intermediate, "position": position}
+    return {
+        "swing": swing,
+        "intermediate": intermediate,
+        "position": position
+    }
