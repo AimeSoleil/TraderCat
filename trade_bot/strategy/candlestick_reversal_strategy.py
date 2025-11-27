@@ -165,7 +165,7 @@ class CandlestickReversalStrategy(TradingStrategy):
 
         # Compute score using ScoringEngine
         engine = ScoringEngine(
-            base_threshold=0.7, 
+            base_threshold=self.score_threshold, 
             required_factors=self.support_scoring_factors(),
             determined_factors=[
                 FactorName.REVERSAL_CANDLE

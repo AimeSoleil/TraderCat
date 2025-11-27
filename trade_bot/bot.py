@@ -107,14 +107,8 @@ class GlobalTradeBot:
         global_strategies = [
             SectorRotationStrategy(data_provider=data_provider),
         ]
-        max_lookback = max(
-            strategy.get_lookback_window() for strategy in global_strategies
-        )
-        candles = data_provider.get_price_data(
-            self.symbol, interval="1d", lookback=max_lookback
-        )
 
-        signals = [strategy.generate_signal(candles=candles[-strategy.get_lookback_window():]) for strategy in global_strategies]
+        signals = [strategy.generate_signal() for strategy in global_strategies]
         final_signal_list = self.aggregate_signals(signals)
 
         # self.executor.execute_trade(final_signal_list, self.symbol)

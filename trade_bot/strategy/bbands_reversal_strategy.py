@@ -150,13 +150,17 @@ class BBandsReversalStrategy(TradingStrategy):
         recent_window = max(1, min(self.vol_zscore_window, len(vols)))
         vol_ok, volume_z = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
 
-        # 检查是否接近上轨/下轨（相对容差
+        # 检查是否接近上轨/下轨/中轨（相对容差
         near_upper = (u_curr is not None) and (
             close > u_curr or abs(close - u_curr) / (u_curr if abs(u_curr) > EPS else 1.0) <= self.touch_pct
         )
         near_lower = (l_curr is not None) and (
             close < l_curr or abs(close - l_curr) / (l_curr if abs(l_curr) > EPS else 1.0) <= self.touch_pct
         )
+        near_mid = (m_curr is not None) and (
+            abs(close - m_curr) / (m_curr if abs(m_curr) > EPS else 1.0) <= self.touch_pct
+        )
+
 
         # 检测拒绝蜡烛（以最近 self.max_time_bars 根内的任意一根作为确认）
         rejection_found = False
@@ -197,14 +201,14 @@ class BBandsReversalStrategy(TradingStrategy):
         }
 
         # 只有在带位接近并出现拒绝蜡烛的情况下考虑反转
-        candidate_buy = near_lower and rejection_found
-        candidate_sell = near_upper and rejection_found
+        candidate_buy = (near_lower or near_mid) and rejection_found
+        candidate_sell = (near_upper or near_mid) and rejection_found
         middle_line_reversal = (candidate_buy and prev_close > m_curr and close < m_curr) or (candidate_sell and prev_close < m_curr and close > m_curr)
 
         # 评分 & 生成 signal
         result: ScoringResult = None
         factors = [
-            Factor(FactorName.BB_REVERSAL_CANDLE, f"检测到布林带带拒绝蜡烛({rejection_type})", 0.35, candidate_buy or candidate_sell),
+            Factor(FactorName.BB_REVERSAL_CANDLE, f"检测到布林带拒绝蜡烛({rejection_type})", 0.35, candidate_buy or candidate_sell),
             Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.25, trend_strength.signal),
             Factor(FactorName.VOLUME_CONFIRM, "成交量放大确认", 0.2, vol_ok),
             Factor(FactorName.MOMENTUM_CONFIRM, "动量确认方向确认", 0.1, momentum_ok),
@@ -213,7 +217,7 @@ class BBandsReversalStrategy(TradingStrategy):
 
         # Compute score using ScoringEngine
         engine = ScoringEngine(
-            base_threshold=0.7, 
+            base_threshold=self.score_threshold, 
             required_factors=self.support_scoring_factors(),
             determined_factors=[
                 FactorName.BB_REVERSAL_CANDLE
@@ -259,7 +263,7 @@ def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
         "vol_zscore_window": 20,        # Match BB period for volume breakout detection
         "vol_zscore_threshold": 1.0,    # Slightly stricter volume confirmation
         "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD settings
-        "score_threshold": 0.7          # Slightly higher threshold for reversal confidence
+        "score_threshold": 0.55          # Slightly higher threshold for reversal confidence
     }
 
     intermediate = {

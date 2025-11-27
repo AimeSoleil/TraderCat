@@ -67,13 +67,13 @@ class Factor:
     weight: float
     condition: bool
 
-    def effective_weight(self, vol_spike: bool, atr_high: bool) -> float:
-        adaptive_weight = self.weight
-        if vol_spike and self.name == FactorName.VOLUME_CONFIRM:
-            adaptive_weight += 0.05
-        if atr_high and self.name == FactorName.VOLATILITY_FILTER:
-            adaptive_weight += 0.05
-        return adaptive_weight
+    # def effective_weight(self, vol_spike: bool, atr_high: bool) -> float:
+    #     adaptive_weight = self.weight
+    #     if vol_spike and self.name == FactorName.VOLUME_CONFIRM:
+    #         adaptive_weight += 0.05
+    #     if atr_high and self.name == FactorName.VOLATILITY_FILTER:
+    #         adaptive_weight += 0.05
+    #     return adaptive_weight
 
 # ---------------- SCORING ENGINE ----------------
 class ScoringEngine:
@@ -82,20 +82,13 @@ class ScoringEngine:
         required_factors: List[FactorName],
         determined_factors: List[FactorName] = None,
         base_threshold: float = 0.7,
-        atr_volatility_factor: float = 0.15,
     ):
         self.base_threshold = base_threshold
-        self.atr_volatility_factor = atr_volatility_factor
         self.required_factors = required_factors
         self.determined_factors = determined_factors
 
-    # def dynamic_threshold(self, atr: float, avg_atr: float) -> float:
-    #     if atr > avg_atr * 1.2:
-    #         return min(1.0, self.base_threshold + self.atr_volatility_factor)
-    #     return self.base_threshold
-
     def _validate_factors(self, factors: List[Factor]) -> List[str]:
-        if not self.required_scoring_factors:
+        if not self.required_factors:
             raise ValueError("Missing required scoring factors definition")
 
         existing_names = {f.name for f in factors}
@@ -121,7 +114,8 @@ class ScoringEngine:
 
         for factor in factors:
             if factor.condition:
-                reasons.append(f"{factor.name.value} (+{score:.2f}) {factor.description}")
+                score += factor.weight
+                reasons.append(f"{factor.name.value} (+{factor.weight:.2f}) {factor.description}")
 
         score = min(1.0, score)
         signal = "hold"
@@ -142,7 +136,7 @@ class ScoringEngine:
             else:
                 reasons.append(f'scoring ({score}) not exceeds threshold ({self.base_threshold})')
         else:
-            reasons.appends(f'side is {side}')
+            reasons.append(f'side is {side}')
 
         return ScoringResult(
             score=round(score, 3), threshold=self.base_threshold, signal=signal, reasons=reasons

@@ -212,28 +212,31 @@ class BollingerBreakoutStrategy(TradingStrategy):
             if idx - self.prior_swing_bars >= 0
             else min(lows[:-1])
         )
-        long_break = (close > bbu) and (close > prior_range_high)
-        short_break = (close < bbl) and (close < prior_range_low)
+
+        # long_break = (close > bbu) and (close > prior_range_high)
+        # short_break = (close < bbl) and (close < prior_range_low)
+        long_break = (close >= bbu) 
+        short_break = (close <= bbl)
 
         details: Dict[str, Any] = {
             "close": close,
             "bbu": bbu,
             "bbl": bbl,
             "bbm": bbm,
+            "prior_high": prior_range_high,
+            "prior_low": prior_range_low,
             "bw_pct": round(bw_pct, 2),
             "ema_fast": round(ema_f, 4),
             "ema_slow": round(ema_s, 4),
             "atr": round(current_atr_val, 6),
             "adx": round(current_adx_val, 6),
-            "prior_high": prior_range_high,
-            "prior_low": prior_range_low,
             "in_squeeze": in_squeeze,
         }
 
         # 评分 & 生成 signal
         result: ScoringResult = None
         factors = [
-            Factor(FactorName.BREAKOUT_TRIGGER, "布林带突破", 0.30, long_break or short_break),
+            Factor(FactorName.BREAKOUT_TRIGGER, f"布林带{"long" if long_break else "short"}突破", 0.30, long_break or short_break),
             Factor(FactorName.SQUEEZE_CONFIRM, "布林带Squeeze确认", 0.25, in_squeeze),
             Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.20, trend_strength.signal),
             Factor(FactorName.VOLUME_CONFIRM, "成交量放大", 0.15, vol_ok),
@@ -241,7 +244,7 @@ class BollingerBreakoutStrategy(TradingStrategy):
             Factor(FactorName.CONFLUENCE_BONUS, "趋势方向强度波动率一致", 0.05, trend_strength.signal and ((long_break and trend_long) or (short_break and trend_short))),
         ]
         engine = ScoringEngine(
-            base_threshold=0.7, 
+            base_threshold=self.score_threshold, 
             required_factors=self.support_scoring_factors(),
             determined_factors=[
                 FactorName.BREAKOUT_TRIGGER
@@ -266,7 +269,7 @@ class BollingerBreakoutStrategy(TradingStrategy):
             strategy=self.get_name(),
             signal=result.signal,
             date=dates[-1],
-            confidence=round(min(1.0, result.signal.score), 3),
+            confidence=round(min(1.0, result.score), 3),
             reason=" | ".join(result.reasons),
             details=details,
         )
@@ -293,7 +296,7 @@ def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
         "min_atr_price_ratio": 0.002,   # Ensures volatility is meaningful (0.2%)
         "vol_zscore_window": 20,        # Match BB period for volume z-score
         "vol_zscore_threshold": 1.0,    # Slightly stricter volume breakout confirmation
-        "score_threshold": 0.7          # Composite score threshold for signal validation
+        "score_threshold": 0.55          # Composite score threshold for signal validation
     }
 
     intermediate = {

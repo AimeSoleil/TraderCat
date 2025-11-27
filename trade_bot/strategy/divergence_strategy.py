@@ -220,7 +220,7 @@ class DivergenceStrategy(TradingStrategy):
 
                 # Compute score using ScoringEngine
                 engine = ScoringEngine(
-                    base_threshold=0.7, 
+                    base_threshold=self.score_threshold, 
                     required_factors=self.support_scoring_factors(),
                     determined_factors=[
                         FactorName.DIVERGENCE
@@ -330,7 +330,7 @@ class DivergenceStrategy(TradingStrategy):
 
                 # Compute score using ScoringEngine
                 engine = ScoringEngine(
-                    base_threshold=0.7, 
+                    base_threshold=self.score_threshold, 
                     required_factors=self.support_scoring_factors(),
                     determined_factors=[
                         FactorName.DIVERGENCE
@@ -411,7 +411,7 @@ class DivergenceStrategy(TradingStrategy):
 
                     # Compute score using ScoringEngine
                     engine = ScoringEngine(
-                        base_threshold=0.7, 
+                        base_threshold=self.score_threshold, 
                         required_factors=self.support_scoring_factors(),
                         determined_factors=[
                             FactorName.DIVERGENCE
@@ -489,7 +489,7 @@ class DivergenceStrategy(TradingStrategy):
 
                     # Compute score using ScoringEngine
                     engine = ScoringEngine(
-                        base_threshold=0.7, 
+                        base_threshold=self.score_threshold, 
                         required_factors=self.support_scoring_factors(),
                         determined_factors=[
                             FactorName.DIVERGENCE

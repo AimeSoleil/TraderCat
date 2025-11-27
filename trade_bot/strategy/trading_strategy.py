@@ -56,8 +56,8 @@ class TradingStrategy(ABC):
         prefer: str = "bull",
     ) -> bool:
         # 简单动量确认：RSI or MACD hist 指向反转方向
-        r_latest = rsi_val_history[-1]
-        macd_hist_latest = macd_hist_val_history[-1]
+        r_latest = rsi_val_history[-1] if rsi_val_history and len(rsi_val_history) > 0 else None
+        macd_hist_latest = macd_hist_val_history[-1] if macd_hist_val_history and len(macd_hist_val_history) > 0 else None
 
         if prefer == "bull":
             if r_latest is not None and r_latest > 30:

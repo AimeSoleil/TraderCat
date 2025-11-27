@@ -47,24 +47,24 @@ CONFIG = {
         #     "position"
         # ],
         
-        "BBBreakout": [
-            "swing",
-        ],
-        "BBReversal": [
-            "swing",
-        ],
-        "ReversalCandle": [
-            "swing",
-        ],
-        "Divergence": [
-            "swing",
-        ],
+        # "BBBreakout": [
+        #     "swing",
+        # ],
+        # "BBReversal": [
+        #     "swing",
+        # ],
+        # "ReversalCandle": [
+        #     "swing",
+        # ],
+        # "Divergence": [
+        #     "swing",
+        # ],
         "Fibonacci": [
             "swing",
         ],
-        "Momentum": [
-            "swing",
-        ],
+        # "Momentum": [
+        #     "swing",
+        # ],
     },
     "interval": "1d",
     "initial_cash": 100000,
@@ -81,9 +81,6 @@ def run_configured_presets():
         "ReversalCandle": (CandlestickReversalStrategy, make_candlestick_reversal_presets()),
         "Fibonacci": (FibonacciRetracementStrategy, make_fibonacci_presets()),
         "Momentum": (MomentumTrendStrategy, make_momentum_presets()),
-
-        # Add global strategies here if needed
-        "SectorRotation": (SectorRotationStrategy, {}),
     }
 
     total_results = {}
@@ -137,6 +134,7 @@ def run_configured_presets():
                 logger.info(f"✅ Finished backtest for {strategy_name} - {preset_name}")
                 logger.info(f"⏱ Duration: {duration:.2f} seconds")
             except Exception as e:
+                stop_event.set()
                 logger.info(f"❌ Error during backtest for {strategy_name} - {preset_name}: {traceback.format_exc()}")
 
     if total_results:
@@ -167,7 +165,7 @@ def print_total_results(total_results):
     logger.info(f"\n{tabulate(table, headers=headers, tablefmt="pretty")}")
 
 def animate_progress_bar(stop_event, prefix='Progress', total=100):
-    with tqdm(total=total, desc=prefix, bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}", ncols=70) as p_bar:
+    with tqdm(total=total, desc=prefix, bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}\n", ncols=70) as p_bar:
         while not stop_event.is_set():
             time.sleep(0.5) # Adjust the sleep time as needed   
             p_bar.update(1)
