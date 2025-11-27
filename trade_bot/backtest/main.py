@@ -22,8 +22,8 @@ CONFIG = {
     "symbols": ["PLTR"],  # Add more tickers as needed
     "strategies": { # Strategy name to list of preset names
         # "BBBreakout": ["swing"],
-        "BBReversal": ["swing"],
-        # "ReversalCandle": ["swing"],
+        # "BBReversal": ["swing"],
+        "ReversalCandle": ["swing"],
         # "Divergence": ["swing"],
         # "Fibonacci": ["swing"],
         # "Momentum": ["swing"],

@@ -433,7 +433,6 @@ class CandlePatterns:
         检测看涨形态
         按优先级依次检测单根、双根、三根组合形态
         """
-        print(f"detect_bullish_pattern: atr={atr}, price={closes[-1]}")
         # Adaptive Based on ATR (Best Practice)
         tolerance = (atr / closes[-1]) if atr else 0.001
         if idx >= 0:
