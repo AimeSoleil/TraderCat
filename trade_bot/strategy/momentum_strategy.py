@@ -294,7 +294,7 @@ class MomentumTrendStrategy(TradingStrategy):
             determined_factors=[
                 FactorName.MOMENTUM_CONFIRM
             ],
-            is_volatility_ok=trend_strength.volatility.signal
+            is_volatility_ok=trend_strength.volatility['signal']
         )
         side = "long" if long_cond else "short" if short_cond else "hold"
         result = engine.compute_score(factors, side=side)

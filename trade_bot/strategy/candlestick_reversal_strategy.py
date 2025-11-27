@@ -170,7 +170,7 @@ class CandlestickReversalStrategy(TradingStrategy):
             determined_factors=[
                 FactorName.REVERSAL_CANDLE
             ],
-            is_volatility_ok=trend_strength.volatility.signal
+            is_volatility_ok=trend_strength.volatility['signal']
         )
         side = "long" if found_bull else "short" if found_bear else "hold"
         result = engine.compute_score(factors, side=side)

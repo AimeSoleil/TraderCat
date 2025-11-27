@@ -221,7 +221,7 @@ class BBandsReversalStrategy(TradingStrategy):
             determined_factors=[
                 FactorName.BB_REVERSAL_CANDLE
             ],
-            is_volatility_ok=trend_strength.volatility.signal
+            is_volatility_ok=trend_strength.volatility['signal']
         )
         side = "long" if candidate_buy else "short" if candidate_sell else "hold"
         result = engine.compute_score(factors, side=side)

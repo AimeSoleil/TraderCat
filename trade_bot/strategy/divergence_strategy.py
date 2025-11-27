@@ -225,7 +225,7 @@ class DivergenceStrategy(TradingStrategy):
                     determined_factors=[
                         FactorName.DIVERGENCE
                     ],
-                    is_volatility_ok=trend_strength.volatility.signal
+                    is_volatility_ok=trend_strength.volatility['signal']
                 )
                 result = engine.compute_score(factors, side="short")
 
@@ -336,7 +336,7 @@ class DivergenceStrategy(TradingStrategy):
                     determined_factors=[
                         FactorName.DIVERGENCE
                     ],
-                    is_volatility_ok=trend_strength.volatility.signal
+                    is_volatility_ok=trend_strength.volatility['signal']
                 )
                 result = engine.compute_score(factors, side="long")
 
@@ -418,7 +418,7 @@ class DivergenceStrategy(TradingStrategy):
                         determined_factors=[
                             FactorName.DIVERGENCE
                         ],
-                        is_volatility_ok=trend_strength.volatility.signal
+                        is_volatility_ok=trend_strength.volatility['signal']
                     )
                     result = engine.compute_score(factors, side="long")
 
@@ -497,7 +497,7 @@ class DivergenceStrategy(TradingStrategy):
                         determined_factors=[
                             FactorName.DIVERGENCE
                         ],
-                        is_volatility_ok=trend_strength.volatility.signal
+                        is_volatility_ok=trend_strength.volatility['signal']
                     )
                     result = engine.compute_score(factors, side="short")
 

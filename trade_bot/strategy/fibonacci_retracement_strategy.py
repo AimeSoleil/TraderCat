@@ -369,7 +369,7 @@ class FibonacciRetracementStrategy(TradingStrategy):
                 determined_factors=[
                     FactorName.FIB_ZONE_CONFIRM
                 ],
-                is_volatility_ok=trend_strength.volatility.signal
+                is_volatility_ok=trend_strength.volatility['signal']
             )
             side = "long" if (in_zone or breakout_up_confirm) else "short" if breakout_down_confirm else "hold"
             result = engine.compute_score(factors, side=side)
