@@ -25,7 +25,7 @@ from trade_bot.strategy.momentum_strategy import (
     MomentumTrendStrategy,
     make_momentum_presets,
 )
-from trade_bot.strategy.sector_rotation_strategy import SectorRotationStrategy
+from trade_bot.strategy.sector_rotation_strategy import SectorRotationStrategy, make_sector_rotation_presets
 from trade_bot.strategy.signal_model import SignalModel
 
 logger = get_logger(__name__)
@@ -105,7 +105,7 @@ class GlobalTradeBot:
 
         # Initialize strategies with the data provider and support adding more strategies per need
         global_strategies = [
-            SectorRotationStrategy(data_provider=data_provider),
+            SectorRotationStrategy(data_provider=data_provider, **make_sector_rotation_presets("intermediate")),
         ]
 
         signals = [strategy.generate_signal() for strategy in global_strategies]

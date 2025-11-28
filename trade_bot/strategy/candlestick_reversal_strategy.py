@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
 
-from trade_bot.strategy.candle_pattern import CandlePatterns
+from trade_bot.strategy.candle_pattern.pattern_detector_orch import PatternDetectorsOrchestrator
 from trade_bot.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
 from trade_bot.strategy.trading_strategy import ExitPlanner, TradingStrategy
 from trade_bot.strategy.signal_model import SignalModel
@@ -24,7 +24,7 @@ class CandlestickReversalStrategy(TradingStrategy):
         rsi_period: int = 14,
         adx_period: int = 14,
         macd_params: Optional[Dict[str,int]] = None,
-        min_atr_price_ratio: float = 0.02,
+        atr_base_factor: float = 1,
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 2.0,
         score_threshold: float = 0.6,
@@ -36,7 +36,7 @@ class CandlestickReversalStrategy(TradingStrategy):
         self.rsi_period = int(rsi_period)
         self.adx_period = adx_period
         self.macd_params = macd_params or {"fast": 12, "slow": 26, "signal": 9}
-        self.min_atr_price_ratio = min_atr_price_ratio
+        self.atr_base_factor = atr_base_factor
         self.vol_zscore_window = int(vol_zscore_window)
         self.vol_zscore_threshold = float(vol_zscore_threshold)
         self.score_threshold = float(score_threshold)
@@ -120,27 +120,80 @@ class CandlestickReversalStrategy(TradingStrategy):
         current_ema_slow_val = ema_slow_history[-1]
 
         # ---------- 趋势判断 ----------
-        trend_long = (current_ema_fast_val is not None and current_ema_slow_val is not None and current_ema_fast_val > current_ema_slow_val)
-        trend_short = (current_ema_fast_val is not None and current_ema_slow_val is not None and current_ema_fast_val < current_ema_slow_val)
+        trend_long = (
+            current_ema_fast_val is not None
+            and current_ema_slow_val is not None
+            and current_ema_fast_val > current_ema_slow_val
+        )
+        trend_short = (
+            current_ema_fast_val is not None
+            and current_ema_slow_val is not None
+            and current_ema_fast_val < current_ema_slow_val
+        )
 
-        # ---------- 烛形检测 (使用 CandlePatterns) ----------
+        # ---------- 烛形检测 (使用 PatternOrchestratorSingleton) ----------
         idx = len(candles) - 1
-        found_bull, bull_pattern, bull_type = CandlePatterns.detect_bullish_pattern(opens, highs, lows, closes, idx, current_atr_val)
-        found_bear, bear_pattern, bear_type = CandlePatterns.detect_bearish_pattern(opens, highs, lows, closes, idx, current_atr_val)
-        pattern = bull_pattern if found_bull else (bear_pattern if found_bear else None)
-        side = "neutral"
-        if bull_type == "neutral" and trend_long:
-            bull_type == "bull"
-        if bear_type == "neutral" and trend_short:
-            bear_type == "bear"
+
+        # Singleton orchestrator (import once at module level ideally)
+        orchestrator = PatternDetectorsOrchestrator()
+
+        # Detect both directions and then resolve
+        res_bull = orchestrator.detect_bullish(
+            opens, highs, lows, closes, idx,
+            atr=current_atr_val,
+            # trend gating hint for detectors that care (e.g., Tweezer Bottom after downtrend)
+            trend_ok=trend_short  # bullish reversal more credible if prior downtrend
+        )
+        res_bear = orchestrator.detect_bearish(
+            opens, highs, lows, closes, idx,
+            atr=current_atr_val,
+            # trend gating hint (e.g., Tweezer Top after uptrend)
+            trend_ok=trend_long   # bearish reversal more credible if prior uptrend
+        )
+
+        found_bull = bool(res_bull and res_bull.is_pattern)
+        found_bear = bool(res_bear and res_bear.is_pattern)
+
+        # Choose a canonical result:
+        # Priority: if both found, prefer alignment with current trend direction;
+        # otherwise prefer non-neutral bias; fallback to whichever exists.
+        chosen_res = None
+        if found_bull and found_bear:
+            if trend_long and not trend_short:
+                chosen_res = res_bear   # bearish reversal against uptrend (tops) is typically more actionable
+            elif trend_short and not trend_long:
+                chosen_res = res_bull   # bullish reversal against downtrend (bottoms)
+            else:
+                # No clear trend; prefer non-neutral bias or pick bullish by default
+                chosen_res = res_bear if (res_bear.bias in ("bear",) and res_bull.bias == "neutral") else (
+                    res_bull if res_bull.bias in ("bull",) else res_bull
+                )
+        elif found_bull:
+            chosen_res = res_bull
+        elif found_bear:
+            chosen_res = res_bear
+
+        pattern = chosen_res.name if chosen_res else None
+        raw_bias = chosen_res.bias if chosen_res else None  # "bull" | "bear" | "neutral" | None
+
+        # Neutral tilt: if bias is neutral, tilt with the EMA trend
+        effective_bias = raw_bias
+        if raw_bias in (None, "neutral"):
+            if trend_long and not trend_short:
+                effective_bias = "bull"
+            elif trend_short and not trend_long:
+                effective_bias = "bear"
+            else:
+                # Fallback: prefer bull if res_bull exists; else bear if res_bear exists; else neutral
+                effective_bias = "bull" if found_bull else ("bear" if found_bear else "neutral")
 
         # ---------- 趋势强度和波动率 -----------
         trend_strength = self._check_trend_and_volatility(
             atr_val_history=atr_val_history,
-            adx_val_history=atr_val_history,
-            close=close,
+            adx_val_history=adx_val_history,      # <-- 修正：传入 ADX 历史
+            price_history=closes,
             window=100,
-            atr_base_threshold=self.min_atr_price_ratio,
+            atr_base_factor=self.atr_base_factor,
             atr_quantile=0.8,
             adx_quantile=0.8,
             mode='reversal'
@@ -152,40 +205,71 @@ class CandlestickReversalStrategy(TradingStrategy):
 
         # ---------- 动量确认 ----------
         mom_ok = False
-        if found_bull or found_bear:
-            mom_ok = self._momentum_confirm(rsi_val_history, macd_hist_val_history, prefer=side)
+        if chosen_res and chosen_res.is_pattern:
+            mom_ok = bool(self._momentum_confirm(
+                rsi_val_history=rsi_val_history,
+                macd_hist_val_history=macd_hist_val_history,
+                prefer=effective_bias
+            ))
 
         # ---------- 评分系统 ----------
-        result: ScoringResult = None
+        # 判定是否识别到拒绝蜡烛
+        found_any = bool(chosen_res and chosen_res.is_pattern)
+
+        # 趋势方向一致（信号与当前趋势方向一致）
+        trend_direction_ok = (
+            (effective_bias == "bull" and trend_long) or
+            (effective_bias == "bear" and trend_short)
+        )
+
         factors = [
-            Factor(FactorName.REVERSAL_CANDLE, f"检测到拒绝蜡烛({pattern})", 0.35, found_bull or found_bear),
-            Factor(FactorName.VOLUME_CONFIRM, "成交量放大确认", 0.2, vol_ok),
-            Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.15, trend_strength.signal),
-            Factor(FactorName.TREND_DIRECTION_CONFIRM, "趋势方向一致", 0.15, (found_bull and trend_long) or (found_bear and trend_short)),
-            Factor(FactorName.MOMENTUM_CONFIRM, "动量确认方向确认", 0.1, mom_ok),
-            Factor(FactorName.CONFLUENCE_BONUS, "三重共振加分", 0.05, mom_ok and trend_strength.signal and ((found_bull and trend_long) or (found_bear and trend_short)))
+            Factor(FactorName.REVERSAL_CANDLE, f"检测到拒绝蜡烛({pattern})", 0.35, found_any),
+            Factor(FactorName.VOLUME_CONFIRM, "成交量放大确认", 0.20, vol_ok),
+            Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.15, bool(trend_strength.signal)),
+            Factor(FactorName.TREND_DIRECTION_CONFIRM, "趋势方向一致", 0.15, trend_direction_ok),
+            Factor(FactorName.MOMENTUM_CONFIRM, "动量确认方向确认", 0.10, mom_ok),
+            Factor(
+                FactorName.CONFLUENCE_BONUS,
+                "三重共振加分",
+                0.05,
+                mom_ok and bool(trend_strength.signal) and trend_direction_ok
+            )
         ]
 
-        # Compute score using ScoringEngine
         engine = ScoringEngine(
-            base_threshold=self.score_threshold, 
+            base_threshold=self.score_threshold,
             required_factors=self.support_scoring_factors(),
-            determined_factors=[
-                FactorName.REVERSAL_CANDLE
-            ],
-            is_volatility_ok=trend_strength.volatility['signal']
+            determined_factors=[FactorName.REVERSAL_CANDLE],
+            is_volatility_ok=bool(trend_strength.volatility.get('signal', True))
         )
-        side = "long" if found_bull else "short" if found_bear else "hold"
-        result = engine.compute_score(factors, side=side)
+
+        # 交易侧：根据有效偏向与识别结果确定
+        side_action = (
+            "long"  if (found_any and effective_bias == "bull") else
+            "short" if (found_any and effective_bias == "bear") else
+            "hold"
+        )
+
+        result: ScoringResult = engine.compute_score(factors, side=side_action)
+
         details = {
             "pattern": pattern,
+            "pattern_bias_raw": raw_bias,
+            "pattern_bias_effective": effective_bias,
+            "pattern_metrics": chosen_res.metrics if chosen_res else None,
             "ema_fast": current_ema_fast_val,
             "ema_slow": current_ema_slow_val,
             "atr": current_atr_val,
             "rsi": current_rsi_val,
             "adx": current_adx_val,
             "vol_zscore": round(volume_z, 3) if volume_z is not None else None,
+            "trend_signal": bool(trend_strength.signal),
+            "trend_info": trend_strength.trend,
+            "volatility_info": trend_strength.volatility,
+            "trend_direction_ok": trend_direction_ok,
+            "momentum_ok": mom_ok,
             "score": round(result.score, 3),
+            "side": side_action,
         }
             
         # 计算入场止损与 trailing stop

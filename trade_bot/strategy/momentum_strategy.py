@@ -35,7 +35,7 @@ class MomentumTrendStrategy(TradingStrategy):
         ht_ema_slow: int = 21,  # higher timeframe EMA slow
         adx_period: int = 14,
         atr_period: int = 14,
-        min_atr_price_ratio: float = 0.001,
+        atr_base_factor: float = 1,
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 1.0,
         score_threshold: float = 0.6,
@@ -48,7 +48,7 @@ class MomentumTrendStrategy(TradingStrategy):
         self.ht_ema_slow = int(ht_ema_slow)
         self.adx_period = int(adx_period)
         self.atr_period = int(atr_period)
-        self.min_atr_price_ratio = float(min_atr_price_ratio)
+        self.atr_base_factor = float(atr_base_factor)
         self.vol_zscore_window = int(vol_zscore_window)
         self.vol_zscore_threshold = float(vol_zscore_threshold)
         self.score_threshold = float(score_threshold)
@@ -210,9 +210,9 @@ class MomentumTrendStrategy(TradingStrategy):
         trend_strength = self._check_trend_and_volatility(
             atr_val_history=atr_val_history,
             adx_val_history=atr_val_history,
-            close=curr_close,
+            price_history=closes,
             window=100,
-            atr_base_threshold=self.min_atr_price_ratio,
+            atr_base_factor=self.atr_base_factor,
             atr_quantile=0.8,
             adx_quantile=0.8,
             mode='reversal'
@@ -337,7 +337,7 @@ def make_momentum_presets() -> Dict[str, Dict[str, Any]]:
         "ht_ema_slow": 21,                 # Hilbert Transform EMA slow.
         "adx_period": 14,                  # ADX for trend strength.
         "atr_period": 14,                  # ATR for volatility context.
-        "min_atr_price_ratio": 0.002,      # ATR ≥ 0.2% of price ensures meaningful move.
+        "atr_base_factor": 0.5,            # ATR base factor for volatility.
         "vol_zscore_window": 20,           # Volume z-score window matches EMA period.
         "vol_zscore_threshold": 1.5,       # Moderate volume spike confirmation.
         "score_threshold": 0.65            # Slightly lenient threshold for swing entries.
@@ -352,7 +352,7 @@ def make_momentum_presets() -> Dict[str, Dict[str, Any]]:
         "ht_ema_slow": 34,
         "adx_period": 14,
         "atr_period": 14,
-        "min_atr_price_ratio": 0.003,      # ATR ≥ 0.3% of price.
+        "atr_base_factor": 1,              # ATR base factor for volatility.
         "vol_zscore_window": 30,           # Longer volume window for stability.
         "vol_zscore_threshold": 2.0,       # Stricter volume confirmation.
         "score_threshold": 0.75            # Balanced confidence threshold.
@@ -367,7 +367,7 @@ def make_momentum_presets() -> Dict[str, Dict[str, Any]]:
         "ht_ema_slow": 55,
         "adx_period": 14,
         "atr_period": 14,
-        "min_atr_price_ratio": 0.004,      # ATR ≥ 0.4% of price.
+        "atr_base_factor": 2,              # ATR base factor for volatility.
         "vol_zscore_window": 40,           # Long volume window for position trades.
         "vol_zscore_threshold": 2.5,       # Very strict volume confirmation.
         "score_threshold": 0.85            # High confidence threshold for position entries.

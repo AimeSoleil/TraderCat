@@ -30,7 +30,7 @@ class DivergenceStrategy(TradingStrategy):
         rsi_period: int = 14,
         macd_params: Optional[Dict[str, int]] = None,
         atr_period: int = 14,
-        min_atr_price_ratio: float = 0.002,
+        atr_base_factor: float = 1,
         adx_period: int = None,
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 1.0,
@@ -42,7 +42,7 @@ class DivergenceStrategy(TradingStrategy):
         self.rsi_period = int(rsi_period)
         self.macd_params = macd_params or {"fast": 12, "slow": 26, "signal": 9}
         self.atr_period = int(atr_period)
-        self.min_atr_price_ratio = float(min_atr_price_ratio)
+        self.atr_base_factor = float(atr_base_factor)
         self.adx_period = int(adx_period) if adx_period else None
         self.vol_zscore_window = int(vol_zscore_window)
         self.vol_zscore_threshold = float(vol_zscore_threshold)
@@ -191,9 +191,9 @@ class DivergenceStrategy(TradingStrategy):
                 trend_strength = self._check_trend_and_volatility(
                     atr_val_history=atr_val_history,
                     adx_val_history=adx_val_history,
-                    close=close,
+                    price_history=closes,
                     window=100,
-                    atr_base_threshold=self.min_atr_price_ratio,
+                    atr_base_factor=self.atr_base_factor,
                     atr_quantile=0.8,
                     adx_quantile=0.8,
                     mode='reversal'
@@ -301,9 +301,9 @@ class DivergenceStrategy(TradingStrategy):
                 trend_strength = self._check_trend_and_volatility(
                     atr_val_history=atr_val_history,
                     adx_val_history=adx_val_history,
-                    close=close,
+                    price_history=closes,
                     window=100,
-                    atr_base_threshold=self.min_atr_price_ratio,
+                    atr_base_factor=self.atr_base_factor,
                     atr_quantile=0.8,
                     adx_quantile=0.8,
                     mode='reversal'
@@ -385,9 +385,9 @@ class DivergenceStrategy(TradingStrategy):
                     trend_strength = self._check_trend_and_volatility(
                         atr_val_history=atr_val_history,
                         adx_val_history=adx_val_history,
-                        close=close,
+                        price_history=closes,
                         window=100,
-                        atr_base_threshold=self.min_atr_price_ratio,
+                        atr_base_factor=self.atr_base_factor,
                         atr_quantile=0.8,
                         adx_quantile=0.8,
                         mode='trend'
@@ -464,9 +464,9 @@ class DivergenceStrategy(TradingStrategy):
                     trend_strength = self._check_trend_and_volatility(
                         atr_val_history=atr_val_history,
                         adx_val_history=adx_val_history,
-                        close=close,
+                        price_history=closes,
                         window=100,
-                        atr_base_threshold=self.min_atr_price_ratio,
+                        atr_base_factor=self.atr_base_factor,
                         atr_quantile=0.8,
                         adx_quantile=0.8,
                         mode='trend'
@@ -546,7 +546,7 @@ def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
         "rsi_period": 14,                   # RSI for momentum divergence.
         "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD.
         "atr_period": 14,                   # ATR for volatility context.
-        "min_atr_price_ratio": 0.002,       # ATR ≥ 0.2% of price ensures meaningful move.
+        "atr_base_factor": 0.5,             # ATR base factor for volatility.
         "adx_period": 14,                   # ADX for trend strength filter.
         "vol_zscore_window": 20,            # Volume z-score window matches ATR period.
         "vol_zscore_threshold": 1.5,        # Moderate volume spike confirmation.
@@ -560,7 +560,7 @@ def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
         "rsi_period": 14,
         "macd_params": {"fast": 12, "slow": 26, "signal": 9},
         "atr_period": 14,
-        "min_atr_price_ratio": 0.003,       # ATR ≥ 0.3% of price.
+        "atr_base_factor": 1,               # ATR base factor for volatility.
         "adx_period": 14,
         "vol_zscore_window": 30,            # Longer volume window for stability.
         "vol_zscore_threshold": 2.0,        # Stricter volume confirmation.
@@ -574,7 +574,7 @@ def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
         "rsi_period": 14,
         "macd_params": {"fast": 12, "slow": 26, "signal": 9},
         "atr_period": 14,
-        "min_atr_price_ratio": 0.004,       # ATR ≥ 0.4% of price.
+        "atr_base_factor": 2,       # ATR ≥ 0.4% of price.
         "adx_period": 14,
         "vol_zscore_window": 40,            # Long volume window for position trades.
         "vol_zscore_threshold": 2.5,        # Very strict volume confirmation.

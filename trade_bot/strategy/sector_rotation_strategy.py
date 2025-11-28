@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from trade_bot.data.market_data_provider import MarketDataProvider
-from trade_bot.strategy.trading_strategy import TradingStrategy, EPS
+from trade_bot.strategy.trading_strategy import StrategyUtilities, TradingStrategy, EPS
 from trade_bot.strategy.signal_model import SignalModel
 from trade_bot.logger.logger import get_logger
 import numpy as np
@@ -138,13 +138,13 @@ class SectorRotationStrategy(TradingStrategy):
         # Normalize and compute composite score
         for etf, ind in etf_indicators.items():
             ind.composite_score = (
-                self._normalize(
+                StrategyUtilities.normalize(
                     ind.momentum, df["momentum"].min(), df["momentum"].max()
                 )
                 * self.weights["momentum"]
-                + self._normalize(ind.rsi, df["rsi"].min(), df["rsi"].max())
+                + StrategyUtilities.normalize(ind.rsi, df["rsi"].min(), df["rsi"].max())
                 * self.weights["rsi"]
-                + self._normalize(
+                + StrategyUtilities.normalize(
                     ind.volume_trend, df["volume_trend"].min(), df["volume_trend"].max()
                 )
                 * self.weights["volume_trend"]

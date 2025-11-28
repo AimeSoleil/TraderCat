@@ -14,6 +14,9 @@ EPS = 1e-9
 
 @dataclass
 class TrendStrength:
+    """
+    ADX趋势强度和Volatility波动率
+    """
     signal: bool                # 最终信号（True/False）
     mode: str                   # 模式："trend" 或 "reversal"
     trend: Dict[str, Any]       # 趋势检测结果（来自 _check_trend_strength）
@@ -111,57 +114,101 @@ class TradingStrategy(ABC):
             vol_ok = False
 
         return vol_ok, volume_z
-
-    def _check_volatility(self, atr_history, close, window=100, base_threshold=0.02, quantile=0.8):
+    
+    def _check_volatility(self, atr_history, price_history, window=100, quantile=0.8, base_factor=1):
         """
         判断市场是否处于高波动状态，采用两步过滤：
-        1. ATR/Price 相对值过滤
-        2. 动态分位数确认
+        1. ATR/Price 相对值过滤（动态阈值）
+        2. 动态分位数确认（基于 ATR 比率）
         返回详细信息而非仅布尔值
+        Tuning Tips:
+        Start with base_factor = 1.0 for neutral behavior.
+        Use 0.5 if you want more signals (looser filter).
+        Use >1.0 if you want fewer signals (stricter filter).
         """
-        if len(atr_history) == 0:
-            return {"signal": False, "reason": "No ATR history", "current": None, "threshold": None}
+        if len(atr_history) == 0 or len(price_history) == 0:
+            return {"signal": False, "reason": "Insufficient data", "current_atr": None, "current_ratio": None, "threshold": None}
 
+        if len(atr_history) != len(price_history):
+            return {"signal": False, "reason": "ATR and price history length mismatch", "current_atr": None, "current_ratio": None, "threshold": None}
+
+        # Current ATR and price
         atr = atr_history[-1]
-        safe_close = close if abs(close) > EPS else 1.0
+        close = price_history[-1]
+        safe_close = max(abs(close), 1e-8)
         atr_ratio = atr / safe_close
 
+        # Compute ATR ratio history
+        atr_ratios = [a / max(p, 1e-8) for a, p in zip(atr_history, price_history) if a and p]
+        recent_ratios = atr_ratios[-window:] if len(atr_ratios) >= window else atr_ratios
+
+        # Dynamic base threshold (20th percentile * base_factor)
+        if len(recent_ratios) >= 20:
+            base_threshold = np.quantile(recent_ratios, 0.2) * base_factor
+        else:
+            base_threshold = 0.002  # fallback for insufficient data
+
+        # Step 1: Base threshold check
         if atr_ratio < base_threshold:
-            return {"signal": False, "reason": f"ATR ratio {atr_ratio:.4f} < base threshold {base_threshold}", 
-                    "current": atr_ratio, "threshold": base_threshold}
+            return {
+                "signal": False,
+                "reason": f"ATR ratio {atr_ratio:.4f} < dynamic base {base_threshold:.4f}",
+                "current_atr": atr,
+                "current_ratio": atr_ratio,
+                "threshold": base_threshold
+            }
 
-        recent_atr = atr_history[-window:] if len(atr_history) >= window else atr_history
-        recent_safe_atr_list = [x for x in recent_atr if x is not None]
-        threshold_dynamic = np.quantile(recent_safe_atr_list, quantile)
+        # Step 2: Dynamic quantile threshold
+        threshold_dynamic = np.quantile(recent_ratios, quantile)
+        signal = atr_ratio >= threshold_dynamic
+        reason = "ATR ratio above dynamic threshold" if signal else "ATR ratio below dynamic threshold"
 
-        signal = atr >= threshold_dynamic
-        reason = "ATR above dynamic threshold" if signal else "ATR below dynamic threshold"
-        return {"signal": signal, "reason": reason, "current": atr, "threshold": threshold_dynamic}
+        return {
+            "signal": signal,
+            "reason": reason,
+            "current_atr": atr,
+            "current_ratio": atr_ratio,
+            "threshold": threshold_dynamic
+        }
 
-    def _check_trend_strength(self, adx_history, window=100, quantile=0.8):
+    def _check_trend_strength(self, adx_history, window=100, quantile=0.8, min_adx=20):
         """
-        判断趋势强度是否达到动态标准（基于历史分位数）
+        判断趋势强度是否达到动态标准（基于历史分位数 + 最低ADX过滤）
         返回详细信息
         """
         if len(adx_history) == 0:
-            return {"signal": False, "reason": "No ADX history", "current": None, "threshold": None}
+            return {"signal": False, "reason": "No ADX history", "current_adx": None, "threshold": None}
 
         adx_val = adx_history[-1]
+
+        # Step 1: Hard floor filter
+        if adx_val < min_adx:
+            return {"signal": False, "reason": f"ADX {adx_val:.2f} < minimum {min_adx}", 
+                    "current_adx": adx_val, "threshold": min_adx}
+
+        # Step 2: Dynamic threshold
         recent_adx = adx_history[-window:] if len(adx_history) >= window else adx_history
-        recent_safe_adx_list = [x for x in recent_adx if x is not None]
-        threshold_dynamic = np.quantile(recent_safe_adx_list, quantile)
+        recent_safe_adx_list = [x for x in recent_adx if x is not None and not np.isnan(x)]
+
+        if len(recent_safe_adx_list) < 20:
+            # Fallback if insufficient data
+            threshold_dynamic = 25
+            reason = "Insufficient history, using fallback threshold"
+        else:
+            threshold_dynamic = np.quantile(recent_safe_adx_list, quantile)
+            reason = "ADX above dynamic threshold" if adx_val >= threshold_dynamic else "ADX below dynamic threshold"
 
         signal = adx_val >= threshold_dynamic
-        reason = "ADX above dynamic threshold" if signal else "ADX below dynamic threshold"
-        return {"signal": signal, "reason": reason, "current": adx_val, "threshold": threshold_dynamic}
+        return {"signal": signal, "reason": reason, "current_adx": adx_val, "threshold": threshold_dynamic}
 
-    def _check_trend_and_volatility(self, atr_val_history, adx_val_history, close,
-                                window=100, atr_base_threshold=0.02,
+
+    def _check_trend_and_volatility(self, atr_val_history, adx_val_history, price_history,
+                                window=100, atr_base_factor=1,
                                 atr_quantile=0.8, adx_quantile=0.8, mode="trend") -> TrendStrength:
         """
         综合判断市场状态：趋势跟随或反转
         """
-        vol_info = self._check_volatility(atr_val_history, close, window, atr_base_threshold, atr_quantile)
+        vol_info = self._check_volatility(atr_val_history, price_history, window, atr_quantile, atr_base_factor)
         trend_info = self._check_trend_strength(adx_val_history, window, adx_quantile)
 
         if mode == "trend":
@@ -388,7 +435,7 @@ class ExitPlanner:
 class StrategyUtilities:
 
     @staticmethod
-    def _normalize(self, val: float, min_val: float, max_val: float) -> float:
+    def normalize(self, val: float, min_val: float, max_val: float) -> float:
         if val is None or max_val <= min_val:
             return 0.0
         return (val - min_val) / (max_val - min_val)

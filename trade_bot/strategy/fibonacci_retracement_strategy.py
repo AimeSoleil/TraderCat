@@ -35,7 +35,7 @@ class FibonacciRetracementStrategy(TradingStrategy):
         rsi_period: int = 14,
         macd_params: Optional[Dict[str, int]] = None,
         adx_period: int = 14,
-        min_atr_price_ratio: float = 0.0015,
+        atr_base_factor: float = 1,
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 1.0,
         score_threshold: float = 0.6,
@@ -51,7 +51,7 @@ class FibonacciRetracementStrategy(TradingStrategy):
         self.rsi_period = int(rsi_period)
         self.macd_params = macd_params or {"fast": 12, "slow": 26, "signal": 9}
         self.adx_period = adx_period
-        self.min_atr_price_ratio = float(min_atr_price_ratio)
+        self.atr_base_factor = float(atr_base_factor)
         self.vol_zscore_window = int(vol_zscore_window)
         self.vol_zscore_threshold = float(vol_zscore_threshold)
         self.score_threshold = float(score_threshold)
@@ -276,9 +276,9 @@ class FibonacciRetracementStrategy(TradingStrategy):
         trend_strength = self._check_trend_and_volatility(
             atr_val_history=atr_val_history,
             adx_val_history=atr_val_history,
-            close=curr_close,
+            price_history=closes,
             window=100,
-            atr_base_threshold=self.min_atr_price_ratio,
+            atr_base_factor=self.atr_base_factor,
             atr_quantile=0.8,
             adx_quantile=0.8,
             mode='reversal'
@@ -418,7 +418,7 @@ def make_fibonacci_presets() -> Dict[str, Dict[str, Any]]:
         "rsi_period": 14,                    # RSI for momentum filter.
         "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD.
         "adx_period": 14,                    # ADX for trend strength.
-        "min_atr_price_ratio": 0.002,        # ATR ≥ 0.2% of price ensures meaningful move.
+        "atr_base_factor": 0.5,              # ATR base factor for volatility.
         "vol_zscore_window": 20,             # Volume z-score window matches EMA period.
         "vol_zscore_threshold": 1.5,         # Moderate volume spike confirmation.
         "score_threshold": 0.65              # Slightly lenient threshold for swing entries.
@@ -435,7 +435,7 @@ def make_fibonacci_presets() -> Dict[str, Dict[str, Any]]:
         "rsi_period": 14,
         "macd_params": {"fast": 12, "slow": 26, "signal": 9},
         "adx_period": 14,
-        "min_atr_price_ratio": 0.003,        # ATR ≥ 0.3% of price.
+        "atr_base_factor": 1,                # ATR base factor for volatility.
         "vol_zscore_window": 30,             # Longer volume window for stability.
         "vol_zscore_threshold": 2.0,         # Stricter volume confirmation.
         "score_threshold": 0.75              # Balanced confidence threshold.
@@ -452,7 +452,7 @@ def make_fibonacci_presets() -> Dict[str, Dict[str, Any]]:
         "rsi_period": 14,
         "macd_params": {"fast": 12, "slow": 26, "signal": 9},
         "adx_period": 14,
-        "min_atr_price_ratio": 0.004,        # ATR ≥ 0.4% of price.
+        "atr_base_factor": 2,                # ATR base factor for volatility.
         "vol_zscore_window": 40,             # Long volume window for position trades.
         "vol_zscore_threshold": 2.5,         # Very strict volume confirmation.
         "score_threshold": 0.85              # High confidence threshold for position entries.
