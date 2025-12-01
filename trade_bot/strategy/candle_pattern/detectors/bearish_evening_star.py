@@ -4,11 +4,11 @@ from trade_bot.strategy.candle_pattern.pattern_detector import PatternResult, Tr
 class EveningStarDetector(TripeCandlePatternDetector):
     """
     Evening Star (bearish, 3-candle):
-      - Candle 1 bullish (c1 > o1)
-      - Candle 2 small body (indecision)
-      - Candle 3 bearish (c3 < o3), closes below Candle 1 midpoint
-      - Optional: gap up into C2 and gap down into C3 (textbook variant)
-      - Optional: ATR-aware decisiveness for Candle 3
+        - Candle 1 bullish (c1 > o1)
+        - Candle 2 small body (indecision)
+        - Candle 3 bearish (c3 < o3), closes below Candle 1 midpoint
+        - Optional: gap up into C2 and gap down into C3 (textbook variant)
+        - Optional: ATR-aware decisiveness for Candle 3
     """
     def __init__(
         self,

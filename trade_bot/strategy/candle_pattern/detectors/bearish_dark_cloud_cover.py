@@ -7,11 +7,11 @@ from trade_bot.strategy.candle_pattern.pattern_detector import DoubleCandlePatte
 class DarkCloudCoverDetector(DoubleCandlePatternDetector):
     """
     Dark Cloud Cover (bearish, 2-candle):
-      - Candle 1 bullish (c1 > o1)
-      - Candle 2 bearish (c2 < o2)
-      - Candle 2 typically gaps up at open (o2 > c1) [daily equities]; configurable
-      - Candle 2 closes below Candle 1 midpoint but above Candle 1 open
-      - Optional: body2 strength relative to body1, doji-avoidance, ATR-aware decisiveness
+        - Candle 1 bullish (c1 > o1)
+        - Candle 2 bearish (c2 < o2)
+        - Candle 2 typically gaps up at open (o2 > c1) [daily equities]; configurable
+        - Candle 2 closes below Candle 1 midpoint but above Candle 1 open
+        - Optional: body2 strength relative to body1, doji-avoidance, ATR-aware decisiveness
     """
     def __init__(
         self,

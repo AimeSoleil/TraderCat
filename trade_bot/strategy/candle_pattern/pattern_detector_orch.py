@@ -7,28 +7,28 @@ from trade_bot.strategy.candle_pattern.pattern_detector import (
 )
 
 # Single-candle
-from trade_bot.strategy.candle_pattern.detectors.standard_doji import StandardDojiDetector
-from trade_bot.strategy.candle_pattern.detectors.hammer import HammerDetector
-from trade_bot.strategy.candle_pattern.detectors.shooting_star import ShootingStarDetector
-from trade_bot.strategy.candle_pattern.detectors.spinning_top import SpinningTopDetector
-from trade_bot.strategy.candle_pattern.detectors.dragonfly_doji import DragonflyDojiDetector
-from trade_bot.strategy.candle_pattern.detectors.gravestone_doji import GravestoneDojiDetector
+from trade_bot.strategy.candle_pattern.detectors.neutral_standard_doji import StandardDojiDetector
+from trade_bot.strategy.candle_pattern.detectors.bullish_hammer import HammerDetector
+from trade_bot.strategy.candle_pattern.detectors.bearish_shooting_star import ShootingStarDetector
+from trade_bot.strategy.candle_pattern.detectors.neutral_spinning_top import SpinningTopDetector
+from trade_bot.strategy.candle_pattern.detectors.neutral_dragonfly_doji import DragonflyDojiDetector
+from trade_bot.strategy.candle_pattern.detectors.neutral_gravestone_doji import GravestoneDojiDetector
 
 # Double-candle
 from trade_bot.strategy.candle_pattern.detectors.bullish_engulfing import BullishEngulfingDetector
 from trade_bot.strategy.candle_pattern.detectors.bearish_engulfing import BearishEngulfingDetector
 from trade_bot.strategy.candle_pattern.detectors.bullish_harami import BullishHaramiDetector
 from trade_bot.strategy.candle_pattern.detectors.bearish_harami import BearishHaramiDetector
-from trade_bot.strategy.candle_pattern.detectors.piercing import PiercingPatternDetector
-from trade_bot.strategy.candle_pattern.detectors.dark_cloud_cover import DarkCloudCoverDetector
-from trade_bot.strategy.candle_pattern.detectors.tweezer_bottom import TweezerBottomDetector
-from trade_bot.strategy.candle_pattern.detectors.tweezer_top import TweezerTopDetector
+from trade_bot.strategy.candle_pattern.detectors.bullish_piercing import PiercingPatternDetector
+from trade_bot.strategy.candle_pattern.detectors.bearish_dark_cloud_cover import DarkCloudCoverDetector
+from trade_bot.strategy.candle_pattern.detectors.bullish_tweezer_bottom import TweezerBottomDetector
+from trade_bot.strategy.candle_pattern.detectors.bearish_tweezer_top import TweezerTopDetector
 
 # Triple-candle
-from trade_bot.strategy.candle_pattern.detectors.morning_star import MorningStarDetector
-from trade_bot.strategy.candle_pattern.detectors.evening_star import EveningStarDetector
-from trade_bot.strategy.candle_pattern.detectors.three_white_soldiers import ThreeWhiteSoldiersDetector
-from trade_bot.strategy.candle_pattern.detectors.three_black_crows import ThreeBlackCrowsDetector
+from trade_bot.strategy.candle_pattern.detectors.bullish_morning_star import MorningStarDetector
+from trade_bot.strategy.candle_pattern.detectors.bearish_evening_star import EveningStarDetector
+from trade_bot.strategy.candle_pattern.detectors.bullish_three_white_soldiers import ThreeWhiteSoldiersDetector
+from trade_bot.strategy.candle_pattern.detectors.bearish_three_black_crows import ThreeBlackCrowsDetector
 
 def _first_match(results: List[PatternResult]) -> PatternResult:
     """Return the first PatternResult that is a pattern."""

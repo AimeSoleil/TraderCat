@@ -6,11 +6,11 @@ from trade_bot.strategy.candle_pattern.pattern_detector import DoubleCandlePatte
 class PiercingPatternDetector(DoubleCandlePatternDetector):
     """
     Piercing Pattern (bullish, 2-candle):
-      - Candle 1 bearish (c1 < o1)
-      - Candle 2 bullish (c2 > o2)
-      - Candle 2 opens below Candle 1 close (o2 < c1)  [gap-down semantics on daily]
-      - Candle 2 closes above Candle 1 midpoint but below Candle 1 open
-      - Optional: body2 strength relative to body1, doji avoidance via range ratios, ATR-aware constraints
+        - Candle 1 bearish (c1 < o1)
+        - Candle 2 bullish (c2 > o2)
+        - Candle 2 opens below Candle 1 close (o2 < c1)  [gap-down semantics on daily]
+        - Candle 2 closes above Candle 1 midpoint but below Candle 1 open
+        - Optional: body2 strength relative to body1, doji avoidance via range ratios, ATR-aware constraints
     """
     def __init__(
         self,

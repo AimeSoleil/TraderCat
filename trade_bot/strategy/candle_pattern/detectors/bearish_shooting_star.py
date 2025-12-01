@@ -5,10 +5,10 @@ from trade_bot.strategy.candle_pattern.pattern_detector import PatternResult, Si
 class ShootingStarDetector(SingleCandlePatternDetector):
     """
     Shooting Star (bearish, single-candle):
-      - Upper shadow long (>= k × body)
-      - Lower shadow short (<= k × body)
-      - Body not tiny (avoid doji): body / range >= min_body_ratio
-      - Typically after an uptrend (recommend external trend/location filters)
+        - Upper shadow long (>= k × body)
+        - Lower shadow short (<= k × body)
+        - Body not tiny (avoid doji): body / range >= min_body_ratio
+        - Typically after an uptrend (recommend external trend/location filters)
     """
     def __init__(
         self,

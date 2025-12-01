@@ -6,11 +6,11 @@ from trade_bot.strategy.candle_pattern.pattern_detector import PatternResult, Tr
 class ThreeWhiteSoldiersDetector(TripeCandlePatternDetector):
     """
     Three White Soldiers (bullish, 3-candle):
-      - Three consecutive bullish candles (c > o)
-      - Each close higher than the previous close
-      - Bodies are strong (relative to average and/or range)
-      - Optional: each open within prior real body; shadows relatively small
-      - Optional: ATR-aware minimum body sizes
+        - Three consecutive bullish candles (c > o)
+        - Each close higher than the previous close
+        - Bodies are strong (relative to average and/or range)
+        - Optional: each open within prior real body; shadows relatively small
+        - Optional: ATR-aware minimum body sizes
     """
     def __init__(
         self,
