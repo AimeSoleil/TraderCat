@@ -245,7 +245,7 @@ class ThreeBlackCrowsDetector(TripeCandlePatternDetector):
         return PatternResult(
             is_pattern=True,
             name="Three Black Crows",
-            bias="bear",
+            bias="short",
             metrics=metrics
         )
     

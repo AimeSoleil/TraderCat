@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Literal, Optional, Dict, Any
 
 from trade_bot.strategy.candle_pattern.pattern_detector import PatternResult
 from trade_bot.strategy.candle_pattern.pattern_detector_orch import PatternDetectorsOrchestrator
@@ -30,7 +30,6 @@ class BBandsReversalStrategy(TradingStrategy):
         adx_period: int = 14,
         adx_threshold: float = 30.0,  # ADX 超过视为强趋势，避免逆势反转
         max_time_bars: int = 3,  # 延续/确认窗口
-        atr_base_factor: float = 1,
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 1.0,
         macd_params: Optional[Dict[str, int]] = {"fast": 12, "slow": 26, "signal": 9},
@@ -45,7 +44,6 @@ class BBandsReversalStrategy(TradingStrategy):
         self.adx_period = adx_period
         self.adx_threshold = float(adx_threshold)
         self.max_time_bars = int(max_time_bars)
-        self.atr_base_factor = float(atr_base_factor)
         self.vol_zscore_window = int(vol_zscore_window)
         self.vol_zscore_threshold = float(vol_zscore_threshold)
         self.macd_params = macd_params or {"fast": 12, "slow": 26, "signal": 9}
@@ -57,12 +55,12 @@ class BBandsReversalStrategy(TradingStrategy):
         self.bb_up_field = f"close_BBU_{self.bb_period}_{self.bb_std}"
         self.bb_low_field = f"close_BBL_{self.bb_period}_{self.bb_std}"
         self.bb_mid_field = f"close_BBM_{self.bb_period}_{self.bb_std}"
+        self.adx_field = f"ADX_{self.adx_period}"
         self.atr_field = f"ATRr_{self.atr_period}"
         self.rsi_field = f"close_RSI_{self.rsi_period}"
         self.macd_field = f"close_MACD_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}"
         self.macd_signal_field = f"close_MACDs_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}"
         self.macd_hist_field = f"close_MACDh_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}"
-        self.adx_field = f"ADX_{self.adx_period}"
 
     def get_name(self) -> str:
         return "BBandsReversal"
@@ -70,6 +68,7 @@ class BBandsReversalStrategy(TradingStrategy):
     def get_lookback_window(self) -> int:
         return (
             max(
+                self.adx_period,
                 self.bb_period,
                 self.rsi_period,
                 self.atr_period,
@@ -89,31 +88,32 @@ class BBandsReversalStrategy(TradingStrategy):
         ]
 
     def _resolve_bias(
+        self,
         rejection_res_bias: str | None,
         candidate_buy: bool,
         candidate_sell: bool,
         near_lower: bool,
         near_upper: bool,
         middle_line_reversal: bool
-    ) -> str:
+    ) -> Literal["long", "short", "neutral"]:
         # Primary: pattern bias agrees with candidate side
-        if rejection_res_bias == "bull" and candidate_buy:
-            return "bull"
-        if rejection_res_bias == "bear" and candidate_sell:
-            return "bear"
+        if rejection_res_bias == "long" and candidate_buy:
+            return "long"
+        if rejection_res_bias == "short" and candidate_sell:
+            return "short"
 
         # Secondary: neutral or mismatched bias — tilt by proximity and mid-line cross
         if near_lower and candidate_buy:
             # If we also have a middle-line reversal in the bullish sense, reinforce bull
-            return "bull" if middle_line_reversal or (rejection_res_bias in (None, "neutral")) else "bull"
+            return "long" if middle_line_reversal or (rejection_res_bias in (None, "neutral")) else "long"
         if near_upper and candidate_sell:
-            return "bear" if middle_line_reversal or (rejection_res_bias in (None, "neutral")) else "bear"
+            return "short" if middle_line_reversal or (rejection_res_bias in (None, "neutral")) else "short"
 
         # Fallback: use band proximity if no candidate agreement
         if near_lower:
-            return "bull"
+            return "long"
         if near_upper:
-            return "bear"
+            return "short"
 
         # No clear signal
         return "neutral"
@@ -165,13 +165,11 @@ class BBandsReversalStrategy(TradingStrategy):
         # 判断趋势强度和市场波动
         trend_strength = self._check_trend_and_volatility(
             atr_val_history=atr_val_history,
-            adx_val_history=atr_val_history,
+            adx_val_history=adx_val_history,
             price_history=closes,
             window=100,
-            atr_base_factor=self.atr_base_factor,
-            atr_quantile=0.8,
-            adx_quantile=0.8,
-            mode='reversal'
+            mode='reversal',
+            trend_quantiles=[0.6, 0.4]
         )
 
         # 成交量 z-score 确认（vol_ok
@@ -195,7 +193,6 @@ class BBandsReversalStrategy(TradingStrategy):
         reject_idx: int | None = None
         rejection_res: PatternResult = PatternResult(False, None, None, None)
         start = max(0, idx - self.max_time_bars + 1)
-        side = "neutral"
         if near_lower or near_upper:
             for i in range(start, idx + 1):
                 atr_i = atr_val_history[i] if atr_val_history is not None else None
@@ -220,7 +217,7 @@ class BBandsReversalStrategy(TradingStrategy):
                     rejection_found = True
                     reject_idx = i
                     break
-        
+
         # 只有在带位接近并出现拒绝蜡烛的情况下考虑反转
         candidate_buy = (near_lower or near_mid) and rejection_found
         candidate_sell = (near_upper or near_mid) and rejection_found
@@ -249,19 +246,18 @@ class BBandsReversalStrategy(TradingStrategy):
             "mid": m_curr,
             "atr": round(current_atr_val, 6),
             "adx": round(current_adx_val, 3),
-            "candle_pattern": rejection_res.name,
-            "candle_pattern_bias": rejection_res.bias,
-            "pattern_metrics": rejection_res.metrics,   # full metrics for downstream analysis
+            "rejection_date": dates[reject_idx] if reject_idx is not None else None,
+            "rejection_pattern": rejection_res.name,
+            "rejection_pattern_bias": rejection_res.bias,
+            "reject_pattern_metrics": rejection_res.metrics,   # full metrics for downstream analysis
             "vol_zscore": round(volume_z, 3) if volume_z is not None else None,
             "trend_volatility_ok": trend_strength.signal,
             "trend_info": trend_strength.trend,
             "volatility_info": trend_strength.volatility,
             "near_upper": near_upper,
             "near_lower": near_lower,
-            "rejection_found": rejection_found,
-            "rejection_idx": reject_idx,
             "momentum_ok": momentum_ok,
-            "resolved_side": side,                     # final direction used for trading decision
+            "resolved_side": side_bias,                     # final direction used for trading decision
         }
 
         # 评分 & 生成 signal
@@ -293,7 +289,7 @@ class BBandsReversalStrategy(TradingStrategy):
                 atr=current_atr_val,
                 close_price=close
             )
-            plan = planner.make_exit_plan('long' if result.signal == 'buy' else 'short')
+            plan = planner.make_exit_plan(trading_signal=result.signal)
             details.update({"plan": plan})
 
         return SignalModel(
@@ -322,8 +318,7 @@ def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
         "rsi_period": 14,               # RSI standard for momentum reversal.
         "atr_period": 14,               # ATR for volatility filter.
         "adx_period": 14,               # ADX for trend strength.
-        "max_time_bars": 3,             # Quick reversal confirmation (within 3 bars).
-        "atr_base_factor": 0.5,         # ATR base factor for volatility.
+        "max_time_bars": 1,             # Quick reversal confirmation (within 3 bars).
         "vol_zscore_window": 20,        # Volume z-score window matches BB period.
         "vol_zscore_threshold": 1.5,    # Moderate volume spike confirmation.
         "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD.
@@ -339,7 +334,6 @@ def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
         "atr_period": 14,
         "adx_period": 14,
         "max_time_bars": 5,             # Allow more bars for confirmation.
-        "atr_base_factor": 1,           # ATR base factor for volatility.
         "vol_zscore_window": 30,        # Longer volume window for stability.
         "vol_zscore_threshold": 2.0,    # Stricter volume confirmation.
         "macd_params": {"fast": 12, "slow": 26, "signal": 9},
@@ -355,7 +349,6 @@ def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
         "atr_period": 14,
         "adx_period": 14,
         "max_time_bars": 7,             # More bars allowed for confirmation.
-        "atr_base_factor": 2,           # ATR base factor for volatility.
         "vol_zscore_window": 40,        # Long volume window for position trades.
         "vol_zscore_threshold": 2.5,    # Very strict volume confirmation.
         "macd_params": {"fast": 12, "slow": 26, "signal": 9},

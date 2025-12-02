@@ -131,8 +131,8 @@ class DarkCloudCoverDetector(DoubleCandlePatternDetector):
 
         # If ratio/ATR constraints requested but ranges missing, fail safely
         ranges_required = (p["min_body_ratio1"] is not None and price_range1 is None) or \
-                          (p["min_body_ratio2"] is not None and price_range2 is None) or \
-                          (p["min_body2_vs_atr"] is not None and atr is not None and price_range2 is None)
+                        (p["min_body_ratio2"] is not None and price_range2 is None) or \
+                        (p["min_body2_vs_atr"] is not None and atr is not None and price_range2 is None)
         if ranges_required:
             return PatternResult(is_pattern=False, name=None, bias=None, metrics=None)
 
@@ -217,6 +217,6 @@ class DarkCloudCoverDetector(DoubleCandlePatternDetector):
         return PatternResult(
             is_pattern=True,
             name="Dark Cloud Cover",
-            bias="bear",
+            bias="short",
             metrics=metrics
         )

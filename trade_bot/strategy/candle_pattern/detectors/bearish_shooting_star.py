@@ -144,7 +144,7 @@ class ShootingStarDetector(SingleCandlePatternDetector):
         return PatternResult(
             is_pattern=True,
             name="Shooting Star",
-            bias="bear",
+            bias="short",
             metrics=metrics
         )
 

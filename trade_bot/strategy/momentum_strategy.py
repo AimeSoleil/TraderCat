@@ -35,7 +35,6 @@ class MomentumTrendStrategy(TradingStrategy):
         ht_ema_slow: int = 21,  # higher timeframe EMA slow
         adx_period: int = 14,
         atr_period: int = 14,
-        atr_base_factor: float = 1,
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 1.0,
         score_threshold: float = 0.6,
@@ -48,7 +47,6 @@ class MomentumTrendStrategy(TradingStrategy):
         self.ht_ema_slow = int(ht_ema_slow)
         self.adx_period = int(adx_period)
         self.atr_period = int(atr_period)
-        self.atr_base_factor = float(atr_base_factor)
         self.vol_zscore_window = int(vol_zscore_window)
         self.vol_zscore_threshold = float(vol_zscore_threshold)
         self.score_threshold = float(score_threshold)
@@ -209,13 +207,11 @@ class MomentumTrendStrategy(TradingStrategy):
         # ---------- 趋势强度和波动率 -----------
         trend_strength = self._check_trend_and_volatility(
             atr_val_history=atr_val_history,
-            adx_val_history=atr_val_history,
+            adx_val_history=adx_val_history,
             price_history=closes,
             window=100,
-            atr_base_factor=self.atr_base_factor,
-            atr_quantile=0.8,
-            adx_quantile=0.8,
-            mode='reversal'
+            mode='trend',
+            trend_quantiles=[0.6, 0.4]
         )
 
         # ---------- 成交量 z-score 确认 -----------
@@ -235,7 +231,7 @@ class MomentumTrendStrategy(TradingStrategy):
             ),
             "adx": round(current_adx_val, 3) if current_adx_val is not None else None,
             "atr": round(current_atr_val, 6) if current_atr_val is not None else None,
-            "trend_strength": trend_strength.reason,
+            "trend_strength": trend_strength,
         }
 
         trend_day_up = (
@@ -296,7 +292,7 @@ class MomentumTrendStrategy(TradingStrategy):
             ],
             is_volatility_ok=trend_strength.volatility['signal']
         )
-        side = "long" if long_cond else "short" if short_cond else "hold"
+        side = "long" if long_cond else "short" if short_cond else "neutral"
         result = engine.compute_score(factors, side=side)
 
         # 8) 计算入场止损与 trailing stop
@@ -307,7 +303,7 @@ class MomentumTrendStrategy(TradingStrategy):
                 atr=current_atr_val,
                 close_price=curr_close
             )
-            plan = planner.make_exit_plan('long' if result.signal == 'buy' else 'short')
+            plan = planner.make_exit_plan(trading_signal=result.signal)
             details.update({"plan": plan})
 
         return SignalModel(
@@ -337,10 +333,9 @@ def make_momentum_presets() -> Dict[str, Dict[str, Any]]:
         "ht_ema_slow": 21,                 # Hilbert Transform EMA slow.
         "adx_period": 14,                  # ADX for trend strength.
         "atr_period": 14,                  # ATR for volatility context.
-        "atr_base_factor": 0.5,            # ATR base factor for volatility.
         "vol_zscore_window": 20,           # Volume z-score window matches EMA period.
         "vol_zscore_threshold": 1.5,       # Moderate volume spike confirmation.
-        "score_threshold": 0.65            # Slightly lenient threshold for swing entries.
+        "score_threshold": 0.6             # Slightly lenient threshold for swing entries.
     }
 
     # ---------------- INTERMEDIATE ----------------
@@ -352,7 +347,6 @@ def make_momentum_presets() -> Dict[str, Dict[str, Any]]:
         "ht_ema_slow": 34,
         "adx_period": 14,
         "atr_period": 14,
-        "atr_base_factor": 1,              # ATR base factor for volatility.
         "vol_zscore_window": 30,           # Longer volume window for stability.
         "vol_zscore_threshold": 2.0,       # Stricter volume confirmation.
         "score_threshold": 0.75            # Balanced confidence threshold.
@@ -367,7 +361,6 @@ def make_momentum_presets() -> Dict[str, Dict[str, Any]]:
         "ht_ema_slow": 55,
         "adx_period": 14,
         "atr_period": 14,
-        "atr_base_factor": 2,              # ATR base factor for volatility.
         "vol_zscore_window": 40,           # Long volume window for position trades.
         "vol_zscore_threshold": 2.5,       # Very strict volume confirmation.
         "score_threshold": 0.85            # High confidence threshold for position entries.

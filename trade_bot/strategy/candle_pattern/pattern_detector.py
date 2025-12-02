@@ -1,13 +1,13 @@
 
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Literal, Optional, Dict, Any
 from abc import ABC, abstractmethod
 
 @dataclass
 class PatternResult:
     is_pattern: bool = False
     name: Optional[str] = None
-    bias: Optional[str] = None
+    bias: Optional[Literal["bull", "bear", "neutral"]] = None
     metrics: Optional[Dict[str, Any]] = None
 
 

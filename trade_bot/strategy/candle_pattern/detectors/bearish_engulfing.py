@@ -206,6 +206,6 @@ class BearishEngulfingDetector(DoubleCandlePatternDetector):
         return PatternResult(
             is_pattern=True,
             name="Bearish Engulfing",
-            bias="bear",
+            bias="short",
             metrics=metrics
         )

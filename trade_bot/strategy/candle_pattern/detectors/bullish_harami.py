@@ -183,6 +183,6 @@ class BullishHaramiDetector(DoubleCandlePatternDetector):
         return PatternResult(
             is_pattern=True,
             name="Bullish Harami",
-            bias="bull",
+            bias="long",
             metrics=metrics
         )

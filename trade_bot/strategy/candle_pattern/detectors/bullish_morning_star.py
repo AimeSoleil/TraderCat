@@ -205,7 +205,7 @@ class MorningStarDetector(TripeCandlePatternDetector):
         return PatternResult(
             is_pattern=True,
             name="Morning Star",
-            bias="bull",
+            bias="long",
             metrics=metrics
         )
 

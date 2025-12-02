@@ -191,6 +191,6 @@ class PiercingPatternDetector(DoubleCandlePatternDetector):
         return PatternResult(
             is_pattern=True,
             name="Piercing Pattern",
-            bias="bull",
+            bias="long",
             metrics=metrics
         )

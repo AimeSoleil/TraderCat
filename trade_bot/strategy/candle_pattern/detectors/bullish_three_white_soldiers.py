@@ -246,7 +246,7 @@ class ThreeWhiteSoldiersDetector(TripeCandlePatternDetector):
         return PatternResult(
             is_pattern=True,
             name="Three White Soldiers",
-            bias="bull",
+            bias="long",
             metrics=metrics
         )
 

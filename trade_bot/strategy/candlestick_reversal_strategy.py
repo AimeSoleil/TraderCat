@@ -24,7 +24,6 @@ class CandlestickReversalStrategy(TradingStrategy):
         rsi_period: int = 14,
         adx_period: int = 14,
         macd_params: Optional[Dict[str,int]] = None,
-        atr_base_factor: float = 1,
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 2.0,
         score_threshold: float = 0.6,
@@ -36,7 +35,6 @@ class CandlestickReversalStrategy(TradingStrategy):
         self.rsi_period = int(rsi_period)
         self.adx_period = adx_period
         self.macd_params = macd_params or {"fast": 12, "slow": 26, "signal": 9}
-        self.atr_base_factor = atr_base_factor
         self.vol_zscore_window = int(vol_zscore_window)
         self.vol_zscore_threshold = float(vol_zscore_threshold)
         self.score_threshold = float(score_threshold)
@@ -165,8 +163,8 @@ class CandlestickReversalStrategy(TradingStrategy):
                 chosen_res = res_bull   # bullish reversal against downtrend (bottoms)
             else:
                 # No clear trend; prefer non-neutral bias or pick bullish by default
-                chosen_res = res_bear if (res_bear.bias in ("bear",) and res_bull.bias == "neutral") else (
-                    res_bull if res_bull.bias in ("bull",) else res_bull
+                chosen_res = res_bear if (res_bear.bias in ("short",) and res_bull.bias == "neutral") else (
+                    res_bull if res_bull.bias in ("long",) else res_bull
                 )
         elif found_bull:
             chosen_res = res_bull
@@ -174,18 +172,18 @@ class CandlestickReversalStrategy(TradingStrategy):
             chosen_res = res_bear
 
         pattern = chosen_res.name if chosen_res else None
-        raw_bias = chosen_res.bias if chosen_res else None  # "bull" | "bear" | "neutral" | None
+        raw_bias = chosen_res.bias if chosen_res else None  # "long" | "short" | "neutral" | None
 
         # Neutral tilt: if bias is neutral, tilt with the EMA trend
         effective_bias = raw_bias
         if raw_bias in (None, "neutral"):
             if trend_long and not trend_short:
-                effective_bias = "bull"
+                effective_bias = "long"
             elif trend_short and not trend_long:
-                effective_bias = "bear"
+                effective_bias = "short"
             else:
                 # Fallback: prefer bull if res_bull exists; else bear if res_bear exists; else neutral
-                effective_bias = "bull" if found_bull else ("bear" if found_bear else "neutral")
+                effective_bias = "long" if found_bull else ("short" if found_bear else "neutral")
 
         # ---------- 趋势强度和波动率 -----------
         trend_strength = self._check_trend_and_volatility(
@@ -193,10 +191,8 @@ class CandlestickReversalStrategy(TradingStrategy):
             adx_val_history=adx_val_history,      # <-- 修正：传入 ADX 历史
             price_history=closes,
             window=100,
-            atr_base_factor=self.atr_base_factor,
-            atr_quantile=0.8,
-            adx_quantile=0.8,
-            mode='reversal'
+            mode='reversal',
+            trend_quantiles=[0.6, 0.4]
         )
 
         # ---------- 成交量 z-score 确认 -----------
@@ -245,8 +241,8 @@ class CandlestickReversalStrategy(TradingStrategy):
 
         # 交易侧：根据有效偏向与识别结果确定
         side_action = (
-            "long"  if (found_any and effective_bias == "bull") else
-            "short" if (found_any and effective_bias == "bear") else
+            "long"  if (found_any and effective_bias == "long") else
+            "short" if (found_any and effective_bias == "short") else
             "hold"
         )
 
@@ -280,7 +276,7 @@ class CandlestickReversalStrategy(TradingStrategy):
                 atr=current_atr_val,
                 close_price=close
             )
-            plan = planner.make_exit_plan('long' if result.signal == 'buy' else 'short')
+            plan = planner.make_exit_plan(trading_signal=result.signal)
             details.update({"plan": plan})
 
         return SignalModel(
@@ -311,7 +307,7 @@ def make_candlestick_reversal_presets() -> Dict[str, Dict[str, Any]]:
         "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD settings.
         "vol_zscore_window": 20,           # Volume z-score window matches EMA period.
         "vol_zscore_threshold": 1.5,       # Moderate volume spike confirmation for swing trades.
-        "score_threshold": 0.65,           # Slightly lenient threshold for short-term reversals.
+        "score_threshold": 0.6,            # Slightly lenient threshold for short-term reversals.
     }
 
     # ---------------- INTERMEDIATE ----------------

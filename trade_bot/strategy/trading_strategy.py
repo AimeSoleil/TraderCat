@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from math import isinf, isnan
-import math
 import statistics
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
@@ -19,9 +18,10 @@ class TrendStrength:
     """
     signal: bool                # 最终信号（True/False）
     mode: str                   # 模式："trend" 或 "reversal"
+    reason: str                 # 解释原因
     trend: Dict[str, Any]       # 趋势检测结果（来自 _check_trend_strength）
     volatility: Dict[str, Any]  # 波动检测结果（来自 _check_volatility）
-    reason: str                 # 解释原因
+    adx_rollover: Optional[Dict[str, Any]]  # ADX回落检测结果（来自 _detect_adx_rollover）
 
 class TradingStrategy(ABC):
 
@@ -56,19 +56,19 @@ class TradingStrategy(ABC):
     def _momentum_confirm(self,
         rsi_val_history: Optional[List[Any]],
         macd_hist_val_history: Optional[List[Any]],
-        prefer: str = "bull",
+        prefer: Literal["long", "short", "neutral"]
     ) -> bool:
         # 简单动量确认：RSI or MACD hist 指向反转方向
         r_latest = rsi_val_history[-1] if rsi_val_history and len(rsi_val_history) > 0 else None
         macd_hist_latest = macd_hist_val_history[-1] if macd_hist_val_history and len(macd_hist_val_history) > 0 else None
 
-        if prefer == "bull":
+        if prefer == "long":
             if r_latest is not None and r_latest > 30:
                 return True
             if macd_hist_latest is not None and macd_hist_latest > 0:
                 return True
             return False
-        elif prefer == "bear":
+        elif prefer == "short":
             if r_latest is not None and r_latest < 70:
                 return True
             if macd_hist_latest is not None and macd_hist_latest < 0:
@@ -115,115 +115,294 @@ class TradingStrategy(ABC):
 
         return vol_ok, volume_z
     
-    def _check_volatility(self, atr_history, price_history, window=100, quantile=0.8, base_factor=1):
+    def _check_volatility(
+        self,
+        atr_history: List[Optional[float]],
+        price_history: List[Optional[float]],
+        window: int = 100,
+        quantile: float = 0.8,
+        base_factor: float = 1.0,
+        min_history_for_quantile: int = 20,
+        fallback_base_threshold: float = 0.002,
+    ) -> Dict[str, Any]:
         """
-        判断市场是否处于高波动状态，采用两步过滤：
-        1. ATR/Price 相对值过滤（动态阈值）
-        2. 动态分位数确认（基于 ATR 比率）
-        返回详细信息而非仅布尔值
-        Tuning Tips:
-        Start with base_factor = 1.0 for neutral behavior.
-        Use 0.5 if you want more signals (looser filter).
-        Use >1.0 if you want fewer signals (stricter filter).
+        判断市场是否处于高波动状态（返回详细信息）：
+        Two-step approach:
+        1) Compute ATR/price ratio for history (nan-safe)
+        2) Compare current ratio to a dynamic base threshold (20th percentile * base_factor)
+        3) Confirm against a higher quantile (quantile) for "high volatility"
+        Returns a dictionary with fields: signal (bool), reason, current_atr, current_ratio, threshold, base_threshold, recent_count
         """
-        if len(atr_history) == 0 or len(price_history) == 0:
-            return {"signal": False, "reason": "Insufficient data", "current_atr": None, "current_ratio": None, "threshold": None}
+        if not atr_history or not price_history:
+            return {"signal": False, "reason": "Insufficient data", "current_atr": None, "current_ratio": None, "threshold": None, "base_threshold": None, "recent_count": 0}
 
         if len(atr_history) != len(price_history):
-            return {"signal": False, "reason": "ATR and price history length mismatch", "current_atr": None, "current_ratio": None, "threshold": None}
+            return {"signal": False, "reason": "ATR and price history length mismatch", "current_atr": None, "current_ratio": None, "threshold": None, "base_threshold": None, "recent_count": 0}
 
-        # Current ATR and price
-        atr = atr_history[-1]
-        close = price_history[-1]
-        safe_close = max(abs(close), 1e-8)
-        atr_ratio = atr / safe_close
+        atr_arr = self._safe_array(atr_history)
+        price_arr = self._safe_array(price_history)
 
-        # Compute ATR ratio history
-        atr_ratios = [a / max(p, 1e-8) for a, p in zip(atr_history, price_history) if a and p]
-        recent_ratios = atr_ratios[-window:] if len(atr_ratios) >= window else atr_ratios
+        # Build ATR ratio history safely (atr / price), avoid divide-by-zero by treating tiny prices as nan
+        safe_price = np.where(np.abs(price_arr) < 1e-8, np.nan, price_arr)
+        atr_ratios = np.divide(atr_arr, safe_price, out=np.full_like(atr_arr, np.nan), where=~np.isnan(safe_price))
 
-        # Dynamic base threshold (20th percentile * base_factor)
-        if len(recent_ratios) >= 20:
-            base_threshold = np.quantile(recent_ratios, 0.2) * base_factor
+        # Current values
+        current_atr = float(atr_arr[-1]) if not np.isnan(atr_arr[-1]) else None
+        current_price = float(price_arr[-1]) if not np.isnan(price_arr[-1]) else None
+        current_ratio = float(atr_ratios[-1]) if not np.isnan(atr_ratios[-1]) else None
+
+        # Recent window
+        recent = atr_ratios[-window:] if len(atr_ratios) >= window else atr_ratios
+        recent_clean = recent[~np.isnan(recent)]
+        recent_count = recent_clean.size
+
+        # Base threshold: 20th percentile * base_factor (fallback when insufficient history)
+        if recent_count >= min_history_for_quantile:
+            base_threshold = float(np.nanquantile(recent_clean, 0.2)) * base_factor
         else:
-            base_threshold = 0.002  # fallback for insufficient data
+            base_threshold = float(fallback_base_threshold) * base_factor
 
-        # Step 1: Base threshold check
-        if atr_ratio < base_threshold:
+        # Quick reject if current ratio is missing
+        if current_ratio is None or np.isnan(current_ratio):
+            return {"signal": False, "reason": "Current ATR/price ratio is NaN", "current_atr": current_atr, "current_ratio": None, "threshold": None, "base_threshold": base_threshold, "recent_count": recent_count}
+
+        if current_ratio < base_threshold:
             return {
                 "signal": False,
-                "reason": f"ATR ratio {atr_ratio:.4f} < dynamic base {base_threshold:.4f}",
-                "current_atr": atr,
-                "current_ratio": atr_ratio,
-                "threshold": base_threshold
+                "reason": f"ATR ratio {current_ratio:.6f} < dynamic base {base_threshold:.6f}",
+                "current_atr": current_atr,
+                "current_ratio": current_ratio,
+                "threshold": None,
+                "base_threshold": base_threshold,
+                "recent_count": recent_count,
             }
 
-        # Step 2: Dynamic quantile threshold
-        threshold_dynamic = np.quantile(recent_ratios, quantile)
-        signal = atr_ratio >= threshold_dynamic
+        # Dynamic quantile threshold for "high volatility"
+        if recent_count >= 1:
+            threshold_dynamic = float(np.nanquantile(recent_clean, quantile))
+        else:
+            threshold_dynamic = base_threshold  # degenerate case
+
+        signal = current_ratio >= threshold_dynamic
         reason = "ATR ratio above dynamic threshold" if signal else "ATR ratio below dynamic threshold"
 
         return {
-            "signal": signal,
+            "signal": bool(signal),
             "reason": reason,
-            "current_atr": atr,
-            "current_ratio": atr_ratio,
-            "threshold": threshold_dynamic
+            "current_atr": current_atr,
+            "current_ratio": current_ratio,
+            "threshold": threshold_dynamic,
+            "base_threshold": base_threshold,
+            "recent_count": recent_count,
         }
 
-    def _check_trend_strength(self, adx_history, window=100, quantile=0.8, min_adx=20):
+    def _check_trend_strength(
+        self,
+        adx_history: List[Optional[float]],
+        window: int = 100,
+        quantiles: List[float] = [0.7, 0.3],
+        min_adx: float = 20.0,
+        min_history_for_quantile: int = 20,
+        fallback_strong: float = 25.0,
+        fallback_weak: float = 15.0,
+        slope_window: int = 5,
+        slope_threshold: float = 0.0,
+    ) -> Dict[str, Any]:
         """
-        判断趋势强度是否达到动态标准（基于历史分位数 + 最低ADX过滤）
-        返回详细信息
+        Enhanced ADX classifier using two quantiles:
+        - weak_quantile: below this => 'weak'
+        - strong_quantile: above this => 'strong'
+        - in-between => 'moderate'
+        Returns diagnostics: classification, signal (boolean for 'strong' + min_adx), thresholds, percentile, zscore, slope, di_info, etc.
         """
-        if len(adx_history) == 0:
-            return {"signal": False, "reason": "No ADX history", "current_adx": None, "threshold": None}
+        # validate quantiles
+        strong_quantile = quantiles[0]
+        weak_quantile = quantiles[1]
+        if strong_quantile < weak_quantile:
+            strong_quantile = quantiles[1]
+            weak_quantile = quantiles[0]
+        if not (0.0 <= weak_quantile < strong_quantile <= 1.0):
+            raise ValueError("Require 0 <= weak_quantile < strong_quantile <= 1")
 
-        adx_val = adx_history[-1]
+        if not adx_history:
+            return {"signal": False, "classification": "no_data", "reason": "No ADX history", "current_adx": None, "threshold_strong": None, "threshold_weak": None, "recent_count": 0}
 
-        # Step 1: Hard floor filter
-        if adx_val < min_adx:
-            return {"signal": False, "reason": f"ADX {adx_val:.2f} < minimum {min_adx}", 
-                    "current_adx": adx_val, "threshold": min_adx}
+        adx_arr = self._safe_array(adx_history)
+        current_adx = float(adx_arr[-1]) if not np.isnan(adx_arr[-1]) else None
+        if current_adx is None:
+            return {"signal": False, "classification": "nan_current", "reason": "Current ADX is NaN", "current_adx": None, "threshold_strong": None, "threshold_weak": None, "recent_count": 0}
 
-        # Step 2: Dynamic threshold
-        recent_adx = adx_history[-window:] if len(adx_history) >= window else adx_history
-        recent_safe_adx_list = [x for x in recent_adx if x is not None and not np.isnan(x)]
+        # Build recent series
+        recent = adx_arr[-window:] if adx_arr.size >= window else adx_arr
+        recent_clean = recent[~np.isnan(recent)]
+        recent_count = int(recent_clean.size)
 
-        if len(recent_safe_adx_list) < 20:
-            # Fallback if insufficient data
-            threshold_dynamic = 25
-            reason = "Insufficient history, using fallback threshold"
+        # Determine thresholds with fallback if not enough history
+        if recent_count >= min_history_for_quantile:
+            threshold_strong = float(np.nanquantile(recent_clean, strong_quantile))
+            threshold_weak = float(np.nanquantile(recent_clean, weak_quantile))
+            used_fallback = False
         else:
-            threshold_dynamic = np.quantile(recent_safe_adx_list, quantile)
-            reason = "ADX above dynamic threshold" if adx_val >= threshold_dynamic else "ADX below dynamic threshold"
+            threshold_strong = float(fallback_strong)
+            threshold_weak = float(fallback_weak)
+            used_fallback = True
 
-        signal = adx_val >= threshold_dynamic
-        return {"signal": signal, "reason": reason, "current_adx": adx_val, "threshold": threshold_dynamic}
+        # Simple checks
+        meets_min = current_adx >= min_adx
 
+        # classification by comparing current adx to weak/strong thresholds
+        if current_adx < threshold_weak:
+            classification = "weak"
+        elif current_adx >= threshold_strong:
+            classification = "strong"
+        else:
+            classification = "moderate"
 
-    def _check_trend_and_volatility(self, atr_val_history, adx_val_history, price_history,
-                                window=100, atr_base_factor=1,
-                                atr_quantile=0.8, adx_quantile=0.8, mode="trend") -> TrendStrength:
+        # percentile and zscore for extra diagnostics
+        percentile = float(np.sum(recent_clean < current_adx) / recent_count) if recent_count > 0 else None
+        mean_recent = float(np.nanmean(recent_clean)) if recent_count > 0 else None
+        std_recent = float(np.nanstd(recent_clean, ddof=0)) if recent_count > 0 else None
+        zscore = (current_adx - mean_recent) / std_recent if (mean_recent is not None and std_recent and std_recent > 0) else None
+
+        # slope estimate
+        slope = None
+        slope_positive = None
+        if slope_window >= 2:
+            last_valid = adx_arr[~np.isnan(adx_arr)]
+            if last_valid.size >= 2:
+                y = last_valid[-min(slope_window, last_valid.size):]
+                if y.size >= 2:
+                    x = np.arange(y.size, dtype=float)
+                    p = np.polyfit(x, y, 1)
+                    slope = float(p[0])
+                    slope_positive = slope > slope_threshold
+
+        # signal boolean: keep simple (strong classification AND meets min_adx)
+        signal = bool(classification == "strong" and meets_min)
+
+        reason = f"classification={classification}; current_adx={current_adx:.2f}; threshold_weak={threshold_weak:.2f}; threshold_strong={threshold_strong:.2f}"
+        if used_fallback:
+            reason += "; used_fallback"
+
+        return {
+            "signal": signal,
+            "classification": classification,
+            "reason": reason,
+            "current_adx": current_adx,
+            "threshold_strong": threshold_strong,
+            "threshold_weak": threshold_weak,
+            "percentile": percentile,
+            "mean_recent": mean_recent,
+            "std_recent": std_recent,
+            "zscore": zscore,
+            "slope": slope,
+            "slope_positive": slope_positive,
+            "meets_min": meets_min,
+            "used_fallback_threshold": used_fallback,
+            "recent_count": recent_count,
+        }
+
+    def _detect_adx_rollover(
+        self,
+        adx_history: List[Optional[float]],
+        peak_window: int = 20,
+        decline_window: int = 5,
+        min_peak_prominence: float = 2.0,
+    ) -> Dict[str, Any]:
         """
-        综合判断市场状态：趋势跟随或反转
+        Detect if ADX recently peaked and is rolling over.
+        Logic:
+        - Find max ADX in the last 'peak_window' bars (or full history if shorter).
+        - If the max occurred earlier than the most recent 'decline_window' bars and
+            current ADX is lower than that peak by at least min_peak_prominence,
+            signal a rollover (potential exhaustion).
+        Returns dict with keys: rollover(bool), current_adx, peak_adx, peak_index_from_end, delta_from_peak
         """
-        vol_info = self._check_volatility(atr_val_history, price_history, window, atr_quantile, atr_base_factor)
-        trend_info = self._check_trend_strength(adx_val_history, window, adx_quantile)
+        if not adx_history:
+            return {"signal": False, "reason": "No ADX history", "current_adx": None, "peak_adx": None, "peak_index_from_end": None, "delta_from_peak": None}
+
+        adx_arr = self._safe_array(adx_history)
+        clean = adx_arr[~np.isnan(adx_arr)]
+        if clean.size == 0:
+            return {"signal": False, "reason": "ADX all NaN", "current_adx": None, "peak_adx": None, "peak_index_from_end": None, "delta_from_peak": None}
+
+        # Work on last peak_window values
+        recent_window = adx_arr[-peak_window:] if adx_arr.size >= peak_window else adx_arr
+        recent_idx = np.arange(len(adx_arr) - len(recent_window), len(adx_arr))  # global indices
+        # Mask NaNs
+        mask = ~np.isnan(recent_window)
+        if not mask.any():
+            return {"signal": False, "reason": "Not enough valid ADX in peak window", "current_adx": float(adx_arr[-1]) if not np.isnan(adx_arr[-1]) else None, "peak_adx": None, "peak_index_from_end": None, "delta_from_peak": None}
+
+        recent_valid = recent_window[mask]
+        recent_valid_idx = recent_idx[mask]
+        # Peak in recent window
+        peak_pos = int(np.argmax(recent_valid))
+        peak_adx = float(recent_valid[peak_pos])
+        peak_global_idx = int(recent_valid_idx[peak_pos])
+        # distance from end
+        peak_index_from_end = len(adx_arr) - 1 - peak_global_idx
+
+        current_adx = float(adx_arr[-1]) if not np.isnan(adx_arr[-1]) else None
+        if current_adx is None:
+            return {"signal": False, "reason": "Current ADX is NaN", "current_adx": None, "peak_adx": peak_adx, "peak_index_from_end": peak_index_from_end, "delta_from_peak": None}
+
+        delta = peak_adx - current_adx
+
+        # Consider rollover if the peak is not the last bar (i.e., peak occurred earlier) and the drop is meaningful
+        if (peak_index_from_end >= decline_window) and (delta >= min_peak_prominence):
+            return {"signal": True, "reason": "ADX peaked earlier and declined", "current_adx": current_adx, "peak_adx": peak_adx, "peak_index_from_end": peak_index_from_end, "delta_from_peak": delta}
+        else:
+            return {"signal": False, "reason": "No clear ADX rollover detected", "current_adx": current_adx, "peak_adx": peak_adx, "peak_index_from_end": peak_index_from_end, "delta_from_peak": delta}
+
+    def _check_trend_and_volatility(
+        self,
+        atr_val_history: List[Optional[float]],
+        adx_val_history: List[Optional[float]],
+        price_history: List[Optional[float]],
+        window: int = 100,
+        mode: str = "trend", # 'trend', 'reversal', or 'exhaustion'
+        # parameters for trend
+        trend_quantiles: List[float] = [0.7, 0.3],
+        # parameters for exhaustion detection
+        adx_peak_window: int = 20,
+        adx_decline_window: int = 5,
+        adx_min_peak_prominence: float = 2.0,
+    ) -> TrendStrength:
+        """
+        综合判断市场状态：'trend', 'reversal', 'exhaustion'
+        - trend: strong ADX + high volatility
+        - reversal: weak ADX + high volatility (good for mean-reversion if vol high? depends on strategy)
+        - exhaustion: ADX peaked then rolled over + volatility spike (fade the exhaustion)
+        Returns TrendStrength dataclass with detailed nested info.
+        """
+        vol_info = self._check_volatility(atr_val_history, price_history, window=window)
+        trend_info = self._check_trend_strength(adx_val_history, window=window, quantiles=trend_quantiles)
 
         if mode == "trend":
             signal = vol_info["signal"] and trend_info["signal"]
             reason = "Strong trend + high volatility" if signal else "Conditions not met for trend"
         elif mode == "reversal":
+            # Standard reversal: weak ADX (trend_info False because ADX < dynamic) AND volatility high
             signal = (not trend_info["signal"]) and vol_info["signal"]
             reason = "Weak trend + high volatility" if signal else "Conditions not met for reversal"
+        elif mode == "exhaustion":
+            # Exhaustion means ADX peaked then rolled down (adx_roll_info) AND volatility is high
+            adx_roll_info = self._detect_adx_rollover(adx_val_history, peak_window=adx_peak_window, decline_window=adx_decline_window, min_peak_prominence=adx_min_peak_prominence)
+            signal = bool(adx_roll_info.get("signal")) and vol_info["signal"]
+            reason = "ADX rolled over after peak + high volatility (exhaustion)" if signal else "Conditions not met for exhaustion reversal"
+            return TrendStrength(signal=signal, mode=mode, reason=reason, trend=trend_info, volatility=vol_info, adx_rollover=adx_roll_info) 
         else:
             signal = False
             reason = "Invalid mode"
 
-        return TrendStrength(signal=signal, mode=mode, trend=trend_info, volatility=vol_info, reason=reason)
-        
+        return TrendStrength(signal=signal, mode=mode, reason=reason, trend=trend_info, volatility=vol_info, adx_rollover=None) 
+
     # --- 工具函数 ---
+    def _safe_array(self, x: List[Optional[float]]) -> np.ndarray:
+        """Convert list to float np.array and coerce None to np.nan."""
+        return np.array([np.nan if v is None else float(v) for v in x], dtype=float)
+
     def _compute_return_L(self, closes: List[float], L: int) -> Optional[float]:
         if len(closes) <= L:
             return None
@@ -370,7 +549,7 @@ class ExitPlanner:
         self.fib_tp_ratio = fib_tp_ratio
         self.atr_tp_mult = atr_tp_mult
 
-    def make_exit_plan(self, side: str) -> Dict[str, Any]:
+    def make_exit_plan(self, trading_signal: Literal['buy', 'sell']) -> Dict[str, Any]:
         """
         Create exit plan combining Chandelier Exit, Fibonacci stop, and take-profit levels.
         """
@@ -382,6 +561,7 @@ class ExitPlanner:
             "fib_tp_ratio": self.fib_tp_ratio,
             "atr_tp_mult": self.atr_tp_mult,
         }
+        signal = trading_signal
 
         if self.atr is None or not self.highs or not self.lows:
             return plan
@@ -396,14 +576,14 @@ class ExitPlanner:
 
         # --- Stop Loss Calculation ---
         if self.fib_stop_ratio is not None and self.close_price is not None:
-            if side == "long":
+            if signal == "buy":
                 stop_fib_level = lowest_low + (highest_high - lowest_low) * self.fib_stop_ratio
             else:
                 stop_fib_level = highest_high - (highest_high - lowest_low) * self.fib_stop_ratio
             plan["fib_stop_loss_at"] = stop_fib_level
 
         # Chandelier stop
-        if side == "long":
+        if signal == "buy":
             chandelier_stop = highest_high - self.atr_mult * self.atr
         else:
             chandelier_stop = lowest_low + self.atr_mult * self.atr
@@ -414,14 +594,14 @@ class ExitPlanner:
 
         # ATR-based TP
         if self.atr_tp_mult is not None and self.close_price is not None:
-            if side == "long":
+            if signal == "buy":
                 tp_levels["atr_tp"] = self.close_price + self.atr_tp_mult * self.atr
             else:
                 tp_levels["atr_tp"] = self.close_price - self.atr_tp_mult * self.atr
 
         # Fibonacci-based TP
         if self.fib_tp_ratio is not None and self.close_price is not None:
-            if side == "long":
+            if signal == "buy":
                 tp_levels["fib_tp"] = lowest_low + (highest_high - lowest_low) * self.fib_tp_ratio
             else:
                 tp_levels["fib_tp"] = highest_high - (highest_high - lowest_low) * self.fib_tp_ratio

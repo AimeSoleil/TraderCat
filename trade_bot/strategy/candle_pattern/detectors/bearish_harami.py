@@ -183,6 +183,6 @@ class BearishHaramiDetector(DoubleCandlePatternDetector):
         return PatternResult(
             is_pattern=True,
             name="Bearish Harami",
-            bias="bear",
+            bias="short",
             metrics=metrics
         )

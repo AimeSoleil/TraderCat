@@ -210,6 +210,6 @@ class EveningStarDetector(TripeCandlePatternDetector):
         return PatternResult(
             is_pattern=True,
             name="Evening Star",
-            bias="bear",
+            bias="short",
             metrics=metrics
         )

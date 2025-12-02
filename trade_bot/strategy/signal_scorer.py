@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from importlib.simple import SimpleReader
 from typing import List, Literal
 from enum import Enum
 
@@ -100,10 +101,16 @@ class ScoringEngine:
         # increase threshold in high volatility
         return self.base_threshold + (0.05 if self.is_volatility_ok else 0.0)
 
+    def _trading_signal(self, side: Literal["long", "short", "neutral"]) -> Literal["bull", "bear", "hold"]:
+        if side == "neutral":
+            return "hold"
+        
+        return "buy" if side == "long" else "sell"
+    
     def compute_score(
         self, 
         factors: List[Factor], 
-        side: Literal["long", "short", "hold"]
+        side: Literal["long", "short", "neutral"]
     ) -> ScoringResult:
         # Validate
         self._validate_factors(factors)
@@ -123,21 +130,24 @@ class ScoringEngine:
         # Determine signal
         normalized_score = min(1.0, normalized_score)
         threshold = self._adaptive_threshold()
-        signal = "hold"
-        if side != "hold":
+        signal = "neutral"
+        if side != "neutral":
             if normalized_score >= threshold:
                 if self.determined_factors:
                     filtered = [f for f in factors if f.name in self.determined_factors]
                     if all(f.condition for f in filtered):
-                        signal = "buy" if side == "long" else "sell"
+                        signal = self._trading_signal(side)
                     else:
+                        signal = self._trading_signal("neutral")
                         reasons.append("关键确认因子未全部满足")
                 else:
-                    signal = "buy" if side == "long" else "sell"
+                    signal = self._trading_signal(side)
             else:
+                signal = self._trading_signal("neutral")
                 reasons.append(f"得分 ({normalized_score:.2f}) 未超过阈值 ({threshold:.2f})")
         else:
-            reasons.append("hold - 暂时没有明确的方向")
+            signal = self._trading_signal(side)
+            reasons.append("暂时没有明确的方向")
 
         return ScoringResult(
             score=round(normalized_score, 3),

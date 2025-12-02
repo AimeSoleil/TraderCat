@@ -20,8 +20,7 @@ class BollingerBreakoutStrategy(TradingStrategy):
         atr_period: int = 14,
         adx_period: int = 14,
         rsi_period: Optional[int] = 14,
-        prior_swing_bars: int = 3,
-        atr_base_factor: float = 1,  # volatility guard: ATR / price
+        prior_swing_bars: int = 5,
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 2.0,
         score_threshold: float = 0.6,
@@ -37,7 +36,6 @@ class BollingerBreakoutStrategy(TradingStrategy):
         self.adx_period = adx_period
         self.rsi_period = rsi_period
         self.prior_swing_bars = prior_swing_bars
-        self.atr_base_factor = atr_base_factor
         self.vol_zscore_window = int(vol_zscore_window)
         self.vol_zscore_threshold = float(vol_zscore_threshold)
         self.score_threshold = score_threshold
@@ -190,10 +188,8 @@ class BollingerBreakoutStrategy(TradingStrategy):
             adx_val_history=adx_val_history,
             price_history=closes,
             window=100,
-            atr_base_factor=self.atr_base_factor,
-            atr_quantile=0.8,
-            adx_quantile=0.8,
-            mode='trend'
+            mode='trend',
+            trend_quantiles=[0.6, 0.4]
         )
         # 成交量 z-score 确认
         recent_window = max(1, min(self.vol_zscore_window, len(vols)))
@@ -251,7 +247,7 @@ class BollingerBreakoutStrategy(TradingStrategy):
             ],
             is_volatility_ok=trend_strength.volatility['signal']
         )
-        side = "long" if long_break else "short" if short_break else "hold"
+        side = "long" if long_break else "short" if short_break else "neutral"
         result = engine.compute_score(factors, side=side)
 
         # 计算入场止损与 trailing stop
@@ -262,7 +258,7 @@ class BollingerBreakoutStrategy(TradingStrategy):
                 atr=current_atr_val,
                 close_price=close
             )
-            plan = planner.make_exit_plan('long' if result.signal == 'buy' else 'short')
+            plan = planner.make_exit_plan(trading_signal=result.signal)
             details.update({"plan": plan})
 
         return SignalModel(
@@ -288,14 +284,13 @@ def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
         "bb_period": 20,                # Standard BB period for short-term volatility.
         "bb_std": 2.0,                  # Classic BB width (2 std dev).
         "trailing_bw_window": 60,       # 3× BB period for squeeze detection.
-        "bw_percentile_threshold": 20.0,# Strict squeeze condition (20th percentile).
+        "bw_percentile_threshold": 30.0,# Strict squeeze condition (20th percentile).
         "ema_fast": 8,                  # Fast EMA for short-term trend.
         "ema_slow": 21,                 # Slow EMA for trend confirmation.
         "atr_period": 14,               # ATR for volatility context.
         "adx_period": 14,               # ADX for trend strength.
         "rsi_period": 14,               # RSI for momentum filter.
-        "prior_swing_bars": 3,          # Minimum pivot bars for swing confirmation.
-        "atr_base_factor": 0.5,         # ATR base factor for volatility.
+        "prior_swing_bars": 5,          # Minimum pivot bars for swing confirmation.
         "vol_zscore_window": 20,        # Volume z-score window matches BB period.
         "vol_zscore_threshold": 1.5,    # Volume spike confirmation (2σ).
         "score_threshold": 0.6          # Slightly lenient for swing entries.
@@ -313,7 +308,6 @@ def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
         "adx_period": 14,               # ADX standard.
         "rsi_period": 14,               # RSI standard.
         "prior_swing_bars": 5,          # More bars for stronger pivot confirmation.
-        "atr_base_factor": 1,           # ATR base factor for volatility.
         "vol_zscore_window": 30,        # Longer volume window for medium-term.
         "vol_zscore_threshold": 2.5,    # Stricter volume confirmation.
         "score_threshold": 0.7          # Balanced threshold for intermediate trades.
@@ -331,7 +325,6 @@ def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
         "adx_period": 14,               # ADX standard.
         "rsi_period": 14,               # RSI standard.
         "prior_swing_bars": 7,          # Strong pivot confirmation for position trades.
-        "atr_base_factor": 2,           # ATR base factor for volatility.
         "vol_zscore_window": 40,        # Longer volume window for position trades.
         "vol_zscore_threshold": 3.0,    # Very strict volume confirmation.
         "score_threshold": 0.8          # High threshold for position entries.
