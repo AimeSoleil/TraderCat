@@ -84,12 +84,14 @@ class BBandsReversalStrategy(TradingStrategy):
             FactorName.BB_REVERSAL_CANDLE,
             FactorName.TREND_STRENGTH,
             FactorName.VOLUME_CONFIRM,
-            FactorName.MOMENTUM_CONFIRM
+            FactorName.MOMENTUM_CONFIRM,
+            FactorName.CONFLUENCE_BONUS
         ]
 
+    # --- Helper Methods ---
     def _resolve_bias(
         self,
-        rejection_res_bias: str | None,
+        rejection_res_bias: Literal["long", "short", "neutral"] | None,
         candidate_buy: bool,
         candidate_sell: bool,
         near_lower: bool,
@@ -143,12 +145,16 @@ class BBandsReversalStrategy(TradingStrategy):
         opens = [float(c.open) for c in candles]
         vols = [float(c.volume) for c in candles]
         dates = [c.date for c in candles]
+        
         atr_val_history = [getattr(a, self.atr_field, None) for a in atr_series]
-        current_atr_val = atr_val_history[-1]
+        current_atr_val = atr_val_history[-1] if atr_val_history else 0.0
+        
         adx_val_history = [getattr(a, self.adx_field, None) for a in adx_series]
-        current_adx_val = adx_val_history[-1]
+        current_adx_val = adx_val_history[-1] if adx_val_history else 0.0
+        
         rsi_val_history = [getattr(r, self.rsi_field, None) for r in rsi_series]
         macd_hist_val_history = [getattr(m, self.macd_hist_field, None) for m in macd_series] if macd_series else []
+        
         idx = len(candles) - 1
         close = closes[-1]
         prev_close = closes[-2] if len(closes) >= 2 else close
@@ -193,35 +199,44 @@ class BBandsReversalStrategy(TradingStrategy):
         reject_idx: int | None = None
         rejection_res: PatternResult = PatternResult(False, None, None, None)
         start = max(0, idx - self.max_time_bars + 1)
+        
         if near_lower or near_upper:
             for i in range(start, idx + 1):
                 atr_i = atr_val_history[i] if atr_val_history is not None else None
 
                 if near_lower:
                     # Bullish reversal candidates (e.g., Tweezer Bottom, Morning Star, etc.)
-                    rejection_res = orchestrator.detect_bullish(
+                    res = orchestrator.detect_bullish(
                         opens, highs, lows, closes, i,
                         atr=atr_i,
-                        # extra_overrides can pass pattern-specific knobs if desired
-                        # extra_overrides={"low_similarity_tolerance": 0.0015}
                     )
                 else:
                     # Bearish reversal candidates (e.g., Tweezer Top, Evening Star, etc.)
-                    rejection_res = orchestrator.detect_bearish(
+                    res = orchestrator.detect_bearish(
                         opens, highs, lows, closes, i,
                         atr=atr_i,
-                        # extra_overrides={"high_similarity_tolerance": 0.0015}
                     )
 
-                if rejection_res.is_pattern:
+                if res.is_pattern:
                     rejection_found = True
+                    rejection_res = res
                     reject_idx = i
                     break
 
         # 只有在带位接近并出现拒绝蜡烛的情况下考虑反转
         candidate_buy = (near_lower or near_mid) and rejection_found
         candidate_sell = (near_upper or near_mid) and rejection_found
-        middle_line_reversal = (candidate_buy and prev_close > m_curr and close < m_curr) or (candidate_sell and prev_close < m_curr and close > m_curr)
+        
+        # 修正：中轨穿越反转逻辑
+        # 看涨反转：之前在下，现在在上 (上穿)
+        # 看跌反转：之前在上，现在在下 (下穿)
+        middle_line_reversal = False
+        if m_curr is not None:
+            if candidate_buy:
+                middle_line_reversal = (prev_close < m_curr and close > m_curr)
+            elif candidate_sell:
+                middle_line_reversal = (prev_close > m_curr and close < m_curr)
+
         # Side resolution
         side_bias = self._resolve_bias(
             rejection_res_bias=rejection_res.bias,
@@ -304,55 +319,60 @@ class BBandsReversalStrategy(TradingStrategy):
 
 def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Bollinger Band reversal strategy presets based on algo trading best practices:
-    - swing: Short-term (1–2 weeks), tighter band touch, quick confirmation.
-    - intermediate: Medium-term (2–6 weeks), balanced thresholds.
-    - position: Long-term (1–3 months), looser band touch, stricter confirmation.
+    Bollinger Band reversal strategy presets (Optimized by Pro Algo Trader).
+    
+    Logic:
+    - Swing: High frequency, tolerates volatility (High ADX), wider touch tolerance, quick exit.
+    - Intermediate: Balanced approach.
+    - Position: High precision, requires trend exhaustion (Low ADX), extreme deviation (2.2 Std), strict volume.
     """
 
-    # ---------------- SWING ----------------
+    # ---------------- SWING (Aggressive / Short-term) ----------------
     swing = {
-        "bb_period": 20,                # Standard BB period for volatility context.
-        "bb_std": 2.0,                  # Classic BB width (2 std dev).
-        "touch_pct": 0.02,              # Price within 2% of band → tighter for short-term reversals.
-        "rsi_period": 14,               # RSI standard for momentum reversal.
-        "atr_period": 14,               # ATR for volatility filter.
-        "adx_period": 14,               # ADX for trend strength.
-        "max_time_bars": 1,             # Quick reversal confirmation (within 3 bars).
-        "vol_zscore_window": 20,        # Volume z-score window matches BB period.
-        "vol_zscore_threshold": 1.5,    # Moderate volume spike confirmation.
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD.
-        "score_threshold": 0.6          # Slightly higher threshold for reversal confidence.
+        "bb_period": 20,
+        "bb_std": 2.0,
+        "touch_pct": 0.015,             # 1.5% tolerance. Short-term charts are noisy, give it room.
+        "rsi_period": 9,                # Faster RSI (9) for quicker divergence detection.
+        "atr_period": 14,
+        "adx_period": 14,
+        "adx_threshold": 35.0,          # Allow trading in higher volatility environments.
+        "max_time_bars": 3,             # Look for pattern within 3 bars of touching band.
+        "vol_zscore_window": 20,
+        "vol_zscore_threshold": 1.2,    # Moderate volume confirmation (>1.2 sigma).
+        "macd_params": {"fast": 8, "slow": 17, "signal": 9}, # Faster MACD settings.
+        "score_threshold": 0.55         # Lower threshold to generate more signals.
     }
 
-    # ---------------- INTERMEDIATE ----------------
+    # ---------------- INTERMEDIATE (Balanced / Swing-to-Mid) ----------------
     intermediate = {
         "bb_period": 20,
         "bb_std": 2.0,
-        "touch_pct": 0.03,              # Looser band touch for medium-term reversals.
+        "touch_pct": 0.01,              # 1.0% tolerance. Standard precision.
         "rsi_period": 14,
         "atr_period": 14,
         "adx_period": 14,
-        "max_time_bars": 5,             # Allow more bars for confirmation.
-        "vol_zscore_window": 30,        # Longer volume window for stability.
-        "vol_zscore_threshold": 2.0,    # Stricter volume confirmation.
+        "adx_threshold": 30.0,          # Standard trend filter.
+        "max_time_bars": 5,             # Allow a consolidation week before reversal.
+        "vol_zscore_window": 20,
+        "vol_zscore_threshold": 1.5,    # Stronger volume required (>1.5 sigma).
         "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-        "score_threshold": 0.7          # Balanced confidence threshold.
+        "score_threshold": 0.65         # Quality over quantity.
     }
 
-    # ---------------- POSITION ----------------
+    # ---------------- POSITION (Conservative / Long-term) ----------------
     position = {
         "bb_period": 20,
-        "bb_std": 2.0,
-        "touch_pct": 0.05,              # Loosest band touch for long-term reversals.
-        "rsi_period": 14,
-        "atr_period": 14,
+        "bb_std": 2.2,                  # Use 2.2 StdDev. 2.0 is often noise on daily/weekly charts.
+        "touch_pct": 0.005,             # 0.5% tolerance. Price must essentially HIT the band.
+        "rsi_period": 21,               # Slower RSI to filter noise.
+        "atr_period": 21,
         "adx_period": 14,
-        "max_time_bars": 7,             # More bars allowed for confirmation.
-        "vol_zscore_window": 40,        # Long volume window for position trades.
-        "vol_zscore_threshold": 2.5,    # Very strict volume confirmation.
+        "adx_threshold": 25.0,          # Strict: Trend must be weak/exhausted to reverse long-term.
+        "max_time_bars": 8,             # Reversals take time to form (e.g., rounded bottom).
+        "vol_zscore_window": 40,        # Compare against longer volume history.
+        "vol_zscore_threshold": 1.8,    # Significant institutional volume required.
         "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-        "score_threshold": 0.8          # High confidence threshold for position entries.
+        "score_threshold": 0.75         # Only enter on high-confidence signals.
     }
 
     return {

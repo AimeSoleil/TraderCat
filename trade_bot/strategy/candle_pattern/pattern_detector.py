@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 class PatternResult:
     is_pattern: bool = False
     name: Optional[str] = None
-    bias: Optional[Literal["bull", "bear", "neutral"]] = None
+    bias: Optional[Literal["long", "short", "neutral"]] = None
     metrics: Optional[Dict[str, Any]] = None
 
 
@@ -39,7 +39,7 @@ class DoubleCandlePatternDetector(ABC):
         """Return PatternResult; kwargs are keyword-only overrides for detector parameters."""
         pass
 
-class TripeCandlePatternDetector(ABC):
+class TripleCandlePatternDetector(ABC):
     """Base class for three-candle patterns (morning star)."""
 
     @abstractmethod

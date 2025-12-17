@@ -476,12 +476,21 @@ class TradingStrategy(ABC):
         return None
     
     def _percentile_rank(self, arr: List[float], value: float) -> float:
-        """返回 value 在 arr 中的百分位(0-100)；arr 长度应>0"""
+        """
+        返回 value 在 arr 中的百分位(0-100)。
+        使用 (less + 0.5*equal) 逻辑处理平局，统计更准确。
+        """
         if not arr:
+            # 安全返回 100.0，避免在数据不足时错误触发 Squeeze (低百分位) 信号
             return 100.0
+        
+        # 对于小窗口 (N < 500)，纯 Python 比 np.array() 转换更快
         less = sum(1 for x in arr if x < value)
         equal = sum(1 for x in arr if x == value)
+        
+        # 计算排名
         rank = (less + 0.5 * equal) / len(arr) * 100.0
+
         return rank
     
     def _find_fractal_swings(

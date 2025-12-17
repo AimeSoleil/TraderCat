@@ -4,38 +4,47 @@ from trade_bot.strategy.candle_pattern.pattern_detector import PatternResult, Si
 
 class ShootingStarDetector(SingleCandlePatternDetector):
     """
-    Shooting Star (bearish, single-candle):
-        - Upper shadow long (>= k × body)
-        - Lower shadow short (<= k × body)
-        - Body not tiny (avoid doji): body / range >= min_body_ratio
-        - Typically after an uptrend (recommend external trend/location filters)
+    Shooting Star (bearish, single-candle) - Production Grade:
+        - Upper shadow long (>= k * body).
+        - Lower shadow short.
+        - Body small but not tiny (distinct from Gravestone Doji).
+        - [New] Color check (Bearish body preferred).
+        - [New] Gap up check (vs previous close).
+        - [New] Volume spike check.
+        - [New] New High check.
     """
     def __init__(
         self,
         *,
         # Body constraint relative to total range (doji avoidance)
-        min_body_ratio: float = 0.10,               # body >= 10% of range (tune per timeframe)
+        min_body_ratio: float = 0.10,               
 
         # Shadow-to-body constraints
-        min_upper_shadow_to_body: float = 2.0,      # upper_shadow >= 2 × body
-        max_lower_shadow_to_body: float = 0.20,     # lower_shadow <= 0.2 × body
+        min_upper_shadow_to_body: float = 2.0,      
+        max_lower_shadow_to_body: float = 0.20,     
 
         # Shadow presence flags
         require_upper_shadow: bool = True,
-        require_lower_shadow: bool = False,         # shooting star often has near-zero lower shadow
+        require_lower_shadow: bool = False,         
+
+        # Color / Direction
+        require_bearish_body: bool = False,         # Ideally True for stronger signal (Red Shooting Star)
+
+        # Context Logic
+        require_gap_up: bool = False,               # Open > Prev Close (Stronger reversal)
+        require_high_volume: bool = False,          # Vol > PrevVol
+        require_new_high: bool = False,             # High > Prev High (Top picking)
 
         # Hygiene / numerical robustness
         min_range: float = 1e-9,
         float_tolerance: float = 1e-9,
 
         # ATR adaptation (optional)
-        body_atr_alpha: float = 1.0,                # sensitivity for scaling min_body_ratio by ATR/range
-        body_atr_bounds: Tuple[float, float] = (0.7, 1.5),  # clamp scaler
-
-        # Optional absolute constraints vs ATR
-        min_upper_vs_atr: Optional[float] = None,   # e.g., upper_shadow >= 0.30 * ATR
-        max_lower_vs_atr: Optional[float] = None,   # e.g., lower_shadow <= 0.10 * ATR
-        max_body_vs_atr: Optional[float] = None,    # optional cap: body <= 0.20 * ATR (if desired)
+        body_atr_alpha: float = 1.0,                
+        body_atr_bounds: Tuple[float, float] = (0.7, 1.5),  
+        min_upper_vs_atr: Optional[float] = None,   
+        max_lower_vs_atr: Optional[float] = None,   
+        max_body_vs_atr: Optional[float] = None,    
     ):
         self.defaults = dict(
             min_body_ratio=min_body_ratio,
@@ -43,6 +52,10 @@ class ShootingStarDetector(SingleCandlePatternDetector):
             max_lower_shadow_to_body=max_lower_shadow_to_body,
             require_upper_shadow=require_upper_shadow,
             require_lower_shadow=require_lower_shadow,
+            require_bearish_body=require_bearish_body,
+            require_gap_up=require_gap_up,
+            require_high_volume=require_high_volume,
+            require_new_high=require_new_high,
             min_range=min_range,
             float_tolerance=float_tolerance,
             body_atr_alpha=body_atr_alpha,
@@ -56,6 +69,11 @@ class ShootingStarDetector(SingleCandlePatternDetector):
         self,
         open_: float, high: float, low: float, close: float,
         *,
+        # Context for Gap/Volume checks
+        prev_close: Optional[float] = None,
+        prev_high: Optional[float] = None,  # Added for New High check
+        vol: Optional[float] = None,
+        prev_vol: Optional[float] = None,
         atr: Optional[float] = None,
         **overrides
     ) -> PatternResult:
@@ -63,23 +81,45 @@ class ShootingStarDetector(SingleCandlePatternDetector):
 
         # Hygiene
         if any(x is None for x in (open_, high, low, close)) or high < low:
-            return PatternResult(is_pattern=False, name=None, bias=None, metrics=None)
+            return PatternResult(is_pattern=False)
 
         price_range = high - low
         if price_range <= p["min_range"]:
-            return PatternResult(is_pattern=False, name=None, bias=None, metrics=None)
+            return PatternResult(is_pattern=False)
 
-        # Magnitudes (clip shadows to non-negative)
+        # Magnitudes
         body = abs(close - open_)
         upper_shadow = max(0.0, high - max(open_, close))
         lower_shadow = max(0.0, min(open_, close) - low)
 
+        # 1. Color Check
+        if p["require_bearish_body"]:
+            if close > open_: # Bullish
+                return PatternResult(is_pattern=False)
+
+        # 2. Gap Check
+        if p["require_gap_up"]:
+            if prev_close is None or open_ <= prev_close:
+                return PatternResult(is_pattern=False)
+
+        # 3. Volume Check
+        if p["require_high_volume"]:
+            if vol is None or prev_vol is None or vol <= prev_vol:
+                return PatternResult(is_pattern=False)
+
+        # 4. New High Check (New)
+        if p["require_new_high"]:
+            if prev_high is None or high <= prev_high:
+                return PatternResult(is_pattern=False)
+
         # Ratios
         body_ratio = body / price_range
-        upper_to_body = (upper_shadow / body) if body > 0 else float('inf')
-        lower_to_body = (lower_shadow / body) if body > 0 else float('inf')
+        # Handle zero body safely
+        safe_body = body if body > p["float_tolerance"] else p["float_tolerance"]
+        upper_to_body = upper_shadow / safe_body
+        lower_to_body = lower_shadow / safe_body
 
-        # ATR-adaptive min body ratio (tighten doji avoidance in high vol)
+        # ATR-adaptive min body ratio
         effective_min_body_ratio = p["min_body_ratio"]
         body_atr_scaler = None
         if atr is not None and atr > 0.0:
@@ -112,33 +152,28 @@ class ShootingStarDetector(SingleCandlePatternDetector):
         is_pattern = body_ok and upper_shadow_ok and lower_shadow_ok
 
         if not is_pattern:
-            return PatternResult(is_pattern=False, name=None, bias=None, metrics=None)
+            return PatternResult(is_pattern=False)
 
         metrics = {
-            # Raw magnitudes
             "body": body,
-            "price_range": price_range,
             "upper_shadow": upper_shadow,
+            "upper_to_body": upper_to_body,
+            "is_bearish_body": close < open_,
+            "gap_up": (open_ > prev_close) if prev_close is not None else None,
+            "volume_spike": (vol > prev_vol) if vol is not None and prev_vol is not None else None,
+            "new_high": (high > prev_high) if prev_high is not None else None,
+            # Raw magnitudes
+            "price_range": price_range,
             "lower_shadow": lower_shadow,
             # Ratios
             "body_ratio": body_ratio,
-            "upper_to_body": upper_to_body,
             "lower_to_body": lower_to_body,
             # Effective thresholds and ATR info
             "effective_min_body_ratio": effective_min_body_ratio,
             "body_atr_scaler": body_atr_scaler,
             "atr": atr,
-            # Pass/fail flags
-            "body_ok": body_ok,
-            "upper_shadow_ok": upper_shadow_ok,
-            "lower_shadow_ok": lower_shadow_ok,
-            # OHLC echo
-            "open": open_,
-            "close": close,
-            "high": high,
-            "low": low,
             # Params snapshot (for logging/debug)
-            "params": self.defaults | {"atr": atr} | overrides,
+            "params": {**self.defaults, "atr": atr, **overrides}, # [Fix] Compatible merge
         }
 
         return PatternResult(
@@ -147,42 +182,3 @@ class ShootingStarDetector(SingleCandlePatternDetector):
             bias="short",
             metrics=metrics
         )
-
-# Usage Example:
-# det = ShootingStarDetector(
-#     min_body_ratio=0.10,
-#     min_upper_shadow_to_body=2.0,
-#     max_lower_shadow_to_body=0.20
-# )
-
-# # Minimal (no ATR)
-# res = det.detect(open_=10.2, high=10.9, low=10.1, close=10.25)
-
-# # ATR-aware thresholds (tighten doji avoidance and add absolute constraints)
-# res2 = det.detect(
-#     open_=10.2, high=10.9, low=10.1, close=10.25,
-#     atr=0.8,
-#     min_upper_vs_atr=0.30,   # upper shadow >= 30% ATR
-#     max_lower_vs_atr=0.10,   # lower shadow <= 10% ATR
-#     max_body_vs_atr=0.20     # body <= 20% ATR (optional cap)
-# )
-
-# Tuning Tips (Trader’s Perspective)
-
-# Thresholds
-
-# min_body_ratio: 0.07–0.12 typical (tighter for intraday to avoid micro doji).
-# min_upper_shadow_to_body: 1.8–3.0 stricter settings improve signal quality.
-# max_lower_shadow_to_body: 0.10–0.25 depending on how strict you want the “short lower shadow”.
-
-
-# Context filters (for real edge)
-
-# Shooting stars are most meaningful near swing highs / resistance after an uptrend.
-# Combine with EMA slope, ADX, proximity to VWAP upper band / pivots / Bollinger upper band, and volume regime.
-
-
-# Confirmation & Risk
-
-# Bearish confirmation: next bar break and close below the shooting star’s low.
-# Stops: commonly above the shooting star’s high; ATR-based position sizing recommended.

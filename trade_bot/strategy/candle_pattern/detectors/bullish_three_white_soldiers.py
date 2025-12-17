@@ -1,16 +1,15 @@
 from typing import Optional, Tuple
 
-from trade_bot.strategy.candle_pattern.pattern_detector import PatternResult, TripeCandlePatternDetector
+from trade_bot.strategy.candle_pattern.pattern_detector import PatternResult, TripleCandlePatternDetector
 
 
-class ThreeWhiteSoldiersDetector(TripeCandlePatternDetector):
+class ThreeWhiteSoldiersDetector(TripleCandlePatternDetector):
     """
-    Three White Soldiers (bullish, 3-candle):
-        - Three consecutive bullish candles (c > o)
-        - Each close higher than the previous close
-        - Bodies are strong (relative to average and/or range)
-        - Optional: each open within prior real body; shadows relatively small
-        - Optional: ATR-aware minimum body sizes
+    Three White Soldiers (bullish, 3-candle) - Production Grade:
+        - Three consecutive bullish candles.
+        - Higher closes (and optionally higher lows).
+        - Strong bodies relative to range/ATR.
+        - [New] Volume confirmation.
     """
     def __init__(
         self,
@@ -41,7 +40,11 @@ class ThreeWhiteSoldiersDetector(TripeCandlePatternDetector):
         # ATR-aware constraints (optional)
         body_atr_alpha: float = 1.0,                      # scaler for (ATR / range_i)
         body_atr_bounds: Tuple[float, float] = (0.7, 1.5),
-        min_body_vs_atr: Optional[float] = None           # each body >= k * ATR (e.g., 0.25)
+        min_body_vs_atr: Optional[float] = None,           # each body >= k * ATR (e.g., 0.25)
+
+        # New optional constraints
+        require_higher_lows: bool = False,             # 新增：l2 > l1 且 l3 > l2
+        require_volume_increase: bool = False,         # 新增：v3 >= v2 >= v1
     ):
         self.defaults = dict(
             require_consecutive_bullish=require_consecutive_bullish,
@@ -58,6 +61,8 @@ class ThreeWhiteSoldiersDetector(TripeCandlePatternDetector):
             body_atr_alpha=body_atr_alpha,
             body_atr_bounds=body_atr_bounds,
             min_body_vs_atr=min_body_vs_atr,
+            require_higher_lows=require_higher_lows,
+            require_volume_increase=require_volume_increase,
         )
 
     def detect(
@@ -72,6 +77,8 @@ class ThreeWhiteSoldiersDetector(TripeCandlePatternDetector):
         h3: Optional[float] = None, l3: Optional[float] = None,
         # Optional ATR (single value applied to all three)
         atr: Optional[float] = None,
+        # Optional volumes (single value applied to all three)
+        v1: Optional[float] = None, v2: Optional[float] = None, v3: Optional[float] = None,
         **overrides
     ) -> PatternResult:
         p = {**self.defaults, **overrides}
@@ -92,7 +99,9 @@ class ThreeWhiteSoldiersDetector(TripeCandlePatternDetector):
         body1 = abs(c1 - o1)
         body2 = abs(c2 - o2)
         body3 = abs(c3 - o3)
-        if body1 <= 0 or body2 <= 0 or body3 <= 0:
+        
+        # Strict tiny body check (avoid micro-candles passing as soldiers)
+        if body1 <= p["min_range"] or body2 <= p["min_range"] or body3 <= p["min_range"]:
             return PatternResult(is_pattern=False, name=None, bias=None, metrics=None)
 
         avg_body = (body1 + body2 + body3) / 3.0
@@ -109,6 +118,19 @@ class ThreeWhiteSoldiersDetector(TripeCandlePatternDetector):
             # For bullish prior candle (c1 > o1), inside means: o1 <= o2 <= c1; same for o3 inside body2
             open_within_ok = (o2 >= o1 * (1 - p["open_within_tolerance"])) and (o2 <= c1 * (1 + p["open_within_tolerance"])) and \
                              (o3 >= o2 * (1 - p["open_within_tolerance"])) and (o3 <= c2 * (1 + p["open_within_tolerance"]))
+
+        # Higher lows（可选）
+        higher_lows_ok = True
+        if p["require_higher_lows"]:
+            if all(x is not None for x in (l1, l2, l3)):
+                higher_lows_ok = (l2 > l1) and (l3 > l2)
+            else:
+                higher_lows_ok = False
+
+        # 成交量放大（可选）
+        volume_ok = True
+        if p["require_volume_increase"]:
+            volume_ok = (v1 is not None and v2 is not None and v3 is not None and v2 >= v1 and v3 >= v2)
 
         # Optional ranges & shadows
         def valid_range(h: Optional[float], l: Optional[float]) -> bool:
@@ -202,8 +224,9 @@ class ThreeWhiteSoldiersDetector(TripeCandlePatternDetector):
             body_ratio_vs_range_ok,
             shadows_ok,
             atr_bodies_ok,
+            higher_lows_ok,
+            volume_ok,
         ])
-
         if not is_pattern:
             return PatternResult(is_pattern=False, name=None, bias=None, metrics=None)
 
@@ -235,6 +258,8 @@ class ThreeWhiteSoldiersDetector(TripeCandlePatternDetector):
             "body_ratio_vs_range_ok": body_ratio_vs_range_ok,
             "shadows_ok": shadows_ok,
             "atr_bodies_ok": atr_bodies_ok,
+            "higher_lows_ok": higher_lows_ok,
+            "volume_trend": ("up" if (v1 and v2 and v3 and v3 >= v2 >= v1) else None),
             # OHLC echo
             "o1": o1, "c1": c1, "h1": h1, "l1": l1,
             "o2": o2, "c2": c2, "h2": h2, "l2": l2,
@@ -249,38 +274,3 @@ class ThreeWhiteSoldiersDetector(TripeCandlePatternDetector):
             bias="long",
             metrics=metrics
         )
-
-# Usage Example
-# det = ThreeWhiteSoldiersDetector(
-#     require_open_within_prev_body=True,      # textbook variant
-#     require_strong_bodies=True,
-#     min_body_vs_avg_body_ratio=0.8
-# )
-
-# # Minimal (open/close only)
-# res = det.detect(
-#     o1=9.8,  c1=10.3,
-#     o2=10.1, c2=10.7,
-#     o3=10.5, c3=11.0
-# )
-
-# # With ranges, shadow constraints, and ATR
-# res2 = det.detect(
-#     o1=9.8,  c1=10.3, h1=10.4, l1=9.6,
-#     o2=10.1, c2=10.7, h2=10.8, l2=10.0,
-#     o3=10.5, c3=11.0, h3=11.1, l3=10.4,
-#     atr=0.8,
-#     min_body_ratio_vs_range=0.30,           # each body >= 30% of its range
-#     max_upper_shadow_to_body=0.30,          # cap upper wicks
-#     max_lower_shadow_to_body=0.50,          # cap lower wicks
-#     min_body_vs_atr=0.25                    # each body >= 25% ATR
-# )
-
-# Tuning Tips (Trader’s Perspective)
-
-# Body strength: Keep min_body_vs_avg_body_ratio in the 0.7–1.0 range; higher values reduce false positives.
-# Range-based ratio: min_body_ratio_vs_range around 0.25–0.40 ensures meaningful bodies (filters micro/weak prints).
-# Open within previous body: require_open_within_prev_body=True gives a textbook look; relax for intraday or adjusted feeds.
-# Shadows: Capping max_upper_shadow_to_body (e.g., ≤0.3) and max_lower_shadow_to_body (e.g., ≤0.5) strengthens pattern quality.
-# ATR filters: Requiring min_body_vs_atr (e.g., 0.25–0.40) improves decisiveness in high volatility.
-# Context & confirmation: Best edge after a downtrend, near support/swing lows/VWAP lower band/pivots, with confirmation (next bar breaks/closes above soldier 3’s high). Stops often below soldier 3’s low; ATR-based sizing recommended.

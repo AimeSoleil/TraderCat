@@ -45,7 +45,7 @@ class FactorName(Enum):
 class ScoringResult:
     score: float
     threshold: float
-    signal: str
+    signal: Literal["buy", "sell", "hold"]
     reasons: List[str]
 
     def to_json(self) -> dict:
@@ -101,7 +101,7 @@ class ScoringEngine:
         # increase threshold in high volatility
         return self.base_threshold + (0.05 if self.is_volatility_ok else 0.0)
 
-    def _trading_signal(self, side: Literal["long", "short", "neutral"]) -> Literal["bull", "bear", "hold"]:
+    def _trading_signal(self, side: Literal["long", "short", "neutral"]) -> Literal["buy", "sell", "hold"]:
         if side == "neutral":
             return "hold"
         

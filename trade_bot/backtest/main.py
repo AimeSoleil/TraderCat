@@ -21,9 +21,9 @@ logger = get_logger(__name__)
 CONFIG = {
     "symbols": ["PLTR"],  # Add more tickers as needed
     "strategies": { # Strategy name to list of preset names
-        "BBBreakout": ["swing"],
+        # "BBBreakout": ["swing"],
         # "BBReversal": ["swing"],
-        # "ReversalCandle": ["swing"],
+        "ReversalCandle": ["swing"],
         # "Divergence": ["swing"],
         # "Fibonacci": ["swing"],
         # "Momentum": ["swing"],

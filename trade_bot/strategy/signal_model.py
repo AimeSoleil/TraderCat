@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Dict, Any, Literal
 
 class SignalModel(BaseModel):
-    date: datetime
+    date: datetime | None
     symbol: str
     strategy: str
     signal: Literal["buy", "sell", "hold"]

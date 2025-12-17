@@ -3,7 +3,7 @@ from trade_bot.strategy.candle_pattern.pattern_detector import (
     PatternResult,
     SingleCandlePatternDetector,
     DoubleCandlePatternDetector,
-    TripeCandlePatternDetector,
+    TripleCandlePatternDetector,
 )
 
 # Single-candle
@@ -11,8 +11,8 @@ from trade_bot.strategy.candle_pattern.detectors.neutral_standard_doji import St
 from trade_bot.strategy.candle_pattern.detectors.bullish_hammer import HammerDetector
 from trade_bot.strategy.candle_pattern.detectors.bearish_shooting_star import ShootingStarDetector
 from trade_bot.strategy.candle_pattern.detectors.neutral_spinning_top import SpinningTopDetector
-from trade_bot.strategy.candle_pattern.detectors.neutral_dragonfly_doji import DragonflyDojiDetector
-from trade_bot.strategy.candle_pattern.detectors.neutral_gravestone_doji import GravestoneDojiDetector
+from trade_bot.strategy.candle_pattern.detectors.bullish_dragonfly_doji import DragonflyDojiDetector
+from trade_bot.strategy.candle_pattern.detectors.bearish_gravestone_doji import GravestoneDojiDetector
 
 # Double-candle
 from trade_bot.strategy.candle_pattern.detectors.bullish_engulfing import BullishEngulfingDetector
@@ -86,13 +86,13 @@ class PatternDetectorsOrchestrator:
         ]
 
         # --- Bullish triple ---
-        self.bullish_triple: List[TripeCandlePatternDetector] = [
+        self.bullish_triple: List[TripleCandlePatternDetector] = [
             MorningStarDetector(),
             ThreeWhiteSoldiersDetector(),
         ]
 
         # --- Bearish triple ---
-        self.bearish_triple: List[TripeCandlePatternDetector] = [
+        self.bearish_triple: List[TripleCandlePatternDetector] = [
             EveningStarDetector(),
             ThreeBlackCrowsDetector(),
         ]
