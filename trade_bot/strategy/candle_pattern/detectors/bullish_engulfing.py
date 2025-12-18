@@ -3,33 +3,69 @@ from trade_bot.strategy.candle_pattern.pattern_detector import DoubleCandlePatte
 
 class BullishEngulfingDetector(DoubleCandlePatternDetector):
     """
-    Bullish Engulfing (Reversal):
-    - Candle 1: Bearish.
-    - Candle 2: Bullish, Body engulfs Candle 1 Body.
-    - [New] Optional Shadow Engulfing (High/Low engulfing).
+    Bullish Engulfing (Reversal) - US Stock Optimized:
+    - Candle 1: Bearish (Must have a visible body).
+    - Candle 2: Bullish, Body completely covers Candle 1 Body.
+    - Logic: Bears were in control, but Bulls overwhelmed them completely in the next session.
     """
     def __init__(
         self,
         *,
-        require_strict_overlap: bool = True,
-        strength_multiplier: float = 1.2,
-        decisive_close_margin_ratio: float = 0.0,
-        min_body_ratio1: Optional[float] = None,
-        min_body_ratio2: Optional[float] = None,
+        # --- Overlap / Gap Logic ---
+        # [Optimization] Default False. 
+        # In modern markets (especially intraday), Open2 often equals Close1. 
+        # Strict gap requirements (Open2 < Close1) miss too many valid signals.
+        require_strict_overlap: bool = False,
+        
+        # --- Strength Parameters ---
+        # [Optimization] 1.05 (5%). 
+        # Body 2 must be at least 5% larger than Body 1. 
+        # 1.2 was too strict; 1.0 is too loose (could be equal size).
+        strength_multiplier: float = 1.05,
+
+        # [New] Stronger Signal. 
+        # If True, High2 > High1 AND Low2 < Low1. 
+        # This is "Outer Bar" engulfing, much more powerful than just body engulfing.
+        require_shadow_engulfing: bool = False,
+
+        # --- Wick Logic (Rejection) ---
+        # [Optimization] 0.3 (30%). 
+        # The bullish candle must close near its high. 
+        # If there is a long upper wick (>30%), it indicates selling pressure at the top.
+        max_upper_wick_ratio2: Optional[float] = 0.3,
+
+        # --- Volume Logic ---
+        # [Optimization] Default False (Safety), but HIGHLY recommended True in config.
+        # Reversals on low volume are often fakeouts (Dead Cat Bounce).
+        require_volume_increase: bool = False,
+
+        # --- Noise Filtering (Crucial) ---
+        # [Optimization] 0.15 (15%). 
+        # Candle 1 must be a real bearish candle, not a Doji. 
+        # Engulfing a flat line is statistically insignificant.
+        min_body_ratio1: Optional[float] = 0.15,
+        
+        # [Optimization] 0.20 (20%). 
+        # The engulfing candle itself must be significant in size.
+        min_body_ratio2: Optional[float] = 0.20,
+
+        # --- Hygiene ---
         min_range: float = 1e-9,
         float_tolerance: float = 1e-9,
+
+        # --- ATR Adaptation (Advanced) ---
+        # Allows dynamic body size requirements based on volatility.
         body_atr_alpha: float = 1.0,
         body_atr_bounds: Tuple[float, float] = (0.7, 1.5),
         max_body1_vs_atr: Optional[float] = None,
         min_body2_vs_atr: Optional[float] = None,
-        require_volume_increase: bool = False,
-        max_upper_wick_ratio2: Optional[float] = None,
-        require_shadow_engulfing: bool = False,  # [New] Stronger signal requirement
     ):
         self.defaults = dict(
             require_strict_overlap=require_strict_overlap,
             strength_multiplier=strength_multiplier,
-            decisive_close_margin_ratio=decisive_close_margin_ratio,
+            require_shadow_engulfing=require_shadow_engulfing,
+            max_upper_wick_ratio2=max_upper_wick_ratio2,
+            require_volume_increase=require_volume_increase,
             min_body_ratio1=min_body_ratio1,
             min_body_ratio2=min_body_ratio2,
             min_range=min_range,
@@ -38,9 +74,6 @@ class BullishEngulfingDetector(DoubleCandlePatternDetector):
             body_atr_bounds=body_atr_bounds,
             max_body1_vs_atr=max_body1_vs_atr,
             min_body2_vs_atr=min_body2_vs_atr,
-            require_volume_increase=require_volume_increase,
-            max_upper_wick_ratio2=max_upper_wick_ratio2,
-            require_shadow_engulfing=require_shadow_engulfing,
         )
 
     def detect(
@@ -60,7 +93,7 @@ class BullishEngulfingDetector(DoubleCandlePatternDetector):
         if any(x is None for x in (o1, c1, o2, c2)):
             return PatternResult(is_pattern=False)
 
-        # Direction Check
+        # 1. Direction Check
         first_bearish = c1 < o1
         second_bullish = c2 > o2
         if not (first_bearish and second_bullish):
@@ -69,17 +102,18 @@ class BullishEngulfingDetector(DoubleCandlePatternDetector):
         body1 = abs(c1 - o1)
         body2 = abs(c2 - o2)
         
-        # Note: body <= 0 check removed as direction checks implicitly ensure bodies > 0.
-        # If we want to allow engulfing a Doji, we would relax 'first_bearish'.
-
-        # 1. Body Engulfing (Overlap)
+        # 2. Body Engulfing (Overlap)
         if p["require_strict_overlap"]:
-            engulf_ok = (o2 <= c1 * (1 + p["float_tolerance"])) and (c2 >= o1 * (1 - p["float_tolerance"]))
+            # Strict: Open2 < Close1 AND Close2 > Open1
+            engulf_ok = (o2 <= c1 * (1 - p["float_tolerance"])) and \
+                        (c2 >= o1 * (1 + p["float_tolerance"]))
         else:
-            # Loose overlap (allows equal open/close)
-            engulf_ok = (o2 <= (c1 + abs(c1) * p["float_tolerance"])) and (c2 >= (o1 - abs(o1) * p["float_tolerance"]))
+            # Standard: Open2 <= Close1 AND Close2 >= Open1
+            # Allows equal opens/closes which is common in algo trading
+            engulf_ok = (o2 <= (c1 + abs(c1) * p["float_tolerance"])) and \
+                        (c2 >= (o1 - abs(o1) * p["float_tolerance"]))
 
-        # 2. Shadow Engulfing (Optional - Stronger Signal)
+        # 3. Shadow Engulfing (Optional - Stronger Signal)
         shadow_engulf_ok = True
         if p["require_shadow_engulfing"]:
             if all(x is not None for x in (h1, l1, h2, l2)):
@@ -87,25 +121,20 @@ class BullishEngulfingDetector(DoubleCandlePatternDetector):
                 shadow_engulf_ok = (h2 >= h1 * (1 - p["float_tolerance"])) and \
                                    (l2 <= l1 * (1 + p["float_tolerance"]))
             else:
-                # If data missing but requirement exists, fail safe
                 shadow_engulf_ok = False
 
-        # 3. Strength & Decisiveness
+        # 4. Strength (Size Multiplier)
         strength_ok = body2 >= body1 * p["strength_multiplier"] * (1 - p["float_tolerance"])
 
-        decisive_ok = True
-        if p["decisive_close_margin_ratio"] and p["decisive_close_margin_ratio"] > 0.0:
-            decisive_ok = c2 >= (o1 + body1 * p["decisive_close_margin_ratio"])
-
-        # 4. Upper Wick Check (Rejection check)
+        # 5. Upper Wick Check (Rejection check)
         upper_wick2_ok = True
         if h2 is not None and l2 is not None and p["max_upper_wick_ratio2"] is not None:
-            price_range2_tmp = h2 - l2
-            if price_range2_tmp > p["min_range"]:
-                upper_wick2 = h2 - max(o2, c2)
-                upper_wick2_ok = (upper_wick2 / body2) <= p["max_upper_wick_ratio2"] * (1 + p["float_tolerance"])
+            upper_wick = h2 - max(o2, c2)
+            # Safe division
+            denom = body2 if body2 > p["min_range"] else p["min_range"]
+            upper_wick2_ok = (upper_wick / denom) <= p["max_upper_wick_ratio2"] * (1 + p["float_tolerance"])
 
-        # 5. Range & Ratio Logic
+        # 6. Range & Ratio Logic
         def valid_range(h, l): return (h is not None) and (l is not None) and (h >= l)
         price_range1 = (h1 - l1) if valid_range(h1, l1) else None
         price_range2 = (h2 - l2) if valid_range(h2, l2) else None
@@ -116,7 +145,7 @@ class BullishEngulfingDetector(DoubleCandlePatternDetector):
         if ranges_required:
             return PatternResult(is_pattern=False)
 
-        # Body Ratio 1
+        # Body Ratio 1 (Must be a real candle)
         body_ratio1_ok = True
         if price_range1 and p["min_body_ratio1"]:
             body_ratio1_ok = (body1 / price_range1) >= (p["min_body_ratio1"] * (1 - p["float_tolerance"]))
@@ -130,6 +159,7 @@ class BullishEngulfingDetector(DoubleCandlePatternDetector):
             if atr and atr > 0:
                 lo, hi = p["body_atr_bounds"]
                 if hi < lo: lo, hi = hi, lo
+                # If ATR is high, we relax the body ratio requirement slightly
                 body_atr_scaler = p["body_atr_alpha"] * (atr / price_range2)
                 body_atr_scaler = max(lo, min(hi, body_atr_scaler))
                 effective_min_body_ratio2 = p["min_body_ratio2"] / body_atr_scaler
@@ -145,36 +175,30 @@ class BullishEngulfingDetector(DoubleCandlePatternDetector):
             if p["min_body2_vs_atr"]:
                 atr_body2_ok = body2 >= (p["min_body2_vs_atr"] * atr) * (1 - p["float_tolerance"])
 
-        # 成交量确认
+        # 7. Volume Confirmation
         volume_ok = True
         if p["require_volume_increase"]:
             volume_ok = (v1 is not None and v2 is not None and v2 > v1)
 
         is_pattern = all([
-            engulf_ok, strength_ok, decisive_ok,
+            engulf_ok, strength_ok,
             body_ratio1_ok, body_ratio2_ok,
             atr_body1_ok, atr_body2_ok,
             upper_wick2_ok,
             volume_ok,
-            shadow_engulf_ok,  # [New] Include shadow engulfing in final check
+            shadow_engulf_ok,
         ])
+        
         if not is_pattern:
             return PatternResult(is_pattern=False)
 
         metrics = {
-            "o1": o1, "c1": c1, "h1": h1, "l1": l1,
-            "o2": o2, "c2": c2, "h2": h2, "l2": l2,
             "body1": body1, "body2": body2,
-            "price_range1": price_range1, "price_range2": price_range2,
-            "body_ratio1": body_ratio1, "body_ratio2": body_ratio2,
-            "engulf_ok": engulf_ok, "strength_ok": strength_ok, "decisive_ok": decisive_ok,
-            "min_body_ratio1": p["min_body_ratio1"],
-            "min_body_ratio2": p["min_body_ratio2"],
+            "engulf_ok": engulf_ok, 
+            "strength_ok": strength_ok,
             "effective_min_body_ratio2": effective_min_body_ratio2,
-            "atr": atr, "body_atr_scaler": body_atr_scaler,
-            "atr_body1_ok": atr_body1_ok, "atr_body2_ok": atr_body2_ok,
             "volume_increase": (v2 / v1) if (v1 and v2 and v1 > 0) else None,
             "upper_wick_ratio2": ((h2 - max(o2, c2)) / body2) if (h2 and l2 and body2 > 0) else None,
-            "params": self.defaults | {"atr": atr} | overrides,
+            "params": {**self.defaults, "atr": atr, **overrides},
         }
         return PatternResult(True, "Bullish Engulfing", "long", metrics)

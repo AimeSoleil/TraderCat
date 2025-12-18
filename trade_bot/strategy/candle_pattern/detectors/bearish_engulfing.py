@@ -1,60 +1,70 @@
-from typing import Optional, Tuple, Any
+from typing import Optional, Tuple
 from trade_bot.strategy.candle_pattern.pattern_detector import DoubleCandlePatternDetector, PatternResult
 
 class BearishEngulfingDetector(DoubleCandlePatternDetector):
     """
-    Bearish Engulfing (2-candle) - Production Grade:
-        - Candle 1 bullish (Green) or Doji.
-        - Candle 2 bearish (Red).
-        - Candle 2 body engulfs Candle 1 body.
-        - [New] Optional Shadow Engulfing (High/Low engulfing).
-        - [Fix] Supports engulfing a Doji.
+    Bearish Engulfing (Reversal) - US Stock Optimized:
+    - Candle 1: Bullish (Must have a visible body).
+    - Candle 2: Bearish, Body completely covers Candle 1 Body.
+    - Logic: Bulls tried to push up (Gap Up or continuation), but Bears overwhelmed them, closing below Candle 1's open.
+    - Psychology: A "Bull Trap" followed by total liquidation of the previous session's gains.
     """
     def __init__(
         self,
         *,
-        # Direction requirements
-        require_first_bullish: bool = True,
-        require_second_bearish: bool = True,
+        # --- Overlap / Gap Logic ---
+        # [Optimization] Default False. 
+        # In modern markets (especially intraday), Open2 often equals Close1. 
+        # Strict gap requirements (Open2 > Close1) miss too many valid signals.
+        require_strict_overlap: bool = False,
+        
+        # --- Strength Parameters ---
+        # [Optimization] 1.05 (5%). 
+        # Body 2 must be at least 5% larger than Body 1. 
+        # Ensures it's not just a "Matching Low" or weak engulfing.
+        strength_multiplier: float = 1.05,
 
-        # Engulfing body overlap semantics
-        require_strict_overlap: bool = True,        
-        overlap_tolerance: float = 1e-9,            
+        # [New] Stronger Signal. 
+        # If True, High2 > High1 AND Low2 < Low1. 
+        # This is "Outer Bar" engulfing, much more powerful than just body engulfing.
+        require_shadow_engulfing: bool = False,
 
-        # Strength & decisiveness
-        strength_multiplier: float = 1.1,           
-        decisive_close_margin_ratio: float = 0.0,   
+        # --- Wick Logic (Rejection) ---
+        # [Optimization] 0.3 (30%). 
+        # The bearish candle must close near its low. 
+        # If there is a long lower wick (>30%), it indicates buying pressure (weakness).
+        max_lower_wick_ratio: Optional[float] = 0.3,
 
-        # Wick Logic 
-        max_lower_wick_ratio: Optional[float] = 0.4, 
+        # --- Volume Logic ---
+        # [Optimization] Default False (Safety), but HIGHLY recommended True in config.
+        # Reversals on low volume are often fakeouts.
+        require_volume_increase: bool = False,
 
-        # Volume Logic 
-        require_volume_increase: bool = False,      
+        # --- Noise Filtering (Crucial) ---
+        # [Optimization] 0.15 (15%). 
+        # Candle 1 must be a real bullish candle, not a Doji. 
+        # Engulfing a flat line is statistically insignificant.
+        min_body_ratio1: Optional[float] = 0.15,
+        
+        # [Optimization] 0.20 (20%). 
+        # The engulfing candle itself must be significant in size.
+        min_body_ratio2: Optional[float] = 0.20,
 
-        # Doji-avoidance
-        min_body_ratio1: Optional[float] = None,    
-        min_body_ratio2: Optional[float] = None,    
-
-        # Hygiene
+        # --- Hygiene ---
         min_range: float = 1e-9,
         float_tolerance: float = 1e-9,
 
-        # ATR-aware constraints
-        body2_atr_alpha: float = 1.0,               
+        # --- ATR Adaptation (Advanced) ---
+        # Allows dynamic body size requirements based on volatility.
+        body2_atr_alpha: float = 1.0,
         body2_atr_bounds: Tuple[float, float] = (0.7, 1.5),
-        max_body1_vs_atr: Optional[float] = None,   
+        max_body1_vs_atr: Optional[float] = None,
         min_body2_vs_atr: Optional[float] = None,
-
-        # [New] Stronger Signal
-        require_shadow_engulfing: bool = False,
     ):
         self.defaults = dict(
-            require_first_bullish=require_first_bullish,
-            require_second_bearish=require_second_bearish,
             require_strict_overlap=require_strict_overlap,
-            overlap_tolerance=overlap_tolerance,
             strength_multiplier=strength_multiplier,
-            decisive_close_margin_ratio=decisive_close_margin_ratio,
+            require_shadow_engulfing=require_shadow_engulfing,
             max_lower_wick_ratio=max_lower_wick_ratio,
             require_volume_increase=require_volume_increase,
             min_body_ratio1=min_body_ratio1,
@@ -65,7 +75,6 @@ class BearishEngulfingDetector(DoubleCandlePatternDetector):
             body2_atr_bounds=body2_atr_bounds,
             max_body1_vs_atr=max_body1_vs_atr,
             min_body2_vs_atr=min_body2_vs_atr,
-            require_shadow_engulfing=require_shadow_engulfing,
         )
 
     def detect(
@@ -75,49 +84,37 @@ class BearishEngulfingDetector(DoubleCandlePatternDetector):
         *,
         h1: Optional[float] = None, l1: Optional[float] = None,
         h2: Optional[float] = None, l2: Optional[float] = None,
-        v1: Optional[float] = None, v2: Optional[float] = None, 
+        v1: Optional[float] = None, v2: Optional[float] = None,
         atr: Optional[float] = None,
         **overrides
     ) -> PatternResult:
         p = {**self.defaults, **overrides}
-
-        # 1. Basic Data Integrity
+        
+        # Basic Hygiene
         if any(x is None for x in (o1, c1, o2, c2)):
             return PatternResult(is_pattern=False)
 
-        # 2. Direction Checks
-        # Note: If require_first_bullish is True, Doji (c1==o1) fails. 
-        # To allow Doji, set require_first_bullish=False in config or relax logic here.
-        # Standard Engulfing usually implies Green then Red.
+        # 1. Direction Check
         first_bullish = c1 > o1
         second_bearish = c2 < o2
-        
-        if p["require_first_bullish"] and not first_bullish:
-            # Allow Doji if body is negligible? 
-            # For strict definition, we keep it. User can disable flag if needed.
-            return PatternResult(is_pattern=False)
-            
-        if p["require_second_bearish"] and not second_bearish:
+        if not (first_bullish and second_bearish):
             return PatternResult(is_pattern=False)
 
-        # 3. Body Calculations
         body1 = abs(c1 - o1)
         body2 = abs(c2 - o2)
         
-        # [Fix] Allow body1 to be zero (Doji). Only check body2.
-        if body2 <= p["float_tolerance"]:
-            return PatternResult(is_pattern=False)
-
-        # 4. Engulfing Logic (Body)
+        # 2. Body Engulfing (Overlap)
         if p["require_strict_overlap"]:
-            # Bear Open >= Bull Close AND Bear Close <= Bull Open
-            engulf_ok = (o2 >= c1 * (1 - p["float_tolerance"])) and \
-                        (c2 <= o1 * (1 + p["float_tolerance"]))
+            # Strict: Open2 > Close1 AND Close2 < Open1
+            engulf_ok = (o2 >= c1 * (1 + p["float_tolerance"])) and \
+                        (c2 <= o1 * (1 - p["float_tolerance"]))
         else:
-            engulf_ok = (o2 >= (c1 - abs(c1) * p["overlap_tolerance"])) and \
-                        (c2 <= (o1 + abs(o1) * p["overlap_tolerance"]))
+            # Standard: Open2 >= Close1 AND Close2 <= Open1
+            # Allows equal opens/closes which is common in algo trading
+            engulf_ok = (o2 >= (c1 - abs(c1) * p["float_tolerance"])) and \
+                        (c2 <= (o1 + abs(o1) * p["float_tolerance"]))
 
-        # 5. Shadow Engulfing (New - Stronger)
+        # 3. Shadow Engulfing (Optional - Stronger Signal)
         shadow_engulf_ok = True
         if p["require_shadow_engulfing"]:
             if all(x is not None for x in (h1, l1, h2, l2)):
@@ -127,88 +124,82 @@ class BearishEngulfingDetector(DoubleCandlePatternDetector):
             else:
                 shadow_engulf_ok = False
 
-        # 6. Strength
+        # 4. Strength (Size Multiplier)
         strength_ok = body2 >= body1 * p["strength_multiplier"] * (1 - p["float_tolerance"])
 
-        # 7. Decisiveness
-        decisive_ok = True
-        if p["decisive_close_margin_ratio"] > 0.0:
-            decisive_ok = c2 <= (o1 - body1 * p["decisive_close_margin_ratio"])
+        # 5. Lower Wick Check (Rejection check)
+        lower_wick_ok = True
+        if h2 is not None and l2 is not None and p["max_lower_wick_ratio"] is not None:
+            lower_wick = max(0.0, c2 - l2)
+            # Safe division
+            denom = body2 if body2 > p["min_range"] else p["min_range"]
+            lower_wick_ok = (lower_wick / denom) <= p["max_lower_wick_ratio"] * (1 + p["float_tolerance"])
 
-        # 8. Volume
-        volume_ok = True
-        if p["require_volume_increase"]:
-            if v1 is not None and v2 is not None:
-                volume_ok = v2 > v1
-            else:
-                volume_ok = False
-
-        # 9. Wick Analysis
-        wick_ok = True
-        if p["max_lower_wick_ratio"] is not None and h2 is not None and l2 is not None:
-            lower_wick = max(0.0, c2 - l2) # Safe calc
-            if lower_wick > (body2 * p["max_lower_wick_ratio"]):
-                wick_ok = False
-
-        # 10. Range & Ratio Checks
-        def valid_range(h, l): return (h is not None and l is not None and h >= l)
+        # 6. Range & Ratio Logic
+        def valid_range(h, l): return (h is not None) and (l is not None) and (h >= l)
         price_range1 = (h1 - l1) if valid_range(h1, l1) else None
         price_range2 = (h2 - l2) if valid_range(h2, l2) else None
 
+        # Fail only if ranges are strictly required for ratios
         ranges_required = (p["min_body_ratio1"] is not None and price_range1 is None) or \
                           (p["min_body_ratio2"] is not None and price_range2 is None)
-        
         if ranges_required:
             return PatternResult(is_pattern=False)
 
+        # Body Ratio 1 (Must be a real candle)
         body_ratio1_ok = True
-        if p["min_body_ratio1"] is not None and price_range1:
+        if price_range1 and p["min_body_ratio1"]:
             body_ratio1_ok = (body1 / price_range1) >= (p["min_body_ratio1"] * (1 - p["float_tolerance"]))
 
-        # ATR Adaptive Logic
+        # Body Ratio 2 (ATR Adaptive)
+        body_ratio2_ok = True
         effective_min_body_ratio2 = p["min_body_ratio2"]
         body2_atr_scaler = 1.0
-        if price_range2 and atr and p["min_body_ratio2"]:
-            raw_scaler = p["body2_atr_alpha"] * (atr / price_range2)
-            lo, hi = p["body2_atr_bounds"]
-            body2_atr_scaler = max(lo, min(hi, raw_scaler))
-            effective_min_body_ratio2 = p["min_body_ratio2"] / body2_atr_scaler
-
-        body_ratio2_ok = True
-        if effective_min_body_ratio2 is not None and price_range2:
+        
+        if price_range2 and p["min_body_ratio2"]:
+            if atr and atr > 0:
+                lo, hi = p["body2_atr_bounds"]
+                if hi < lo: lo, hi = hi, lo
+                # If ATR is high, we relax the body ratio requirement slightly
+                raw_scaler = p["body2_atr_alpha"] * (atr / price_range2)
+                body2_atr_scaler = max(lo, min(hi, raw_scaler))
+                effective_min_body_ratio2 = p["min_body_ratio2"] / body2_atr_scaler
+            
             body_ratio2_ok = (body2 / price_range2) >= (effective_min_body_ratio2 * (1 - p["float_tolerance"]))
 
         # ATR Absolute Checks
         atr_body1_ok = True
         atr_body2_ok = True
-        if atr:
+        if atr and atr > 0:
             if p["max_body1_vs_atr"]:
-                atr_body1_ok = body1 <= (p["max_body1_vs_atr"] * atr)
+                atr_body1_ok = body1 <= (p["max_body1_vs_atr"] * atr) * (1 + p["float_tolerance"])
             if p["min_body2_vs_atr"]:
-                atr_body2_ok = body2 >= (p["min_body2_vs_atr"] * atr)
+                atr_body2_ok = body2 >= (p["min_body2_vs_atr"] * atr) * (1 - p["float_tolerance"])
 
-        # Final Decision
-        conditions = [
-            engulf_ok, shadow_engulf_ok,
-            strength_ok, decisive_ok, volume_ok, wick_ok,
-            body_ratio1_ok, body_ratio2_ok, atr_body1_ok, atr_body2_ok
-        ]
+        # 7. Volume Confirmation
+        volume_ok = True
+        if p["require_volume_increase"]:
+            volume_ok = (v1 is not None and v2 is not None and v2 > v1)
+
+        is_pattern = all([
+            engulf_ok, strength_ok,
+            body_ratio1_ok, body_ratio2_ok,
+            atr_body1_ok, atr_body2_ok,
+            lower_wick_ok,
+            volume_ok,
+            shadow_engulf_ok,
+        ])
         
-        if not all(conditions):
+        if not is_pattern:
             return PatternResult(is_pattern=False)
 
         metrics = {
-            "body1": body1,
-            "body2": body2,
-            "vol_increase": (v2/v1) if (v1 and v2 and v1 > 0) else None,
-            "lower_wick_ratio": ((c2 - l2)/body2) if (l2 and body2 > 0) else 0.0,
-            "atr_multiple": (body2 / atr) if (atr and atr > 0) else None,
-            "params": {**self.defaults, "atr": atr, **overrides}, # Added params
+            "body1": body1, "body2": body2,
+            "engulf_ok": engulf_ok, 
+            "strength_ok": strength_ok,
+            "effective_min_body_ratio2": effective_min_body_ratio2,
+            "volume_increase": (v2 / v1) if (v1 and v2 and v1 > 0) else None,
+            "lower_wick_ratio": ((c2 - l2) / body2) if (l2 and body2 > 0) else None,
+            "params": {**self.defaults, "atr": atr, **overrides},
         }
-
-        return PatternResult(
-            is_pattern=True,
-            name="Bearish Engulfing",
-            bias="short",
-            metrics=metrics
-        )
+        return PatternResult(True, "Bearish Engulfing", "short", metrics)

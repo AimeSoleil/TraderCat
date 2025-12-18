@@ -1,7 +1,8 @@
 from typing import List, Optional, Dict, Any, Tuple
 
+from trade_bot.strategy.exit_planner import ExitPlanner
 from trade_bot.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
-from trade_bot.strategy.trading_strategy import ExitPlanner, TradingStrategy
+from trade_bot.strategy.trading_strategy import TradingStrategy
 from trade_bot.strategy.signal_model import SignalModel
 from trade_bot.logger.logger import get_logger
 
@@ -14,7 +15,7 @@ class BollingerBreakoutStrategy(TradingStrategy):
         bb_period: int = 20,
         bb_std: float = 2.0,
         trailing_bw_window: int = 60,
-        bw_percentile_threshold: float = 20.0,  # percentile threshold (e.g. 30)
+        bw_percentile_threshold: float = 20.0,
         ema_fast: int = 8,
         ema_slow: int = 21,
         atr_period: int = 14,
@@ -24,6 +25,10 @@ class BollingerBreakoutStrategy(TradingStrategy):
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 2.0,
         score_threshold: float = 0.6,
+        # --- [Optimization] New Params ---
+        min_atr_percent: float = 0.5,       # Dead Stock Filter: ATR must be > 0.5% of price
+        breakout_margin_atr: float = 0.2,   # Breakout Margin: Close > BBU + 0.2 * ATR
+        # ---------------------------------
         data_provider=None,
     ):
         self.bb_period = bb_period
@@ -39,6 +44,11 @@ class BollingerBreakoutStrategy(TradingStrategy):
         self.vol_zscore_window = int(vol_zscore_window)
         self.vol_zscore_threshold = float(vol_zscore_threshold)
         self.score_threshold = score_threshold
+        
+        # [Optimization] Store new params
+        self.min_atr_percent = min_atr_percent
+        self.breakout_margin_atr = breakout_margin_atr
+        
         self.provider = data_provider
 
         # 指标字段命名（对应 provider 返回的属性）
@@ -56,7 +66,6 @@ class BollingerBreakoutStrategy(TradingStrategy):
         return "BollingerBreakout"
 
     def get_lookback_window(self) -> int:
-        # 需要的最少历史条数：用于计算 trailing_bw_window、chandelier、ATR、EMA 等
         return (
             max(
                 self.trailing_bw_window,
@@ -68,7 +77,6 @@ class BollingerBreakoutStrategy(TradingStrategy):
             + 5
         )
     
-    # Supported scoring factors
     def support_scoring_factors(self) -> List[FactorName]:
         return  [
             FactorName.BREAKOUT_TRIGGER,
@@ -83,15 +91,10 @@ class BollingerBreakoutStrategy(TradingStrategy):
     def _read_provider_bandwidth(self, bb_series: Any, idx: int) -> Tuple[
         Optional[float], List[float], Optional[float], Optional[float], Optional[float]
     ]:
-        """
-        统一读取 provider 提供的 bandwidth 字段及上/中/下带（若可用）。
-        返回: (curr_bw, bw_list, u_curr, l_curr, m_curr)
-        """
         curr_bw = None
         u_curr = l_curr = m_curr = None
         if not bb_series:
             return None, [], None, None, None
-        # 尝试读取 upper/mid/lower（用于止损/显示）
         try:
             curr_bw = getattr(bb_series[-1], self.bb_bw_field, None)
             u_curr = getattr(bb_series[-1], self.bb_up_field, None)
@@ -99,7 +102,6 @@ class BollingerBreakoutStrategy(TradingStrategy):
             m_curr = getattr(bb_series[-1], self.bb_mid_field, None)
         except Exception:
             u_curr = l_curr = m_curr = None
-        # 构建历史 bandwidth 列表：仅从 provider 的 bandwidth 字段收集
         bw_list: List[float] = []
         start = max(0, idx - self.trailing_bw_window + 1)
         for i in range(start, idx + 1):
@@ -116,13 +118,6 @@ class BollingerBreakoutStrategy(TradingStrategy):
 
     # --- 主逻辑 ---
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
-        """
-        Input:
-            symbol: 标的
-            candles: 日线序列，按时间升序排列（old ... recent），每个元素需包含 high/low/open/close/volume/date
-        Output:
-            SignalModel with fields: signal in {'buy','sell','hold'}, confidence, reason, details
-        """
         # 基本数据校验
         if not candles or len(candles) < self.get_lookback_window():
             return SignalModel(
@@ -147,7 +142,6 @@ class BollingerBreakoutStrategy(TradingStrategy):
         atr_series = self.provider.get_indicator("atr", candles, {"length": self.atr_period})
         adx_series = self.provider.get_indicator("adx", candles, {"length": self.adx_period})
 
-        # 提取 recent 值（以 provider 返回的属性命名为近似格式）
         closes = [float(c.close) for c in candles]
         highs = [float(c.high) for c in candles]
         lows = [float(c.low) for c in candles]
@@ -160,6 +154,7 @@ class BollingerBreakoutStrategy(TradingStrategy):
         idx = len(candles) - 1
         close = closes[-1]
         curr_bw, bw_list, bbu, bbl, bbm = self._read_provider_bandwidth(bb_series, idx)
+        
         if curr_bw is None or not bw_list:
             return SignalModel(
                 symbol=symbol,
@@ -169,20 +164,31 @@ class BollingerBreakoutStrategy(TradingStrategy):
                 reason=f"缺少 BB bandwidth",
                 confidence=0.0,
             )
+
+        # --- [Optimization 1] Dead Stock Filter (最小波动率检查) ---
+        # 如果 ATR 占比过小，说明该资产波动率不足以覆盖交易成本
+        atr_pct = (current_atr_val / close) * 100.0
+        if atr_pct < self.min_atr_percent:
+            return SignalModel(
+                symbol=symbol,
+                strategy=self.get_name(),
+                signal="hold",
+                date=dates[-1],
+                reason=f"波动率过低 (ATR%={atr_pct:.2f} < {self.min_atr_percent}%)",
+                confidence=0.0,
+            )
+        # -------------------------------------------------------
         
         # Squeeze判断
-        # 值越小表示相对于历史越窄（更“收缩”）
-        # 用 ≤ threshold 表示“在历史最窄的 X% 范围内视为 squeeze”
         bw_pct = self._percentile_rank(bw_list, curr_bw)
         in_squeeze = bw_pct <= self.bw_percentile_threshold
 
-        # 趋势过滤（EMA），使用封装的提取函数（兼容 provider 命名）
+        # 趋势过滤
         ema_f = self._extract_latest_indicator_value(ema_fast_series, [self.ema_fast_field])
         ema_s = self._extract_latest_indicator_value(ema_slow_series, [self.ema_slow_field])
         trend_long = ema_f > ema_s
         trend_short = ema_f < ema_s
 
-        # 判断趋势强度和市场波动
         trend_strength = self._check_trend_and_volatility(
             atr_val_history=atr_val_history,
             adx_val_history=adx_val_history,
@@ -191,48 +197,38 @@ class BollingerBreakoutStrategy(TradingStrategy):
             mode='trend',
             trend_quantiles=[0.6, 0.4]
         )
-        # 成交量 z-score 确认
+        
         recent_window = max(1, min(self.vol_zscore_window, len(vols)))
         vol_ok = self._check_volume_zscore(
             vols, recent_window, self.vol_zscore_threshold
         )
 
-        # prior swing high/low over prior_swing_bars (exclude current)
-        prior_range_high = (
-            max(highs[max(0, idx - self.prior_swing_bars) : idx])
-            if idx - self.prior_swing_bars >= 0
-            else max(highs[:-1])
-        )
-        prior_range_low = (
-            min(lows[max(0, idx - self.prior_swing_bars) : idx])
-            if idx - self.prior_swing_bars >= 0
-            else min(lows[:-1])
-        )
-
-        # long_break = (close > bbu) and (close > prior_range_high)
-        # short_break = (close < bbl) and (close < prior_range_low)
-        long_break = (close >= bbu) 
-        short_break = (close <= bbl)
+        # --- [Optimization 2] Breakout Margin (假突破过滤) ---
+        # 要求收盘价必须显著突破上轨/下轨，而不仅仅是 > bbu
+        margin = current_atr_val * self.breakout_margin_atr
+        
+        long_break = (close >= bbu + margin) 
+        short_break = (close <= bbl - margin)
+        # ---------------------------------------------------
 
         details: Dict[str, Any] = {
             "close": close,
             "bbu": bbu,
             "bbl": bbl,
             "bbm": bbm,
-            "prior_high": prior_range_high,
-            "prior_low": prior_range_low,
             "bw_pct": round(bw_pct, 2),
             "ema_fast": round(ema_f, 4),
             "ema_slow": round(ema_s, 4),
             "atr": round(current_atr_val, 6),
             "adx": round(current_adx_val, 6),
             "in_squeeze": in_squeeze,
+            "atr_pct": round(atr_pct, 2)
         }
 
         # 评分 & 生成 signal
         result: ScoringResult = None
         factors = [
-            Factor(FactorName.BREAKOUT_TRIGGER, f"布林带{"long" if long_break else "short"}突破", 0.30, long_break or short_break),
+            Factor(FactorName.BREAKOUT_TRIGGER, f"布林带{'long' if long_break else 'short'}显著突破", 0.30, long_break or short_break),
             Factor(FactorName.SQUEEZE_CONFIRM, "布林带Squeeze确认", 0.25, in_squeeze),
             Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.20, trend_strength.signal),
             Factor(FactorName.VOLUME_CONFIRM, "成交量放大", 0.15, vol_ok),
@@ -259,6 +255,14 @@ class BollingerBreakoutStrategy(TradingStrategy):
                 close_price=close
             )
             plan = planner.make_exit_plan(trading_signal=result.signal)
+            
+            # --- [Optimization 3] Mean Reversion Stop (中轨止损) ---
+            # 建议使用布林带中轨作为移动止损参考
+            if bbm:
+                plan['trailing_stop_ref'] = bbm
+                plan['stop_loss_type'] = 'mean_reversion_band'
+            # -----------------------------------------------------
+            
             details.update({"plan": plan})
 
         return SignalModel(
@@ -281,53 +285,62 @@ def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
 
     # ---------------- SWING TRADING ----------------
     swing = {
-        "bb_period": 20,                # Standard BB period for short-term volatility.
-        "bb_std": 2.0,                  # Classic BB width (2 std dev).
-        "trailing_bw_window": 60,       # 3× BB period for squeeze detection.
-        "bw_percentile_threshold": 30.0,# Strict squeeze condition (20th percentile).
-        "ema_fast": 8,                  # Fast EMA for short-term trend.
-        "ema_slow": 21,                 # Slow EMA for trend confirmation.
-        "atr_period": 14,               # ATR for volatility context.
-        "adx_period": 14,               # ADX for trend strength.
-        "rsi_period": 14,               # RSI for momentum filter.
-        "prior_swing_bars": 5,          # Minimum pivot bars for swing confirmation.
-        "vol_zscore_window": 20,        # Volume z-score window matches BB period.
-        "vol_zscore_threshold": 1.5,    # Volume spike confirmation (2σ).
-        "score_threshold": 0.6          # Slightly lenient for swing entries.
+        "bb_period": 20,
+        "bb_std": 2.0,
+        "trailing_bw_window": 60,
+        "bw_percentile_threshold": 30.0,
+        "ema_fast": 8,
+        "ema_slow": 21,
+        "atr_period": 14,
+        "adx_period": 14,
+        "rsi_period": 14,
+        "prior_swing_bars": 5,
+        "vol_zscore_window": 20,
+        "vol_zscore_threshold": 1.5,
+        "score_threshold": 0.6,
+        # [New]
+        "min_atr_percent": 0.5,      # Allow slightly lower vol for swings
+        "breakout_margin_atr": 0.1   # Faster entry
     }
 
     # ---------------- INTERMEDIATE TERM ----------------
     intermediate = {
-        "bb_period": 20,                # Same BB period (20 bars).
-        "bb_std": 2.0,                  # Standard deviation remains classic.
-        "trailing_bw_window": 80,       # Longer squeeze window for stability.
-        "bw_percentile_threshold": 25.0,# Slightly relaxed squeeze threshold.
-        "ema_fast": 13,                 # Moderate EMA for trend detection.
-        "ema_slow": 34,                 # Slower EMA for confirmation.
-        "atr_period": 14,               # ATR standard.
-        "adx_period": 14,               # ADX standard.
-        "rsi_period": 14,               # RSI standard.
-        "prior_swing_bars": 5,          # More bars for stronger pivot confirmation.
-        "vol_zscore_window": 30,        # Longer volume window for medium-term.
-        "vol_zscore_threshold": 2.5,    # Stricter volume confirmation.
-        "score_threshold": 0.7          # Balanced threshold for intermediate trades.
+        "bb_period": 20,
+        "bb_std": 2.0,
+        "trailing_bw_window": 80,
+        "bw_percentile_threshold": 25.0,
+        "ema_fast": 13,
+        "ema_slow": 34,
+        "atr_period": 14,
+        "adx_period": 14,
+        "rsi_period": 14,
+        "prior_swing_bars": 5,
+        "vol_zscore_window": 30,
+        "vol_zscore_threshold": 2.5,
+        "score_threshold": 0.7,
+        # [New]
+        "min_atr_percent": 0.8,      # Standard filter
+        "breakout_margin_atr": 0.2   # Standard confirmation
     }
 
     # ---------------- POSITION TRADING ----------------
     position = {
-        "bb_period": 20,                # BB period remains standard.
-        "bb_std": 2.0,                  # Classic BB width.
-        "trailing_bw_window": 100,      # Very long squeeze window for position trades.
-        "bw_percentile_threshold": 30.0,# Relaxed squeeze threshold for long-term setups.
-        "ema_fast": 21,                 # Slow EMA for position trend.
-        "ema_slow": 55,                 # Very slow EMA for strong trend confirmation.
-        "atr_period": 14,               # ATR standard.
-        "adx_period": 14,               # ADX standard.
-        "rsi_period": 14,               # RSI standard.
-        "prior_swing_bars": 7,          # Strong pivot confirmation for position trades.
-        "vol_zscore_window": 40,        # Longer volume window for position trades.
-        "vol_zscore_threshold": 3.0,    # Very strict volume confirmation.
-        "score_threshold": 0.8          # High threshold for position entries.
+        "bb_period": 20,
+        "bb_std": 2.0,
+        "trailing_bw_window": 100,
+        "bw_percentile_threshold": 30.0,
+        "ema_fast": 21,
+        "ema_slow": 55,
+        "atr_period": 14,
+        "adx_period": 14,
+        "rsi_period": 14,
+        "prior_swing_bars": 7,
+        "vol_zscore_window": 40,
+        "vol_zscore_threshold": 3.0,
+        "score_threshold": 0.8,
+        # [New]
+        "min_atr_percent": 1.0,      # 高波动率过滤
+        "breakout_margin_atr": 0.3   # 更严格的突破确认
     }
 
     return {

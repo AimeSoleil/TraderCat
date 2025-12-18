@@ -2,8 +2,9 @@ from typing import List, Literal, Optional, Dict, Any
 
 from trade_bot.strategy.candle_pattern.pattern_detector import PatternResult
 from trade_bot.strategy.candle_pattern.pattern_detector_orch import PatternDetectorsOrchestrator
+from trade_bot.strategy.exit_planner import ExitPlanner
 from trade_bot.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
-from trade_bot.strategy.trading_strategy import ExitPlanner, TradingStrategy, EPS
+from trade_bot.strategy.trading_strategy import TradingStrategy
 from trade_bot.strategy.signal_model import SignalModel
 from trade_bot.logger.logger import get_logger
 
@@ -15,21 +16,21 @@ class BBandsReversalStrategy(TradingStrategy):
     核心思想：
         - 当价格接近上/下轨并出现拒绝性蜡烛（长影线、吞没、反转实体）时，作为反转候选
         - 用 ATR 过滤低波动、用 ADX 避免强趋势中做逆向交易，用成交量 z-score 与动量作为确认
-        - 可配置的确认窗口（max_time_bars），以及 presets（swing/intermediate/position）
-    输出：
-        SignalModel(signal in {'buy','sell','hold'}, confidence, reason(中文), details)
+        - [优化] 动态接触阈值 (ATR-based)
+        - [优化] 中轨作为第一止盈位
     """
 
     def __init__(
         self,
         bb_period: int = 20,
         bb_std: float = 2.0,
-        touch_pct: float = 0.03,  # 价格与带位的相对容差（3%以内视为“接触”）
+        # [Optimization] Replaced fixed touch_pct with ATR multiplier
+        touch_atr_multiplier: float = 0.5,  # Dynamic threshold: 0.5 * ATR
         rsi_period: int = 14,
         atr_period: int = 14,
         adx_period: int = 14,
-        adx_threshold: float = 30.0,  # ADX 超过视为强趋势，避免逆势反转
-        max_time_bars: int = 3,  # 延续/确认窗口
+        adx_threshold: float = 30.0,
+        max_time_bars: int = 3,
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 1.0,
         macd_params: Optional[Dict[str, int]] = {"fast": 12, "slow": 26, "signal": 9},
@@ -38,7 +39,8 @@ class BBandsReversalStrategy(TradingStrategy):
     ):
         self.bb_period = bb_period
         self.bb_std = bb_std
-        self.touch_pct = float(touch_pct)
+        # [Optimization] Store ATR multiplier
+        self.touch_atr_multiplier = float(touch_atr_multiplier)
         self.rsi_period = rsi_period
         self.atr_period = atr_period
         self.adx_period = adx_period
@@ -78,7 +80,6 @@ class BBandsReversalStrategy(TradingStrategy):
             + 5
         )
     
-    # Supported scoring factors
     def support_scoring_factors(self) -> List[FactorName]:
         return  [
             FactorName.BB_REVERSAL_CANDLE,
@@ -182,16 +183,14 @@ class BBandsReversalStrategy(TradingStrategy):
         recent_window = max(1, min(self.vol_zscore_window, len(vols)))
         vol_ok, volume_z = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
 
-        # 检查是否接近上轨/下轨/中轨（相对容差
-        near_upper = (u_curr is not None) and (
-            close > u_curr or abs(close - u_curr) / (u_curr if abs(u_curr) > EPS else 1.0) <= self.touch_pct
-        )
-        near_lower = (l_curr is not None) and (
-            close < l_curr or abs(close - l_curr) / (l_curr if abs(l_curr) > EPS else 1.0) <= self.touch_pct
-        )
-        near_mid = (m_curr is not None) and (
-            abs(close - m_curr) / (m_curr if abs(m_curr) > EPS else 1.0) <= self.touch_pct
-        )
+        # --- [Optimization 1] Adaptive Bandwidth (波动率自适应带宽) ---
+        # 使用 ATR 计算动态接触阈值，而不是固定的百分比
+        touch_threshold = current_atr_val * self.touch_atr_multiplier
+
+        near_upper = (u_curr is not None) and (close >= u_curr - touch_threshold)
+        near_lower = (l_curr is not None) and (close <= l_curr + touch_threshold)
+        near_mid = (m_curr is not None) and (abs(close - m_curr) <= touch_threshold)
+        # -----------------------------------------------------------
 
         # 检测拒绝蜡烛（以最近 self.max_time_bars 根内的任意一根作为确认）
         orchestrator = PatternDetectorsOrchestrator()
@@ -305,6 +304,14 @@ class BBandsReversalStrategy(TradingStrategy):
                 close_price=close
             )
             plan = planner.make_exit_plan(trading_signal=result.signal)
+            
+            # --- [Optimization 2] Mean Reversion Target (中轨止盈) ---
+            # 布林带反转的第一目标位通常是中轨
+            if m_curr:
+                plan['take_profit_ref'] = m_curr
+                plan['take_profit_type'] = 'mean_reversion_mid'
+            # -------------------------------------------------------
+            
             details.update({"plan": plan})
 
         return SignalModel(
@@ -319,60 +326,57 @@ class BBandsReversalStrategy(TradingStrategy):
 
 def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Bollinger Band reversal strategy presets (Optimized by Pro Algo Trader).
-    
-    Logic:
-    - Swing: High frequency, tolerates volatility (High ADX), wider touch tolerance, quick exit.
-    - Intermediate: Balanced approach.
-    - Position: High precision, requires trend exhaustion (Low ADX), extreme deviation (2.2 Std), strict volume.
+    Bollinger Band reversal strategy presets (Optimized).
     """
-
-    # ---------------- SWING (Aggressive / Short-term) ----------------
+    # ---------------- SWING ----------------
     swing = {
         "bb_period": 20,
         "bb_std": 2.0,
-        "touch_pct": 0.015,             # 1.5% tolerance. Short-term charts are noisy, give it room.
-        "rsi_period": 9,                # Faster RSI (9) for quicker divergence detection.
+        # [Opt] Dynamic touch: 0.5 ATR is generous for swings
+        "touch_atr_multiplier": 0.5,    
+        "rsi_period": 9,
         "atr_period": 14,
         "adx_period": 14,
-        "adx_threshold": 35.0,          # Allow trading in higher volatility environments.
-        "max_time_bars": 3,             # Look for pattern within 3 bars of touching band.
+        "adx_threshold": 35.0,
+        "max_time_bars": 3,
         "vol_zscore_window": 20,
-        "vol_zscore_threshold": 1.2,    # Moderate volume confirmation (>1.2 sigma).
-        "macd_params": {"fast": 8, "slow": 17, "signal": 9}, # Faster MACD settings.
-        "score_threshold": 0.55         # Lower threshold to generate more signals.
+        "vol_zscore_threshold": 1.2,
+        "macd_params": {"fast": 8, "slow": 17, "signal": 9},
+        "score_threshold": 0.55
     }
 
-    # ---------------- INTERMEDIATE (Balanced / Swing-to-Mid) ----------------
+    # ---------------- INTERMEDIATE ----------------
     intermediate = {
         "bb_period": 20,
         "bb_std": 2.0,
-        "touch_pct": 0.01,              # 1.0% tolerance. Standard precision.
+        # [Opt] Stricter touch: 0.3 ATR
+        "touch_atr_multiplier": 0.3,    
         "rsi_period": 14,
         "atr_period": 14,
         "adx_period": 14,
-        "adx_threshold": 30.0,          # Standard trend filter.
-        "max_time_bars": 5,             # Allow a consolidation week before reversal.
+        "adx_threshold": 30.0,
+        "max_time_bars": 5,
         "vol_zscore_window": 20,
-        "vol_zscore_threshold": 1.5,    # Stronger volume required (>1.5 sigma).
+        "vol_zscore_threshold": 1.5,
         "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-        "score_threshold": 0.65         # Quality over quantity.
+        "score_threshold": 0.65
     }
 
-    # ---------------- POSITION (Conservative / Long-term) ----------------
+    # ---------------- POSITION ----------------
     position = {
         "bb_period": 20,
-        "bb_std": 2.2,                  # Use 2.2 StdDev. 2.0 is often noise on daily/weekly charts.
-        "touch_pct": 0.005,             # 0.5% tolerance. Price must essentially HIT the band.
-        "rsi_period": 21,               # Slower RSI to filter noise.
+        "bb_std": 2.2,
+        # [Opt] Very strict touch: 0.1 ATR (Must almost hit the band)
+        "touch_atr_multiplier": 0.1,    
+        "rsi_period": 21,
         "atr_period": 21,
         "adx_period": 14,
-        "adx_threshold": 25.0,          # Strict: Trend must be weak/exhausted to reverse long-term.
-        "max_time_bars": 8,             # Reversals take time to form (e.g., rounded bottom).
-        "vol_zscore_window": 40,        # Compare against longer volume history.
-        "vol_zscore_threshold": 1.8,    # Significant institutional volume required.
+        "adx_threshold": 25.0,
+        "max_time_bars": 8,
+        "vol_zscore_window": 40,
+        "vol_zscore_threshold": 1.8,
         "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-        "score_threshold": 0.75         # Only enter on high-confidence signals.
+        "score_threshold": 0.75
     }
 
     return {

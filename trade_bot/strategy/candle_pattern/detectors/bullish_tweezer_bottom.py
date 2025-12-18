@@ -1,45 +1,60 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from trade_bot.strategy.candle_pattern.pattern_detector import PatternResult, DoubleCandlePatternDetector
 
 class TweezerBottomDetector(DoubleCandlePatternDetector):
     """
-    Detects a Tweezer Bottom pattern across two consecutive candles.
-    - Candle 1: Bearish.
-    - Candle 2: Bullish.
-    - Lows are approximately equal (Support test).
-    - [Improved] Flexible shadow logic (Supports Marubozu/Shaved Bottom).
-    - [New] Volume confirmation support.
+    Tweezer Bottom (Bullish, 2-candle) - US Stock Optimized:
+        - Pattern: Two candles with matching Lows (Support Test).
+        - Candle 1: Bearish (Bears push to Low).
+        - Candle 2: Bullish (Bears try again, fail, Bulls take over).
+        - Logic: Double rejection at the same price level.
     """
 
     def __init__(
         self,
         *,
-        # Similarity controls
-        low_similarity_tolerance: float = 0.001,          # 0.1% of price scale
-        tolerance_scale_alpha: float = 1.0,               # ATR scaling factor
-        tolerance_scale_bounds: tuple = (0.7, 1.5),
+        # --- Similarity Controls (Crucial for Algo) ---
+        # [Optimization] Changed from 0.001 to 0.05 (5%).
+        # We calculate tolerance based on the Candle Range. 
+        # If a stock moves $1.00, we allow the lows to differ by $0.05.
+        # 0.001 was too strict for real-world noise.
+        low_similarity_tolerance: float = 0.05,          
+        
+        # ATR scaling allows looser tolerance in high volatility
+        tolerance_scale_alpha: float = 1.0,               
+        tolerance_scale_bounds: Tuple[float, float] = (0.7, 1.5),
 
-        # Candle role requirements
+        # --- Candle Roles ---
+        # [Optimization] True. 
+        # Tweezer Bottom is a reversal. We need a Down move (Red) followed by an Up move (Green).
         require_bearish_first: bool = True,
         require_bullish_second: bool = True,
 
-        # Body filters
-        min_body_ratio_first: float = 0.10,               
-        min_body_ratio_second: float = 0.10,              
+        # --- Body Filters ---
+        # [Optimization] 0.15 (15%).
+        # We want visible bodies to ensure significant trading activity.
+        min_body_ratio_first: float = 0.15,               
+        min_body_ratio_second: float = 0.15,              
 
-        # Shadow requirements (Relaxed defaults for broader detection)
-        require_lower_shadow_first: bool = False,   # False allows Shaved Bottom
+        # --- Shadow Logic ---
+        # [Optimization] False. 
+        # A "Shaved Bottom" (Marubozu) hitting support is just as valid as a wick.
+        require_lower_shadow_first: bool = False,   
         require_lower_shadow_second: bool = False,  
 
-        # Hygiene / numeric
+        # --- Volume Logic ---
+        # [Optimization] False (Default), but recommended True in config.
+        # Rejection on higher volume (Vol2 > Vol1) is a stronger signal.
+        require_volume_increase: bool = False,      
+
+        # --- Hygiene ---
         min_range: float = 1e-9,
         float_tolerance: float = 1e-9,
 
-        # Optional hard caps using ATR
-        max_low_diff_atr_ratio: Optional[float] = None,   
-
-        # Volume requirements
-        require_volume_increase: bool = False,      # Vol2 > Vol1
+        # --- ATR Hard Caps ---
+        # [Optimization] 0.1 (10% of ATR).
+        # Even if ranges are huge, the difference in Lows shouldn't exceed 10% of the daily ATR.
+        max_low_diff_atr_ratio: Optional[float] = 0.1,   
     ):
         self.defaults = dict(
             low_similarity_tolerance=low_similarity_tolerance,
@@ -91,44 +106,45 @@ class TweezerBottomDetector(DoubleCandlePatternDetector):
         body_ratio1 = body1 / range1
         body_ratio2 = body2 / range2
 
-        # Role requirements
+        # 1. Role requirements
         bearish_first_ok = (c1 < o1) if p["require_bearish_first"] else True
         bullish_second_ok = (c2 > o2) if p["require_bullish_second"] else True
 
-        # Body filters
+        # 2. Body filters
         body_first_ok = (body_ratio1 >= p["min_body_ratio_first"] * (1 - p["float_tolerance"]))
         body_second_ok = (body_ratio2 >= p["min_body_ratio_second"] * (1 - p["float_tolerance"]))
 
-        # Lower shadows presence
+        # 3. Lower shadows presence
         lower_shadow_first_ok = (lower_shadow1 > 0.0) if p["require_lower_shadow_first"] else True
         lower_shadow_second_ok = (lower_shadow2 > 0.0) if p["require_lower_shadow_second"] else True
 
-        # Similar lows (The Core)
+        # 4. Similar lows (The Core Logic)
         low_diff = abs(l1 - l2)
 
-        # Local price scale
+        # Scale tolerance based on the AVERAGE RANGE of the two candles.
         avg_range = (range1 + range2) / 2.0
-        price_scale = avg_range if avg_range > p["min_range"] else max(l1, l2, p["min_range"])
+        
+        # Base tolerance calculation
+        tol = p["low_similarity_tolerance"] * avg_range
 
-        tol = p["low_similarity_tolerance"] * price_scale
-
-        # ATR scaler
+        # ATR scaler (Adaptive)
         atr_scaler = 1.0
         if atr is not None and atr > 0.0:
             lo, hi = p["tolerance_scale_bounds"]
             if hi < lo: lo, hi = hi, lo
-            atr_scaler = p["tolerance_scale_alpha"] * (atr / max(price_scale, p["min_range"]))
+            # If ATR is high relative to current range, allow slightly more tolerance
+            atr_scaler = p["tolerance_scale_alpha"] * (atr / avg_range)
             atr_scaler = max(lo, min(hi, atr_scaler))
             tol *= atr_scaler
 
-        # Optional hard cap using ATR
+        # Optional hard cap using ATR (Safety net)
         atr_cap_ok = True
         if atr is not None and atr > 0.0 and p["max_low_diff_atr_ratio"]:
             atr_cap_ok = (low_diff <= (p["max_low_diff_atr_ratio"] * atr) * (1 + p["float_tolerance"]))
 
         lows_similar_ok = (low_diff <= tol * (1 + p["float_tolerance"])) and atr_cap_ok
 
-        # Volume Confirmation
+        # 5. Volume Confirmation
         volume_ok = True
         if p["require_volume_increase"]:
             if v1 is not None and v2 is not None:
@@ -136,18 +152,15 @@ class TweezerBottomDetector(DoubleCandlePatternDetector):
             else:
                 volume_ok = False
 
-        is_pattern = (
-            bearish_first_ok and
-            bullish_second_ok and
-            body_first_ok and
-            body_second_ok and
-            lower_shadow_first_ok and
-            lower_shadow_second_ok and
-            lows_similar_ok and
-            volume_ok
-        )
+        # Final Decision
+        conditions = [
+            bearish_first_ok, bullish_second_ok,
+            body_first_ok, body_second_ok,
+            lower_shadow_first_ok, lower_shadow_second_ok,
+            lows_similar_ok, volume_ok
+        ]
 
-        if not is_pattern:
+        if not all(conditions):
             return PatternResult(is_pattern=False)
 
         metrics: Dict[str, Any] = {
@@ -155,6 +168,7 @@ class TweezerBottomDetector(DoubleCandlePatternDetector):
             "tolerance": tol,
             "atr_scaler": atr_scaler,
             "volume_increase": (v2 / v1) if (v1 and v2 and v1 > 0) else None,
+            "params": {**self.defaults, "atr": atr, **overrides},
         }
 
         return PatternResult(True, "Tweezer Bottom", "long", metrics)

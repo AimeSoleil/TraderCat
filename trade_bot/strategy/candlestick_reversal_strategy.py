@@ -1,8 +1,9 @@
 from typing import List, Optional, Dict, Any, Literal
 
 from trade_bot.strategy.candle_pattern.pattern_detector_orch import PatternDetectorsOrchestrator
+from trade_bot.strategy.exit_planner import ExitPlanner
 from trade_bot.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
-from trade_bot.strategy.trading_strategy import ExitPlanner, TradingStrategy
+from trade_bot.strategy.trading_strategy import TradingStrategy
 from trade_bot.strategy.signal_model import SignalModel
 from trade_bot.logger.logger import get_logger
 
@@ -70,6 +71,24 @@ class CandlestickReversalStrategy(TradingStrategy):
             FactorName.CONFLUENCE_BONUS
         ]
 
+    # [New] Helper for Confirmation Candle
+    def _check_reversal_confirmation(
+        self, 
+        closes: List[float], 
+        effective_bias: str,
+    ) -> bool:
+        """确认反转有效性：价格是否朝着预期方向移动"""
+        if len(closes) < 3:
+            return False
+        
+        # 简单的确认：最新收盘价优于前一根
+        if effective_bias == "long":
+            return closes[-1] > closes[-2]
+        elif effective_bias == "short":
+            return closes[-1] < closes[-2]
+        
+        return False
+
     # ---------- 主决策逻辑 ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
         if not candles or len(candles) < max(self.ema_slow, self.atr_period, 3):
@@ -105,7 +124,7 @@ class CandlestickReversalStrategy(TradingStrategy):
         current_adx_val = adx_val_history[-1] if adx_val_history else 0.0
         current_rsi_val = rsi_val_history[-1] if rsi_val_history else 50.0
 
-        # ---------- 趋势判断 ----------
+        # ---------- 趋势判断 (Major Trend) ----------
         trend_long = (current_ema_fast_val > current_ema_slow_val) if (current_ema_fast_val and current_ema_slow_val) else False
         trend_short = (current_ema_fast_val < current_ema_slow_val) if (current_ema_fast_val and current_ema_slow_val) else False
 
@@ -113,7 +132,8 @@ class CandlestickReversalStrategy(TradingStrategy):
         idx = len(candles) - 1
         orchestrator = PatternDetectorsOrchestrator()
 
-        # 关键：在上升趋势中寻找看涨反转（回调买入），在下降趋势中寻找看跌反转
+        # 策略：在上升趋势中寻找看涨反转（回调买入），在下降趋势中寻找看跌反转（反弹做空）
+        # 注意：这里 trend_ok 传入的是主趋势方向，用于过滤逆势信号
         res_bull = orchestrator.detect_bullish(opens, highs, lows, closes, idx, atr=current_atr_val, trend_ok=trend_long)
         res_bear = orchestrator.detect_bearish(opens, highs, lows, closes, idx, atr=current_atr_val, trend_ok=trend_short)
 
@@ -126,8 +146,8 @@ class CandlestickReversalStrategy(TradingStrategy):
             if trend_long: chosen_res = res_bull # Uptrend -> Buy Dip
             elif trend_short: chosen_res = res_bear # Downtrend -> Sell Rally
             else: 
-                # 无明确趋势时，比较信号强度（或直接 hold）
-                chosen_res = None  # 或根据 confidence/metrics 选择
+                # 无明确趋势时，保持中立
+                chosen_res = None 
         elif found_bull:
             chosen_res = res_bull
         elif found_bear:
@@ -156,14 +176,25 @@ class CandlestickReversalStrategy(TradingStrategy):
         recent_window = max(1, min(self.vol_zscore_window, len(vols)))
         vol_ok, volume_z = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
 
+        # [Optimization] Use parent class momentum check
         mom_ok = False
-        if chosen_res and chosen_res.is_pattern:
-            mom_ok = self._momentum_confirm(rsi_val_history, macd_hist_val_history, effective_bias)
+        if chosen_res and chosen_res.is_pattern and effective_bias:
+            mom_ok = self._momentum_confirm(
+                rsi_val_history=rsi_val_history,
+                macd_hist_val_history=macd_hist_val_history,
+                prefer=effective_bias
+            )
+
+        # [Optimization] Reversal Confirmation (Price Action)
+        reversal_confirmed = False
+        if effective_bias:
+            reversal_confirmed = self._check_reversal_confirmation(
+                closes, effective_bias
+            )
 
         # ---------- 评分系统 ----------
         found_any = bool(chosen_res and chosen_res.is_pattern)
 
-        # 修正：使用 "long"/"short" 进行比较
         trend_direction_ok = (
             (effective_bias == "long" and trend_long) or
             (effective_bias == "short" and trend_short)
@@ -172,10 +203,10 @@ class CandlestickReversalStrategy(TradingStrategy):
         factors = [
             Factor(FactorName.REVERSAL_CANDLE, f"检测到烛形({pattern})", 0.35, found_any),
             Factor(FactorName.VOLUME_CONFIRM, "成交量放大", 0.20, vol_ok),
-            Factor(FactorName.TREND_STRENGTH, "趋势强度(ADX)", 0.15, bool(trend_strength.signal)),
+            Factor(FactorName.TREND_STRENGTH, "趋势强度(ADX)", 0.10, bool(trend_strength.signal)),
             Factor(FactorName.TREND_DIRECTION_CONFIRM, "顺大势(EMA)", 0.15, trend_direction_ok),
             Factor(FactorName.MOMENTUM_CONFIRM, "动量确认(RSI/MACD)", 0.10, mom_ok),
-            Factor(FactorName.CONFLUENCE_BONUS, "三重共振", 0.05, mom_ok and bool(trend_strength.signal) and trend_direction_ok)
+            Factor(FactorName.CONFLUENCE_BONUS, "反转确认(Price Action)", 0.10, reversal_confirmed)
         ]
 
         engine = ScoringEngine(
@@ -200,12 +231,23 @@ class CandlestickReversalStrategy(TradingStrategy):
             "vol_zscore": round(volume_z, 3) if volume_z is not None else None,
             "trend_direction_ok": trend_direction_ok,
             "momentum_ok": mom_ok,
+            "reversal_confirmed": reversal_confirmed,
             "score": round(result.score, 3),
         }
             
         if result.signal != 'hold':
             planner = ExitPlanner(highs=highs, lows=lows, atr=current_atr_val, close_price=close)
+            
+            # [Optimization] Dynamic Stop Loss for Reversals
             plan = planner.make_exit_plan(trading_signal=result.signal)
+            
+            # Adjust stop loss based on ADX (Weaker trend = tighter stop)
+            sl_mult = 1.0 if current_adx_val < 20 else 1.5
+            if result.signal == 'long':
+                plan['stop_loss'] = close - (sl_mult * current_atr_val)
+            elif result.signal == 'short':
+                plan['stop_loss'] = close + (sl_mult * current_atr_val)
+                
             details.update({"plan": plan})
 
         return SignalModel(

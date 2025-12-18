@@ -1,45 +1,68 @@
 from typing import Optional, Tuple
 from trade_bot.strategy.candle_pattern.pattern_detector import PatternResult, TripleCandlePatternDetector
 
-# --- Morning Star standalone detector ---
 class MorningStarDetector(TripleCandlePatternDetector):
     """
-    Morning Star (bullish, 3-candle) - Production Grade:
-        - Candle 1: Long Bearish.
-        - Candle 2: Small body (Indecision), gaps down (optional).
-        - Candle 3: Long Bullish, gaps up (optional), closes deep into C1.
-        - [New] Volume and High-breakout confirmation.
+    Morning Star (bullish, 3-candle) - US Stock Optimized:
+        - Candle 1: Long Bearish (Trend continuation).
+        - Candle 2: Small body (Indecision/Star), gaps down from C1.
+        - Candle 3: Long Bullish, gaps up from C2 (optional), closes deep into C1.
+        - Logic: Exhaustion of bears (C2) followed by strong bull attack (C3).
     """
     def __init__(
         self,
         *,
-        # Core semantics
-        small_body2_ratio_vs_body1: float = 0.50,   # body2 <= body1 * 0.5
-        min_body3_ratio_vs_body1: float = 0.80,     # body3 >= body1 * 0.8
-        require_c3_above_midpoint1: bool = True,    # c3 >= midpoint(o1, c1)
+        # --- Core Shape Parameters ---
+        # [Optimization] 0.3 (30%). 
+        # The star (C2) should be small relative to the first candle. 
+        # 0.5 is too big (looks like a normal candle).
+        small_body2_ratio_vs_body1: float = 0.30,   
+
+        # [Optimization] 0.5 (50%). 
+        # C3 doesn't need to be huge (0.8), it just needs to penetrate deep enough into C1.
+        min_body3_ratio_vs_body1: float = 0.50,     
+
+        # [Optimization] True. 
+        # This is the textbook definition. C3 must close above the midpoint of C1 to confirm reversal.
+        require_c3_above_midpoint1: bool = True,    
         midpoint_margin_ratio: float = 0.0,         
 
-        # Overlap / gaps (Stock market: True, Crypto/Forex: False)
-        require_gap_down_into_c2: bool = False,     
+        # --- Gap / Structure Parameters (US Stock Specific) ---
+        # [Optimization] True. 
+        # In US Stocks, gaps are meaningful. We expect C2 to open lower than C1 closed.
+        require_gap_down_into_c2: bool = True,     
+        
+        # [Optimization] False. 
+        # Gap up into C3 is rare even in stocks. Usually C3 opens inside C2's body or at C2's close.
         require_gap_up_into_c3: bool = False,       
+        
         lenient_overlap_tolerance: float = 1e-9,    
 
-        # Indecision checks for candle 2
+        # --- Indecision / Star Quality ---
+        # [Optimization] 0.3 (30%). 
+        # The body of the star should be small relative to its own range (wicks).
         max_body2_ratio_vs_range2: Optional[float] = 0.30,  
-        min_shadows2_to_body: Optional[float] = None,       
-
-        # Hygiene
+        
+        # [Optimization] None. 
+        # Removed min_shadows2_to_body as it's redundant if we check body ratio vs range.
+        
+        # --- Hygiene ---
         min_range: float = 1e-9,
         float_tolerance: float = 1e-9,
 
-        # ATR adaptation
+        # --- ATR Adaptation ---
         body3_atr_alpha: float = 1.0,                          
         body3_atr_bounds: Tuple[float, float] = (0.7, 1.5),    
         min_body3_vs_atr: Optional[float] = None,               
 
-        # Optional conditions
-        require_c3_above_high2: bool = False,          # c3 close > h2
-        require_volume_increase_c3: bool = False,      # v3 > v2
+        # --- Confirmation ---
+        # [Optimization] True. 
+        # C3 closing above the high of the star (C2) confirms the breakout.
+        require_c3_above_high2: bool = True,          
+        
+        # [Optimization] False (Default), but HIGHLY recommended True in config.
+        # Reversals on low volume are often fakeouts.
+        require_volume_increase_c3: bool = False,      
     ):
         self.defaults = dict(
             small_body2_ratio_vs_body1=small_body2_ratio_vs_body1,
@@ -50,7 +73,6 @@ class MorningStarDetector(TripleCandlePatternDetector):
             require_gap_up_into_c3=require_gap_up_into_c3,
             lenient_overlap_tolerance=lenient_overlap_tolerance,
             max_body2_ratio_vs_range2=max_body2_ratio_vs_range2,
-            min_shadows2_to_body=min_shadows2_to_body,
             min_range=min_range,
             float_tolerance=float_tolerance,
             body3_atr_alpha=body3_atr_alpha,
@@ -95,34 +117,17 @@ class MorningStarDetector(TripleCandlePatternDetector):
         midpoint1 = (o1 + c1) / 2.0
 
         def valid_range(h, l): return (h is not None) and (l is not None) and (h >= l)
-        price_range1 = (h1 - l1) if valid_range(h1, l1) else None
         price_range2 = (h2 - l2) if valid_range(h2, l2) else None
         price_range3 = (h3 - l3) if valid_range(h3, l3) else None
-
-        # Fail safely if ranges required but missing
-        ranges_required = (p["max_body2_ratio_vs_range2"] is not None and price_range2 is None)
-        if ranges_required:
-            return PatternResult(is_pattern=False)
 
         # (1) Candle 2 small relative to body1
         small2_ok = body2 <= (body1 * p["small_body2_ratio_vs_body1"] * (1 + p["float_tolerance"]))
 
         # Optional: indecision using candle 2’s own range
         indecision2_ok = True
-        shadows2_ok = True
-        body_ratio2_vs_range2 = None
         if price_range2 is not None and p["max_body2_ratio_vs_range2"] is not None:
             body_ratio2_vs_range2 = body2 / price_range2
             indecision2_ok = (body_ratio2_vs_range2 <= (p["max_body2_ratio_vs_range2"] * (1 + p["float_tolerance"])))
-            
-            if p["min_shadows2_to_body"] is not None and p["min_shadows2_to_body"] > 0.0:
-                upper2 = max(0.0, (h2 - max(o2, c2)))
-                lower2 = max(0.0, (min(o2, c2) - l2))
-                # Handle zero body case for shadow ratio
-                safe_body2 = body2 if body2 > p["min_range"] else p["min_range"]
-                upper2_ok = (upper2 / safe_body2) >= (p["min_shadows2_to_body"] * (1 - p["float_tolerance"]))
-                lower2_ok = (lower2 / safe_body2) >= (p["min_shadows2_to_body"] * (1 - p["float_tolerance"]))
-                shadows2_ok = upper2_ok and lower2_ok
 
         # (2) Candle 3 closes above midpoint of candle 1
         midpoint_ok = True
@@ -151,11 +156,13 @@ class MorningStarDetector(TripleCandlePatternDetector):
         gap_down_ok = True
         gap_up_ok = True
         if p["require_gap_down_into_c2"]:
-            gap_down_ok = o2 <= (min(o1, c1) * (1 - p["lenient_overlap_tolerance"]))
+            # Open2 < Close1 (Standard Gap Down)
+            gap_down_ok = o2 <= (c1 * (1 - p["lenient_overlap_tolerance"]))
         if p["require_gap_up_into_c3"]:
-            gap_up_ok = o3 >= (max(o2, c2) * (1 + p["lenient_overlap_tolerance"]))
+            # Open3 > Close2 (Standard Gap Up)
+            gap_up_ok = o3 >= (c2 * (1 + p["lenient_overlap_tolerance"]))
 
-        # Optional: c3 close > h2
+        # (5) Breakout Confirmation
         close_above_high2_ok = True
         if p["require_c3_above_high2"]:
             if h2 is None:
@@ -163,14 +170,14 @@ class MorningStarDetector(TripleCandlePatternDetector):
             else:
                 close_above_high2_ok = c3 >= h2 * (1 - p["float_tolerance"])
 
-        # Optional: Volume
+        # (6) Volume Confirmation
         volume_ok = True
         if p["require_volume_increase_c3"]:
             volume_ok = (v2 is not None and v3 is not None and v3 > v2)
 
         is_pattern = all([
             first_bearish, third_bullish,
-            small2_ok, indecision2_ok, shadows2_ok,
+            small2_ok, indecision2_ok,
             midpoint_ok, body3_vs_body1_ok,
             gap_down_ok, gap_up_ok,
             atr_body3_ok, close_above_high2_ok, volume_ok,
@@ -182,13 +189,11 @@ class MorningStarDetector(TripleCandlePatternDetector):
         metrics = {
             "body1": body1, "body2": body2, "body3": body3,
             "midpoint1": midpoint1,
-            "price_range2": price_range2,
-            "body_ratio2_vs_range2": body_ratio2_vs_range2,
             "atr": atr,
             "body3_atr_scaler": body3_atr_scaler,
             "effective_min_body3_ratio_vs_body1": effective_min_body3_ratio_vs_body1,
             "volume_increase_c3": (v3 / v2) if (v2 and v3 and v2 > 0) else None,
-            "params": {**self.defaults, "atr": atr, **overrides}, # Safe merge
+            "params": {**self.defaults, "atr": atr, **overrides},
         }
 
         return PatternResult(

@@ -39,8 +39,12 @@ def _first_match(results: List[PatternResult]) -> PatternResult:
 
 class PatternDetectorsOrchestrator:
     """
-    Priority-driven pattern orchestrator that tries single-, double-, triple-candle detectors
-    for bullish and bearish flows. ATR and trend flags can be passed through as overrides.
+    Priority-driven pattern orchestrator.
+    
+    OPTIMIZATION:
+    1. Priority Order: Triple -> Double -> Single. 
+    (Complex patterns are stronger and contain simpler ones).
+    2. Params: Initialized with 'Production Grade' strictness to reduce noise.
     """
 
     _instance = None
@@ -52,49 +56,54 @@ class PatternDetectorsOrchestrator:
         return cls._instance
 
     def _initialize(self):
-        # Instantiate detectors once (state-less; params can be overridden per call)
-        # --- Bullish single ---
-        self.bullish_single: List[SingleCandlePatternDetector] = [
-            HammerDetector(),            # typical bullish single
-            StandardDojiDetector(),         # neutral; included to match your legacy priority
-            DragonflyDojiDetector(),      # bullish-leaning
-            SpinningTopDetector(),        # neutral
-        ]
-
-        # --- Bearish single ---
-        self.bearish_single: List[SingleCandlePatternDetector] = [
-            ShootingStarDetector(),       # typical bearish single
-            StandardDojiDetector(),
-            GravestoneDojiDetector(),     # bearish-leaning
-            SpinningTopDetector(),
-        ]
-
-        # --- Bullish double ---
-        self.bullish_double: List[DoubleCandlePatternDetector] = [
-            BullishEngulfingDetector(),
-            PiercingPatternDetector(),
-            BullishHaramiDetector(),
-            TweezerBottomDetector(),        # requires lows via kwargs
-        ]
-
-        # --- Bearish double ---
-        self.bearish_double: List[DoubleCandlePatternDetector] = [
-            BearishEngulfingDetector(),
-            DarkCloudCoverDetector(),
-            BearishHaramiDetector(),
-            TweezerTopDetector(),           # requires highs via kwargs
-        ]
-
-        # --- Bullish triple ---
+        # ==========================================
+        # 1. TRIPLE CANDLE PATTERNS (Highest Priority)
+        # ==========================================
+        
         self.bullish_triple: List[TripleCandlePatternDetector] = [
             MorningStarDetector(),
             ThreeWhiteSoldiersDetector(),
         ]
 
-        # --- Bearish triple ---
         self.bearish_triple: List[TripleCandlePatternDetector] = [
             EveningStarDetector(),
             ThreeBlackCrowsDetector(),
+        ]
+
+        # ==========================================
+        # 2. DOUBLE CANDLE PATTERNS (Medium Priority)
+        # ==========================================
+
+        self.bullish_double: List[DoubleCandlePatternDetector] = [
+            BullishEngulfingDetector(),
+            PiercingPatternDetector(),
+            TweezerBottomDetector(),
+            BullishHaramiDetector(),
+        ]
+
+        self.bearish_double: List[DoubleCandlePatternDetector] = [
+            BearishEngulfingDetector(),
+            DarkCloudCoverDetector(),
+            TweezerTopDetector(),
+            BearishHaramiDetector(),
+        ]
+
+        # ==========================================
+        # 3. SINGLE CANDLE PATTERNS (Lowest Priority)
+        # ==========================================
+        
+        self.bullish_single: List[SingleCandlePatternDetector] = [
+            HammerDetector(),
+            DragonflyDojiDetector(),
+            StandardDojiDetector(),
+            SpinningTopDetector(),
+        ]
+
+        self.bearish_single: List[SingleCandlePatternDetector] = [
+            ShootingStarDetector(),
+            GravestoneDojiDetector(),
+            StandardDojiDetector(),
+            SpinningTopDetector(),
         ]
 
     # -------------------------
@@ -114,8 +123,7 @@ class PatternDetectorsOrchestrator:
     ) -> PatternResult:
         """
         Detect bullish pattern at index `idx` with priority:
-        single -> double -> triple.
-        `trend_ok` (if provided) can be used by detectors that want trend context.
+        TRIPLE -> DOUBLE -> SINGLE.
         """
         overrides = {"atr": atr}
         if trend_ok is not None:
@@ -125,21 +133,25 @@ class PatternDetectorsOrchestrator:
 
         results: List[PatternResult] = []
 
-        # Single-candle
-        if idx >= 0:
-            for det in self.bullish_single:
+        # 1. Triple-candle (Strongest)
+        if idx >= 2:
+            for det in self.bullish_triple:
                 r = det.detect(
-                    opens[idx], highs[idx], lows[idx], closes[idx],
+                    opens[idx - 2], closes[idx - 2],
+                    opens[idx - 1], closes[idx - 1],
+                    opens[idx],     closes[idx],
+                    h1=highs[idx - 2], l1=lows[idx - 2],
+                    h2=highs[idx - 1], l2=lows[idx - 1],
+                    h3=highs[idx],     l3=lows[idx],
                     **overrides
                 )
                 if r.is_pattern:
                     results.append(r)
-                    break  # stop at first match by priority
+                    break # Priority match found
 
-        # Double-candle
+        # 2. Double-candle
         if not _first_match(results).is_pattern and idx >= 1:
             for det in self.bullish_double:
-                # Detectors that need highs/lows can read them via kwargs
                 r = det.detect(
                     opens[idx - 1], closes[idx - 1],
                     opens[idx], closes[idx],
@@ -151,16 +163,11 @@ class PatternDetectorsOrchestrator:
                     results.append(r)
                     break
 
-        # Triple-candle
-        if not _first_match(results).is_pattern and idx >= 2:
-            for det in self.bullish_triple:
+        # 3. Single-candle (Weakest)
+        if not _first_match(results).is_pattern and idx >= 0:
+            for det in self.bullish_single:
                 r = det.detect(
-                    opens[idx - 2], closes[idx - 2],
-                    opens[idx - 1], closes[idx - 1],
-                    opens[idx],     closes[idx],
-                    h1=highs[idx - 2], l1=lows[idx - 2],
-                    h2=highs[idx - 1], l2=lows[idx - 1],
-                    h3=highs[idx],     l3=lows[idx],
+                    opens[idx], highs[idx], lows[idx], closes[idx],
                     **overrides
                 )
                 if r.is_pattern:
@@ -183,7 +190,7 @@ class PatternDetectorsOrchestrator:
     ) -> PatternResult:
         """
         Detect bearish pattern at index `idx` with priority:
-        single -> double -> triple.
+        TRIPLE -> DOUBLE -> SINGLE.
         """
         overrides = {"atr": atr}
         if trend_ok is not None:
@@ -193,18 +200,23 @@ class PatternDetectorsOrchestrator:
 
         results: List[PatternResult] = []
 
-        # Single-candle
-        if idx >= 0:
-            for det in self.bearish_single:
+        # 1. Triple-candle
+        if idx >= 2:
+            for det in self.bearish_triple:
                 r = det.detect(
-                    opens[idx], highs[idx], lows[idx], closes[idx],
+                    opens[idx - 2], closes[idx - 2],
+                    opens[idx - 1], closes[idx - 1],
+                    opens[idx],     closes[idx],
+                    h1=highs[idx - 2], l1=lows[idx - 2],
+                    h2=highs[idx - 1], l2=lows[idx - 1],
+                    h3=highs[idx],     l3=lows[idx],
                     **overrides
                 )
                 if r.is_pattern:
                     results.append(r)
                     break
 
-        # Double-candle
+        # 2. Double-candle
         if not _first_match(results).is_pattern and idx >= 1:
             for det in self.bearish_double:
                 r = det.detect(
@@ -218,16 +230,11 @@ class PatternDetectorsOrchestrator:
                     results.append(r)
                     break
 
-        # Triple-candle
-        if not _first_match(results).is_pattern and idx >= 2:
-            for det in self.bearish_triple:
+        # 3. Single-candle
+        if not _first_match(results).is_pattern and idx >= 0:
+            for det in self.bearish_single:
                 r = det.detect(
-                    opens[idx - 2], closes[idx - 2],
-                    opens[idx - 1], closes[idx - 1],
-                    opens[idx],     closes[idx],
-                    h1=highs[idx - 2], l1=lows[idx - 2],
-                    h2=highs[idx - 1], l2=lows[idx - 1],
-                    h3=highs[idx],     l3=lows[idx],
+                    opens[idx], highs[idx], lows[idx], closes[idx],
                     **overrides
                 )
                 if r.is_pattern:

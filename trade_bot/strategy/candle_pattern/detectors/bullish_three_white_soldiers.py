@@ -1,54 +1,79 @@
 from typing import Optional, Tuple
-
 from trade_bot.strategy.candle_pattern.pattern_detector import PatternResult, TripleCandlePatternDetector
 
 
 class ThreeWhiteSoldiersDetector(TripleCandlePatternDetector):
     """
-    Three White Soldiers (bullish, 3-candle) - Production Grade:
-        - Three consecutive bullish candles.
-        - Higher closes (and optionally higher lows).
-        - Strong bodies relative to range/ATR.
-        - [New] Volume confirmation.
+    Three White Soldiers (Bullish Reversal) - US Stock Optimized:
+        - Pattern: Three consecutive long bullish candles.
+        - Structure: Staircase up (Higher Highs, Higher Lows, Higher Closes).
+        - Psychology: Steady buying pressure. Bulls are in total control.
+        - Optimization: Enforces strong bodies and weak upper wicks to filter out "weak rallies".
     """
+
     def __init__(
         self,
         *,
-        # Core directional constraints
+        # --- Directional Constraints ---
         require_consecutive_bullish: bool = True,
-        require_higher_closes: bool = True,               # c2 > c1, c3 > c2
+        require_higher_closes: bool = True,
+        
+        # [Optimization] True. 
+        # In a strong march, lows should also be moving up (Staircase pattern).
+        require_higher_lows: bool = True,             
 
-        # Open location constraints (textbook variant)
-        require_open_within_prev_body: bool = False,      # o2 inside body1, o3 inside body2
+        # --- Open/Gap Logic ---
+        # [Optimization] False. 
+        # Textbook says "Open within previous body", but in US Stocks, 
+        # a Gap Up (Open > Prev Close) indicates even stronger momentum. 
+        # We disable this to capture high-momentum breakouts.
+        require_open_within_prev_body: bool = False,
         open_within_tolerance: float = 1e-9,
 
-        # Body strength constraints
-        min_body_vs_avg_body_ratio: float = 0.80,         # each body >= 0.8 * avg(body1..3)
+        # --- Body Strength (Crucial) ---
+        # [Optimization] 0.80. 
+        # The three candles should be roughly similar in size. 
+        # We don't want one huge candle followed by two tiny ones.
+        min_body_vs_avg_body_ratio: float = 0.80,
+        
         require_strong_bodies: bool = True,
 
-        # Range-based body constraints (requires h/l if set)
-        min_body_ratio_vs_range: Optional[float] = None,  # body_i / range_i >= x (e.g., 0.30)
+        # --- Range-based Body Constraints ---
+        # [Optimization] 0.40 (40%). 
+        # This is the most important filter. 
+        # It ensures the candles are "Long White Candles" (Body is >40% of total range),
+        # filtering out small dojis or spinning tops drifting higher.
+        min_body_ratio_vs_range: Optional[float] = 0.40,  
 
-        # Shadow constraints (optional; soldiers typically have small shadows)
-        max_upper_shadow_to_body: Optional[float] = None, # upper_shadow/body <= x (e.g., 0.30)
-        max_lower_shadow_to_body: Optional[float] = None, # lower_shadow/body <= x (e.g., 0.50)
+        # --- Shadow Constraints (Rejection) ---
+        # [Optimization] 0.30 (30%). 
+        # Soldiers must close near their highs. Long upper wicks indicate selling pressure.
+        max_upper_shadow_to_body: Optional[float] = 0.30, 
+        
+        # [Optimization] None. 
+        # Lower wicks matter less in a bullish march, as long as the body is strong.
+        max_lower_shadow_to_body: Optional[float] = None, 
 
-        # Hygiene / numeric robustness
+        # --- Volume Logic ---
+        # [Optimization] False (Default), but True recommended in config.
+        # Ideally, Volume 1 < Volume 2 < Volume 3 (Buying pressure growing).
+        require_volume_increase: bool = False,  
+
+        # --- Hygiene ---
         min_range: float = 1e-9,
         float_tolerance: float = 1e-9,
 
-        # ATR-aware constraints (optional)
-        body_atr_alpha: float = 1.0,                      # scaler for (ATR / range_i)
-        body_atr_bounds: Tuple[float, float] = (0.7, 1.5),
-        min_body_vs_atr: Optional[float] = None,           # each body >= k * ATR (e.g., 0.25)
+        # --- ATR Constraints ---
+        min_body_vs_atr: Optional[float] = None,
 
-        # New optional constraints
-        require_higher_lows: bool = False,             # 新增：l2 > l1 且 l3 > l2
-        require_volume_increase: bool = False,         # 新增：v3 >= v2 >= v1
+        # ATR adaptive scaling for body-vs-range check
+        body_atr_alpha: float = 1.0,
+        body_atr_bounds: Tuple[float, float] = (0.7, 1.5),
     ):
         self.defaults = dict(
             require_consecutive_bullish=require_consecutive_bullish,
             require_higher_closes=require_higher_closes,
+            require_higher_lows=require_higher_lows,
             require_open_within_prev_body=require_open_within_prev_body,
             open_within_tolerance=open_within_tolerance,
             min_body_vs_avg_body_ratio=min_body_vs_avg_body_ratio,
@@ -56,13 +81,12 @@ class ThreeWhiteSoldiersDetector(TripleCandlePatternDetector):
             min_body_ratio_vs_range=min_body_ratio_vs_range,
             max_upper_shadow_to_body=max_upper_shadow_to_body,
             max_lower_shadow_to_body=max_lower_shadow_to_body,
+            require_volume_increase=require_volume_increase,
             min_range=min_range,
             float_tolerance=float_tolerance,
+            min_body_vs_atr=min_body_vs_atr,
             body_atr_alpha=body_atr_alpha,
             body_atr_bounds=body_atr_bounds,
-            min_body_vs_atr=min_body_vs_atr,
-            require_higher_lows=require_higher_lows,
-            require_volume_increase=require_volume_increase,
         )
 
     def detect(
@@ -71,201 +95,143 @@ class ThreeWhiteSoldiersDetector(TripleCandlePatternDetector):
         o2: float, c2: float,
         o3: float, c3: float,
         *,
-        # Optional highs/lows for ranges & shadow analysis
         h1: Optional[float] = None, l1: Optional[float] = None,
         h2: Optional[float] = None, l2: Optional[float] = None,
         h3: Optional[float] = None, l3: Optional[float] = None,
-        # Optional ATR (single value applied to all three)
-        atr: Optional[float] = None,
-        # Optional volumes (single value applied to all three)
         v1: Optional[float] = None, v2: Optional[float] = None, v3: Optional[float] = None,
+        atr: Optional[float] = None,
         **overrides
     ) -> PatternResult:
         p = {**self.defaults, **overrides}
 
         # Basic hygiene
         if any(x is None for x in (o1, c1, o2, c2, o3, c3)):
-            return PatternResult(is_pattern=False, name=None, bias=None, metrics=None)
+            return PatternResult(is_pattern=False)
 
-        # Directions
-        bull1 = c1 > o1
-        bull2 = c2 > o2
-        bull3 = c3 > o3
-
+        # 1) Direction
+        bull1, bull2, bull3 = c1 > o1, c2 > o2, c3 > o3
         if p["require_consecutive_bullish"] and not (bull1 and bull2 and bull3):
-            return PatternResult(is_pattern=False, name=None, bias=None, metrics=None)
+            return PatternResult(is_pattern=False)
 
-        # Bodies
-        body1 = abs(c1 - o1)
-        body2 = abs(c2 - o2)
-        body3 = abs(c3 - o3)
-        
-        # Strict tiny body check (avoid micro-candles passing as soldiers)
+        # 2) Bodies
+        body1, body2, body3 = abs(c1 - o1), abs(c2 - o2), abs(c3 - o3)
         if body1 <= p["min_range"] or body2 <= p["min_range"] or body3 <= p["min_range"]:
-            return PatternResult(is_pattern=False, name=None, bias=None, metrics=None)
-
+            return PatternResult(is_pattern=False)
         avg_body = (body1 + body2 + body3) / 3.0
 
-        # Higher closes
+        # 3) Staircase (closes & lows)
         higher_closes_ok = True
         if p["require_higher_closes"]:
             higher_closes_ok = (c2 >= c1 * (1 + p["float_tolerance"])) and \
                                (c3 >= c2 * (1 + p["float_tolerance"]))
 
-        # Open within previous body (optional)
-        open_within_ok = True
-        if p["require_open_within_prev_body"]:
-            # For bullish prior candle (c1 > o1), inside means: o1 <= o2 <= c1; same for o3 inside body2
-            open_within_ok = (o2 >= o1 * (1 - p["open_within_tolerance"])) and (o2 <= c1 * (1 + p["open_within_tolerance"])) and \
-                             (o3 >= o2 * (1 - p["open_within_tolerance"])) and (o3 <= c2 * (1 + p["open_within_tolerance"]))
-
-        # Higher lows（可选）
         higher_lows_ok = True
         if p["require_higher_lows"]:
             if all(x is not None for x in (l1, l2, l3)):
                 higher_lows_ok = (l2 > l1) and (l3 > l2)
             else:
-                higher_lows_ok = False
+                # Fallback if lows missing
+                higher_lows_ok = (o2 > o1) and (o3 > o2)
 
-        # 成交量放大（可选）
-        volume_ok = True
-        if p["require_volume_increase"]:
-            volume_ok = (v1 is not None and v2 is not None and v3 is not None and v2 >= v1 and v3 >= v2)
+        # 4) Open within previous body (Legacy / Textbook check)
+        open_within_ok = True
+        if p["require_open_within_prev_body"]:
+            # Strict textbook definition: Open is inside previous real body.
+            def is_inside(op, prev_o, prev_c):
+                top, bot = max(prev_o, prev_c), min(prev_o, prev_c)
+                return (op >= bot * (1 - p["open_within_tolerance"])) and \
+                       (op <= top * (1 + p["open_within_tolerance"]))
+            
+            open_within_ok = is_inside(o2, o1, c1) and is_inside(o3, o2, c2)
 
-        # Optional ranges & shadows
-        def valid_range(h: Optional[float], l: Optional[float]) -> bool:
-            return (h is not None) and (l is not None) and (h >= l) and ((h - l) > p["min_range"])
-
-        ranges = []
-        for (h, l) in [(h1, l1), (h2, l2), (h3, l3)]:
-            ranges.append((h - l) if valid_range(h, l) else None)
-        price_range1, price_range2, price_range3 = ranges
-
-        # If range-based constraints requested but ranges missing, fail safely
-        if p["min_body_ratio_vs_range"] is not None and (price_range1 is None or price_range2 is None or price_range3 is None):
-            return PatternResult(is_pattern=False, name=None, bias=None, metrics=None)
-
-        # Shadows (if ranges provided)
-        def shadows(open_, high, low, close):
-            if high is None or low is None:
-                return None, None
-            upper = max(0.0, high - max(open_, close))
-            lower = max(0.0, min(open_, close) - low)
-            return upper, lower
-
-        upper1, lower1 = shadows(o1, h1, l1, c1)
-        upper2, lower2 = shadows(o2, h2, l2, c2)
-        upper3, lower3 = shadows(o3, h3, l3, c3)
-
-        # Ratios: body/range and shadow/body
-        def ratios(body, prange, upper, lower):
-            if prange is None:
-                return None, None, None
-            body_ratio = body / prange
-            upper_to_body = (upper / body) if body > 0 else float('inf')
-            lower_to_body = (lower / body) if body > 0 else float('inf')
-            return body_ratio, upper_to_body, lower_to_body
-
-        br1, ub1, lb1 = ratios(body1, price_range1, upper1, lower1)
-        br2, ub2, lb2 = ratios(body2, price_range2, upper2, lower2)
-        br3, ub3, lb3 = ratios(body3, price_range3, upper3, lower3)
-
-        # Body strength vs average
+        # 5) Body strength consistency
         strong_vs_avg_ok = True
         if p["require_strong_bodies"]:
-            strong_vs_avg_ok = (body1 >= avg_body * p["min_body_vs_avg_body_ratio"] * (1 - p["float_tolerance"])) and \
-                               (body2 >= avg_body * p["min_body_vs_avg_body_ratio"] * (1 - p["float_tolerance"])) and \
-                               (body3 >= avg_body * p["min_body_vs_avg_body_ratio"] * (1 - p["float_tolerance"]))
+            r = p["min_body_vs_avg_body_ratio"]
+            strong_vs_avg_ok = (body1 >= avg_body * r) and (body2 >= avg_body * r) and (body3 >= avg_body * r)
 
-        # Body ratio vs range (ATR-adaptive optional)
-        body_ratio_vs_range_ok = True
-        effective_min_body_ratio_vs_range = [p["min_body_ratio_vs_range"]] * 3 if p["min_body_ratio_vs_range"] is not None else [None, None, None]
-        body_atr_scalers = [None, None, None]
-        if p["min_body_ratio_vs_range"] is not None:
-            # ATR adaptation per candle (if atr provided and ranges valid)
-            for i, (pr, br) in enumerate([(price_range1, br1), (price_range2, br2), (price_range3, br3)]):
-                if pr is None or br is None:
-                    body_ratio_vs_range_ok = False
-                    break
-                if atr is not None and atr > 0.0:
+        # 6) Volume progression
+        vol_ok = True
+        if p["require_volume_increase"]:
+            if all(v is not None for v in (v1, v2, v3)):
+                # Allow slight variance, but generally increasing
+                vol_ok = (v2 >= v1 * 0.9) and (v3 >= v2 * 0.9)
+            else:
+                vol_ok = False
+
+        # 7) Range & shadows
+        def valid_range(h, l): return (h is not None and l is not None) and (h >= l)
+        ranges = [(h - l) if valid_range(h, l) else None for h, l in [(h1, l1), (h2, l2), (h3, l3)]]
+
+        shadows_ok = True
+        # Check each candle for shadow limits
+        candle_data = [
+            (o1, c1, h1, l1, body1),
+            (o2, c2, h2, l2, body2),
+            (o3, c3, h3, l3, body3)
+        ]
+        
+        for (o, c, h, l, b) in candle_data:
+            if h is None or l is None: continue
+            if b <= p["min_range"]: 
+                shadows_ok = False; break
+
+            upper = h - max(o, c)
+            lower = min(o, c) - l
+            
+            if p["max_upper_shadow_to_body"] is not None:
+                if (upper / b) > p["max_upper_shadow_to_body"]: shadows_ok = False
+            
+            if p["max_lower_shadow_to_body"] is not None:
+                if (lower / b) > p["max_lower_shadow_to_body"]: shadows_ok = False
+
+        # 7b) Body vs Range (The "Long Candle" check)
+        body_ratios_ok = True
+        effective_min_body_ratio = p["min_body_ratio_vs_range"]
+        
+        # ATR Adaptive Logic
+        if effective_min_body_ratio is not None and atr is not None and atr > 0:
+            valid_ranges_vals = [r for r in ranges if r is not None]
+            if valid_ranges_vals:
+                avg_range_val = sum(valid_ranges_vals) / len(valid_ranges_vals)
+                if avg_range_val > p["min_range"]:
                     lo, hi = p["body_atr_bounds"]
                     if hi < lo: lo, hi = hi, lo
-                    scaler = p["body_atr_alpha"] * (atr / pr)
-                    scaler = max(lo, min(hi, scaler))
-                    body_atr_scalers[i] = scaler
-                    effective_min_body_ratio_vs_range[i] = p["min_body_ratio_vs_range"] / scaler  # tighten in high vol
-                # Check
-                body_ratio_vs_range_ok = body_ratio_vs_range_ok and (br >= effective_min_body_ratio_vs_range[i] * (1 - p["float_tolerance"]))
+                    # If ATR is high (volatile), we relax the body ratio requirement
+                    raw_scaler = p["body_atr_alpha"] * (atr / avg_range_val)
+                    scaler = max(lo, min(hi, raw_scaler))
+                    effective_min_body_ratio = effective_min_body_ratio / scaler
 
-        # Shadow-to-body constraints (if provided)
-        shadows_ok = True
-        if p["max_upper_shadow_to_body"] is not None and ub1 is not None and ub2 is not None and ub3 is not None:
-            shadows_ok = shadows_ok and (ub1 <= p["max_upper_shadow_to_body"] * (1 + p["float_tolerance"])) \
-                                   and (ub2 <= p["max_upper_shadow_to_body"] * (1 + p["float_tolerance"])) \
-                                   and (ub3 <= p["max_upper_shadow_to_body"] * (1 + p["float_tolerance"]))
-        if p["max_lower_shadow_to_body"] is not None and lb1 is not None and lb2 is not None and lb3 is not None:
-            shadows_ok = shadows_ok and (lb1 <= p["max_lower_shadow_to_body"] * (1 + p["float_tolerance"])) \
-                                   and (lb2 <= p["max_lower_shadow_to_body"] * (1 + p["float_tolerance"])) \
-                                   and (lb3 <= p["max_lower_shadow_to_body"] * (1 + p["float_tolerance"]))
+        if effective_min_body_ratio is not None:
+            for b, r in zip([body1, body2, body3], ranges):
+                if r is None:
+                    body_ratios_ok = False; break
+                # Must be a solid candle, not a doji
+                if (b / r) < (effective_min_body_ratio * (1 - p["float_tolerance"])):
+                    body_ratios_ok = False; break
 
-        # ATR absolute body constraint (optional)
+        # 8) ATR absolute check
         atr_bodies_ok = True
-        if atr is not None and atr > 0.0 and p["min_body_vs_atr"] is not None and p["min_body_vs_atr"] > 0.0:
-            atr_bodies_ok = (body1 >= p["min_body_vs_atr"] * atr * (1 - p["float_tolerance"])) and \
-                            (body2 >= p["min_body_vs_atr"] * atr * (1 - p["float_tolerance"])) and \
-                            (body3 >= p["min_body_vs_atr"] * atr * (1 - p["float_tolerance"]))
+        if atr and p["min_body_vs_atr"]:
+            threshold = p["min_body_vs_atr"] * atr
+            atr_bodies_ok = (body1 >= threshold) and (body2 >= threshold) and (body3 >= threshold)
 
         # Final decision
-        is_pattern = all([
-            (bull1 and bull2 and bull3) if p["require_consecutive_bullish"] else True,
-            higher_closes_ok,
-            open_within_ok,
-            strong_vs_avg_ok,
-            body_ratio_vs_range_ok,
-            shadows_ok,
-            atr_bodies_ok,
-            higher_lows_ok,
-            volume_ok,
-        ])
-        if not is_pattern:
-            return PatternResult(is_pattern=False, name=None, bias=None, metrics=None)
+        conditions = [
+            higher_closes_ok, higher_lows_ok, open_within_ok,
+            strong_vs_avg_ok, vol_ok,
+            shadows_ok, atr_bodies_ok, body_ratios_ok
+        ]
+        
+        if not all(conditions):
+            return PatternResult(is_pattern=False)
 
         metrics = {
-            # Bodies & directions
-            "bull1": bull1, "bull2": bull2, "bull3": bull3,
-            "body1": body1, "body2": body2, "body3": body3,
             "avg_body": avg_body,
-            # Close progression
-            "higher_closes_ok": higher_closes_ok,
-            # Open location
-            "open_within_ok": open_within_ok,
-            # Ranges & shadows
-            "price_range1": price_range1, "price_range2": price_range2, "price_range3": price_range3,
-            "upper1": upper1, "lower1": lower1,
-            "upper2": upper2, "lower2": lower2,
-            "upper3": upper3, "lower3": lower3,
-            # Ratios
-            "body_ratio1": br1, "upper_to_body1": ub1, "lower_to_body1": lb1,
-            "body_ratio2": br2, "upper_to_body2": ub2, "lower_to_body2": lb2,
-            "body_ratio3": br3, "upper_to_body3": ub3, "lower_to_body3": lb3,
-            # Effective thresholds & ATR info
-            "min_body_vs_avg_body_ratio": p["min_body_vs_avg_body_ratio"],
-            "effective_min_body_ratio_vs_range": effective_min_body_ratio_vs_range,
-            "body_atr_scalers": body_atr_scalers,
-            "atr": atr,
-            # Flags
-            "strong_vs_avg_ok": strong_vs_avg_ok,
-            "body_ratio_vs_range_ok": body_ratio_vs_range_ok,
-            "shadows_ok": shadows_ok,
-            "atr_bodies_ok": atr_bodies_ok,
-            "higher_lows_ok": higher_lows_ok,
-            "volume_trend": ("up" if (v1 and v2 and v3 and v3 >= v2 >= v1) else None),
-            # OHLC echo
-            "o1": o1, "c1": c1, "h1": h1, "l1": l1,
-            "o2": o2, "c2": c2, "h2": h2, "l2": l2,
-            "o3": o3, "c3": c3, "h3": h3, "l3": l3,
-            # Params snapshot (logging/debug)
-            "params": self.defaults | {"atr": atr} | overrides,
+            "higher_lows": higher_lows_ok,
+            "vol_trend": "increasing" if (v1 and v3 and v3 > v1) else "mixed",
+            "effective_min_body_ratio": effective_min_body_ratio,
+            "params": {**self.defaults, "atr": atr, **overrides},
         }
 
         return PatternResult(

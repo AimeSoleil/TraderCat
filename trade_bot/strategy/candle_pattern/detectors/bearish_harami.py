@@ -3,45 +3,56 @@ from trade_bot.strategy.candle_pattern.pattern_detector import DoubleCandlePatte
 
 class BearishHaramiDetector(DoubleCandlePatternDetector):
     """
-    Bearish Harami (2-candle) - Production Grade:
-        - Candle 1: Large Bullish.
-        - Candle 2: Small Bearish (or Doji), contained within Candle 1's body.
-        - [Fix] Now supports Harami Cross (body2=0).
-        - [Fix] Robust inside-body logic.
+    Bearish Harami (2-candle) - US Stock Optimized:
+        - Candle 1: Large Bullish (Trend continuation).
+        - Candle 2: Small Bearish or Doji (Indecision), contained within Candle 1's body.
+        - Logic: Momentum stall. Bulls couldn't push higher, price consolidated inside previous range.
+        - Note: Often an "Inside Bar" setup indicating a pause or potential reversal.
     """
     def __init__(
         self,
         *,
-        # Direction requirements
+        # --- Direction ---
         require_first_bullish: bool = True,
-        require_second_bearish: bool = True,
+        
+        # [Optimization] False. 
+        # A Harami Cross (Doji) is often neutral or slightly bullish in color but bearish in implication.
+        # We allow C2 to be Green if it's tiny and inside C1.
+        require_second_bearish: bool = False,
 
-        # "Inside" semantics
-        strict_body_inside: bool = True,      # Body 2 inside Body 1
-        strict_wick_inside: bool = False,     # High2/Low2 inside High1/Low1
+        # --- Inside Logic ---
+        # [Optimization] True. 
+        # The body of C2 MUST be inside the body of C1. This is the definition.
+        strict_body_inside: bool = True,           
+        
+        # [Optimization] False. 
+        # Wicks can poke out slightly (bull trap/bear trap) as long as the body is contained.
+        strict_wick_inside: bool = False,          
         inside_tolerance: float = 1e-9,       
 
-        # Size constraints
+        # --- Size Constraints ---
+        # [Optimization] 0.5 (50%). 
+        # The baby (C2) should be at most half the size of the mother (C1).
         max_body2_ratio_vs_body1: float = 0.50,   
         require_small_body2: bool = True,         
 
-        # Volume Logic
-        require_volume_contraction: bool = False, 
+        # --- Volume Logic ---
+        # [Optimization] True. 
+        # Harami represents a drop in volatility and momentum. Volume usually dries up.
+        require_volume_contraction: bool = True,  
 
-        # Doji-avoidance / Range checks
-        min_body_ratio1: Optional[float] = None,  
-        max_body_ratio2: Optional[float] = None,  
+        # --- Doji / Range Checks ---
+        # [Optimization] 0.2 (20%). 
+        # Candle 1 must be a significant "Long White Candle", not a doji itself.
+        min_body_ratio1: Optional[float] = 0.20,  
 
-        # Hygiene
+        # --- Hygiene ---
         min_range: float = 1e-9,
         float_tolerance: float = 1e-9,
 
-        # ATR constraints
+        # --- ATR Constraints ---
         min_body1_vs_atr: Optional[float] = None, 
         max_body2_vs_atr: Optional[float] = None, 
-        
-        # Upper Wick Filter (New)
-        max_upper_wick_ratio2: Optional[float] = None,
     ):
         self.defaults = dict(
             require_first_bullish=require_first_bullish,
@@ -53,12 +64,10 @@ class BearishHaramiDetector(DoubleCandlePatternDetector):
             require_small_body2=require_small_body2,
             require_volume_contraction=require_volume_contraction,
             min_body_ratio1=min_body_ratio1,
-            max_body_ratio2=max_body_ratio2,
             min_range=min_range,
             float_tolerance=float_tolerance,
             min_body1_vs_atr=min_body1_vs_atr,
             max_body2_vs_atr=max_body2_vs_atr,
-            max_upper_wick_ratio2=max_upper_wick_ratio2,
         )
 
     def detect(
@@ -73,7 +82,8 @@ class BearishHaramiDetector(DoubleCandlePatternDetector):
         **overrides
     ) -> PatternResult:
         p = {**self.defaults, **overrides}
-
+        
+        # Hygiene
         if any(x is None for x in (o1, c1, o2, c2)):
             return PatternResult(is_pattern=False)
 
@@ -85,8 +95,7 @@ class BearishHaramiDetector(DoubleCandlePatternDetector):
             return PatternResult(is_pattern=False)
         
         if p["require_second_bearish"]:
-            # [Fix] Allow Doji (Harami Cross) even if strict bearish is requested
-            # Usually Harami Cross is c2 <= o2 (Bearish or Neutral)
+            # If strict bearish required, allow Red or Doji (c2 <= o2)
             if not (c2 <= o2): 
                 return PatternResult(is_pattern=False)
 
@@ -94,34 +103,34 @@ class BearishHaramiDetector(DoubleCandlePatternDetector):
         body1 = abs(c1 - o1)
         body2 = abs(c2 - o2)
         
-        # Only reject if body1 is zero. Allow body2 to be zero.
+        # Mother candle must exist
         if body1 <= p["min_range"]:
             return PatternResult(is_pattern=False)
 
         # 3. Inside Body Check (Robust)
-        # Calculate boundaries regardless of candle color
         top1, bottom1 = max(o1, c1), min(o1, c1)
         top2, bottom2 = max(o2, c2), min(o2, c2)
 
         if p["strict_body_inside"]:
-            body_inside = (top2 <= top1 * (1 + p["float_tolerance"])) and \
-                          (bottom2 >= bottom1 * (1 - p["float_tolerance"]))
+            # C2 Body strictly inside C1 Body
+            inside_ok = (bottom2 >= bottom1 * (1 - p["float_tolerance"])) and \
+                        (top2 <= top1 * (1 + p["float_tolerance"]))
         else:
+            # Lenient
             tol = body1 * p["inside_tolerance"]
-            body_inside = (top2 <= (top1 + tol)) and \
-                          (bottom2 >= (bottom1 - tol))
+            inside_ok = (bottom2 >= (bottom1 - tol)) and (top2 <= (top1 + tol))
 
-        if not body_inside:
+        if not inside_ok:
             return PatternResult(is_pattern=False)
 
         # 4. Inside Wick Check
-        wick_inside = True
+        wick_inside_ok = True
         if p["strict_wick_inside"]:
             if all(x is not None for x in (h1, l1, h2, l2)):
-                wick_inside = (h2 <= h1) and (l2 >= l1)
+                wick_inside_ok = (h2 <= h1) and (l2 >= l1)
             else:
-                wick_inside = False
-        if not wick_inside:
+                wick_inside_ok = False
+        if not wick_inside_ok:
             return PatternResult(is_pattern=False)
 
         # 5. Relative Size
@@ -138,56 +147,46 @@ class BearishHaramiDetector(DoubleCandlePatternDetector):
                 vol_ok = False
 
         # 7. Range & Ratio Checks
-        def valid_range(h, l): return (h is not None and l is not None and h >= l)
+        def valid_range(h, l): return (h is not None) and (l is not None) and (h >= l)
         price_range1 = (h1 - l1) if valid_range(h1, l1) else None
-        price_range2 = (h2 - l2) if valid_range(h2, l2) else None
-
-        ranges_required = (p["min_body_ratio1"] is not None and price_range1 is None) or \
-                          (p["max_body_ratio2"] is not None and price_range2 is None)
-        if ranges_required:
-            return PatternResult(is_pattern=False)
+        
+        # Only check range1 for min_body_ratio1
+        if p["min_body_ratio1"] is not None and price_range1 is None:
+             return PatternResult(is_pattern=False)
 
         body_ratio1_ok = True
         if p["min_body_ratio1"] is not None and price_range1:
             body_ratio1_ok = (body1 / price_range1) >= (p["min_body_ratio1"] * (1 - p["float_tolerance"]))
 
-        body_ratio2_ok = True
-        if p["max_body_ratio2"] is not None and price_range2:
-            body_ratio2_ok = (body2 / price_range2) <= (p["max_body_ratio2"] * (1 + p["float_tolerance"]))
-
         # 8. ATR Checks
         atr_body1_ok = True
         atr_body2_ok = True
-        if atr:
+        if atr is not None and atr > 0.0:
             if p["min_body1_vs_atr"]:
-                atr_body1_ok = body1 >= (p["min_body1_vs_atr"] * atr)
+                atr_body1_ok = body1 >= (p["min_body1_vs_atr"] * atr) * (1 - p["float_tolerance"])
             if p["max_body2_vs_atr"]:
-                atr_body2_ok = body2 <= (p["max_body2_vs_atr"] * atr)
-
-        # 9. Upper Wick Filter (New)
-        upper_wick2_ok = True
-        if p["max_upper_wick_ratio2"] is not None and h2 is not None and l2 is not None:
-            upper_wick2 = h2 - max(o2, c2)
-            denom = body2 if body2 > p["float_tolerance"] else p["float_tolerance"]
-            upper_wick2_ok = (upper_wick2 / denom) <= p["max_upper_wick_ratio2"] * (1 + p["float_tolerance"])
+                atr_body2_ok = body2 <= (p["max_body2_vs_atr"] * atr) * (1 + p["float_tolerance"])
 
         # Final Decision
         conditions = [
-            strength_ok, vol_ok,
-            body_ratio1_ok, body_ratio2_ok,
-            atr_body1_ok, atr_body2_ok,
-            upper_wick2_ok
+            inside_ok,
+            strength_ok,
+            body_ratio1_ok,
+            atr_body1_ok,
+            atr_body2_ok,
+            wick_inside_ok,
+            vol_ok,
         ]
 
         if not all(conditions):
             return PatternResult(is_pattern=False)
 
         metrics = {
-            "body1": body1,
-            "body2": body2,
-            "vol_contraction": (v2/v1) if (v1 and v2 and v1 > 0) else None,
-            "wick_inside": wick_inside,
-            "params": {**self.defaults, "atr": atr}
+            "body1": body1, "body2": body2,
+            "inside_ok": inside_ok,
+            "strength_ok": strength_ok,
+            "vol_contraction": (v2 / v1) if (v1 and v2 and v1 > 0) else None,
+            "params": {**self.defaults, "atr": atr, **overrides},
         }
 
         return PatternResult(

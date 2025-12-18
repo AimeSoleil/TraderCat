@@ -1,28 +1,33 @@
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
-from trade_bot.data.market_data_provider import MarketDataProvider
-from trade_bot.strategy.trading_strategy import StrategyUtilities, TradingStrategy, EPS
-from trade_bot.strategy.signal_model import SignalModel
-from trade_bot.logger.logger import get_logger
+from scipy.stats import zscore
 import numpy as np
 import pandas as pd
 
+from trade_bot.data.market_data_provider import MarketDataProvider
+from trade_bot.strategy.trading_strategy import TradingStrategy
+from trade_bot.strategy.signal_model import SignalModel
+from trade_bot.logger.logger import get_logger
+
 logger = get_logger(__name__)
 
-# ETF list
+# Standard SPDR Select Sector ETFs (GICS)
 SECTOR_ETF_LIST = {
-    "Information Technology": "XLK",
+    "Technology": "XLK",
     "Health Care": "XLV",
     "Financials": "XLF",
-    "Consumer Discretionary": "XLY",
-    "Consumer Staples": "XLP",
+    "Discretionary": "XLY",
+    "Staples": "XLP",
     "Energy": "XLE",
     "Industrials": "XLI",
     "Materials": "XLB",
     "Utilities": "XLU",
     "Real Estate": "XLRE",
-    "Communication Services": "XLC",
+    "Comms": "XLC",
 }
+
+# Safe Haven Asset (Short-term Treasury)
+SAFE_HAVEN_ETF = "SHY"
 
 class Indicators(BaseModel):
     rsi: Optional[float]
@@ -30,11 +35,14 @@ class Indicators(BaseModel):
     momentum: Optional[float]
     avg_volume: Optional[float]
     volume_trend: Optional[float]
-    composite_score: Optional[float]
+    composite_score: Optional[float] = 0.0
 
 class SectorRotationStrategy(TradingStrategy):
     """
-    Sector Rotation Strategy with dynamic thresholds and market regime filter.
+    Sector Rotation Strategy (Production Grade)
+    - Uses Z-Score for robust ranking across sectors.
+    - Implements 'Cash/Safety' switch during bear markets.
+    - Risk-Adjusted Allocation (Inverse Volatility).
     """
 
     def __init__(
@@ -50,205 +58,213 @@ class SectorRotationStrategy(TradingStrategy):
         self.num_sectors_to_select = num_sectors_to_select
         self.rsi_period = rsi_period
         self.atr_period = atr_period
-        self.weights = (
-            weights
-            if weights
-            else {
-                "momentum": 0.5,
-                "rsi": 0.3,
-                "volume_trend": 0.2,
-            }
-        )
+        self.weights = weights or {
+            "momentum": 0.5,
+            "rsi": 0.3,
+            "volume_trend": 0.2,
+        }
         self.provider = data_provider
 
         self.rsi_field = f"close_RSI_{self.rsi_period}"
         self.atr_field = f"ATRr_{self.atr_period}"
 
     def get_name(self) -> str:
-        return "SectorRotationStrategy"
+        return "SectorRotation"
 
     def get_lookback_window(self) -> int:
-        return self.look_back_days + self.rsi_period
+        # Need enough data for SPY SMA200 and Sector Momentum
+        return max(200, self.look_back_days + 20)
 
     # ---------- Helper Functions ------------
     def _detect_market_regime(self) -> Dict[str, Any]:
-        spy_candles = self.provider.get_price_data("SPY", "1d", 200)
+        """
+        Detects if the broad market (SPY) is in a Bull or Bear regime.
+        """
+        spy_candles = self.provider.get_price_data("SPY", "1d", 210)
+        if not spy_candles or len(spy_candles) < 200:
+            return {"bull_regime": True, "sma200": 0} # Default to Bull if no data
 
         spy_closes = [float(getattr(c, "close")) for c in spy_candles]
-        sma50 = np.mean(spy_closes[-50:])
+        current_price = spy_closes[-1]
         sma200 = np.mean(spy_closes[-200:])
-        bull_regime = sma50 > sma200
+        
+        # Bull regime if Price > SMA200
+        bull_regime = current_price > sma200
 
         return {
             "bull_regime": bull_regime,
+            "current_price": current_price,
+            "sma200": sma200
         }
 
-    def generate_signal(self, symbol: str = None, candles: List[Any] = None) -> SignalModel:
-        etf_indicators: Dict[str, Indicators] = {}
+    def _compute_momentum(self, closes: List[float], lookback: int) -> float:
+        if len(closes) < lookback:
+            return 0.0
+        # Simple Return
+        return (closes[-1] / closes[-lookback]) - 1
 
-        # Market regime detection
+    def generate_signal(self, symbol: str = None, candles: List[Any] = None) -> SignalModel:
+        # Note: 'symbol' and 'candles' args are ignored here as this is a portfolio strategy
+        # that fetches its own data for the sector list.
+        
+        etf_indicators: Dict[str, Indicators] = {}
+        
+        # 1. Market Regime Check
         regime = self._detect_market_regime()
         bull_regime = regime["bull_regime"]
-
-        # Collect data for all sectors
-        _candles = candles
-        for sector, etf in SECTOR_ETF_LIST.items():
+        
+        # 2. Collect Data for Sectors
+        # In production, fetch these in batch if possible to reduce latency
+        valid_sectors = []
+        
+        for sector_name, etf in SECTOR_ETF_LIST.items():
             _candles = self.provider.get_price_data(etf, interval="1d", lookback=self.get_lookback_window())
+            if not _candles or len(_candles) < self.look_back_days:
+                continue
+
             closes = [float(getattr(c, "close")) for c in _candles]
             vols = [float(getattr(c, "volume")) for c in _candles]
             price = closes[-1]
             date = getattr(_candles[-1], "date")
 
-            # RSI
+            # Indicators
             rsi_series = self.provider.get_indicator("rsi", _candles, {"length": self.rsi_period})
-            current_rsi_val = self._extract_latest_indicator_value(rsi_series, [self.rsi_field])
-
-            # Volatility (ATR ratio)
-            atr_series = self.provider.get_indicator(
-                "atr", _candles, {"length": self.atr_period}
-            )
-            current_atr_val = self._extract_latest_indicator_value(atr_series, [self.atr_field])
-            volatility = current_atr_val / max(abs(price), EPS) if current_atr_val else None
-
+            atr_series = self.provider.get_indicator("atr", _candles, {"length": self.atr_period})
+            
+            curr_rsi = getattr(rsi_series[-1], self.rsi_field, 50) if rsi_series else 50
+            curr_atr = getattr(atr_series[-1], self.atr_field, 0) if atr_series else 0
+            
+            # Normalized Volatility (ATR %)
+            volatility = (curr_atr / price) if price > 0 else 0.01
+            
             # Momentum
-            momentum = self._compute_return_L(closes, self.look_back_days)
-
-            # Volume metrics
-            avg_volume = (
-                np.mean(vols[-self.look_back_days :])
-                if len(vols) >= self.look_back_days
-                else None
-            )
-            volume_trend = vols[-1] / (np.mean(vols[-20:]) if len(vols) >= 20 else 1)
+            mom = self._compute_momentum(closes, self.look_back_days)
+            
+            # Volume Trend (Current vs 20MA)
+            avg_vol_20 = np.mean(vols[-20:]) if len(vols) >= 20 else 1
+            vol_trend = vols[-1] / avg_vol_20 if avg_vol_20 > 0 else 1.0
+            
+            avg_vol_long = np.mean(vols[-self.look_back_days:])
 
             etf_indicators[etf] = Indicators(
-                rsi=current_rsi_val,
+                rsi=curr_rsi,
                 volatility=volatility,
-                momentum=momentum,
-                avg_volume=avg_volume,
-                volume_trend=volume_trend,
-                composite_score=None,
+                momentum=mom,
+                avg_volume=avg_vol_long,
+                volume_trend=vol_trend
             )
+            valid_sectors.append(etf)
 
-        # Convert to DataFrame for normalization
-        df = pd.DataFrame(
-            {etf: ind.model_dump() for etf, ind in etf_indicators.items()}
-        ).T
+        if not valid_sectors:
+            return SignalModel(symbol="CASH", strategy=self.get_name(), signal="hold", reason="No data")
 
-        # Normalize and compute composite score
-        for etf, ind in etf_indicators.items():
-            ind.composite_score = (
-                StrategyUtilities.normalize(
-                    ind.momentum, df["momentum"].min(), df["momentum"].max()
-                )
-                * self.weights["momentum"]
-                + StrategyUtilities.normalize(ind.rsi, df["rsi"].min(), df["rsi"].max())
-                * self.weights["rsi"]
-                + StrategyUtilities.normalize(
-                    ind.volume_trend, df["volume_trend"].min(), df["volume_trend"].max()
-                )
-                * self.weights["volume_trend"]
-            )
-
-        # Dynamic thresholds adjusted by regime
-        vol_threshold = np.percentile(
-            df["volatility"].dropna(), 85 if bull_regime else 65
+        # 3. Compute Scores using Z-Score (Robust Scaling)
+        df = pd.DataFrame({etf: ind.model_dump() for etf, ind in etf_indicators.items()}).T
+        
+        # Calculate Z-scores for each factor across the sector universe
+        # Handle NaNs by filling with mean or 0
+        df = df.fillna(df.mean())
+        
+        # Z-Score normalization (Standardization)
+        # Momentum: Higher is better
+        z_mom = zscore(df['momentum'])
+        # RSI: Higher is better (up to a point), but here we treat higher as stronger trend
+        z_rsi = zscore(df['rsi'])
+        # Volume Trend: Higher is better
+        z_vol = zscore(df['volume_trend'])
+        
+        # Composite Score
+        # Note: We use the weights to blend the Z-scores
+        df['composite_score'] = (
+            (z_mom * self.weights['momentum']) +
+            (z_rsi * self.weights['rsi']) +
+            (z_vol * self.weights['volume_trend'])
         )
-        rsi_threshold = np.percentile(df["rsi"].dropna(), 40 if bull_regime else 60)
-        volume_threshold = np.percentile(df["avg_volume"].dropna(), 25)
 
-        # Filter and Rank sectors
-        filtered = [
-            (sector, etf_indicators[SECTOR_ETF_LIST[sector]])
-            for sector in SECTOR_ETF_LIST
-            if etf_indicators[SECTOR_ETF_LIST[sector]].rsi
-            and etf_indicators[SECTOR_ETF_LIST[sector]].rsi >= rsi_threshold
-            and etf_indicators[SECTOR_ETF_LIST[sector]].volatility
-            and etf_indicators[SECTOR_ETF_LIST[sector]].volatility <= vol_threshold
-            and etf_indicators[SECTOR_ETF_LIST[sector]].avg_volume
-            and etf_indicators[SECTOR_ETF_LIST[sector]].avg_volume >= volume_threshold
+        # 4. Filter & Select
+        # Dynamic Thresholds based on Regime
+        # In Bear regime, we are stricter on Volatility and Momentum
+        
+        min_rsi = 40 if bull_regime else 50
+        max_vol = np.percentile(df['volatility'], 80) if bull_regime else np.percentile(df['volatility'], 50)
+        
+        # Filter
+        candidates = df[
+            (df['rsi'] > min_rsi) & 
+            (df['volatility'] < max_vol) &
+            (df['momentum'] > 0) # Absolute Momentum Filter: Must be positive
         ]
-
-        ranked = sorted(filtered, key=lambda x: x[1].composite_score or 0, reverse=True)
-        top_sectors = ranked[: self.num_sectors_to_select]
-
-        # Risk-adjusted allocation with cap
+        
+        top_sectors = candidates.sort_values(by='composite_score', ascending=False).head(self.num_sectors_to_select)
+        
+        selected_symbols = []
         allocations = {}
-        total_inv_vol = sum(1 / (ind.volatility or 1) for _, ind in top_sectors)
-        for sector, ind in top_sectors:
-            weight = (1 / (ind.volatility or 1)) / total_inv_vol
-            allocations[sector] = min(weight, 0.5)  # Cap at 50%
+        
+        # 5. Allocation Logic (Safety Switch)
+        if top_sectors.empty:
+            # BEAR MARKET SAFETY: If no sectors pass criteria (e.g. all have negative momentum),
+            # switch to Safe Haven Asset.
+            selected_symbols = [SAFE_HAVEN_ETF]
+            allocations = {SAFE_HAVEN_ETF: 1.0}
+            reason = "Bear Market / Negative Momentum: Switched to Safety (SHY)"
+        else:
+            selected_symbols = top_sectors.index.tolist()
+            
+            # Inverse Volatility Weighting
+            # Lower volatility = Higher weight
+            inv_vol = 1.0 / top_sectors['volatility']
+            allocations = (inv_vol / inv_vol.sum()).to_dict()
+            
+            # Cap weights at 50% to ensure diversification
+            for k, v in allocations.items():
+                if v > 0.5: allocations[k] = 0.5
+            
+            # Re-normalize after capping (simple approximation)
+            total_w = sum(allocations.values())
+            allocations = {k: v/total_w for k, v in allocations.items()}
+            
+            reason = f"Top Sectors: {','.join(selected_symbols)} (Bull Regime: {bull_regime})"
 
         details = {
-            "dynamic_thresholds": {
-                "volatility": vol_threshold,
-                "rsi": rsi_threshold,
-                "avg_volume": volume_threshold,
-            },
-            "market_regime": regime,
-            "etf_indicators": {sector: ind.model_dump() for sector, ind in filtered},
+            "regime": "Bull" if bull_regime else "Bear",
+            "spy_sma200": regime.get("sma200"),
             "allocations": allocations,
+            "all_scores": df['composite_score'].to_dict()
         }
 
         return SignalModel(
-            symbol=",".join([SECTOR_ETF_LIST[sector] for sector, _ in top_sectors]),
+            symbol=",".join(selected_symbols),
             strategy=self.get_name(),
-            signal="rebalance" if top_sectors else "hold",
+            signal="rebalance",
             date=date,
-            confidence=1 if top_sectors else 0,
-            reason=(
-                "Top sectors selected using dynamic thresholds, composite score, and market regime filter"
-                if top_sectors
-                else "No sectors met dynamic criteria"
-            ),
+            confidence=1.0,
+            reason=reason,
             details=details,
         )
 
 def make_sector_rotation_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Sector Rotation Strategy presets based on algo trading best practices:
-    - swing: Short-term (1–2 weeks), aggressive momentum weighting, tighter volatility filter.
-    - intermediate: Medium-term (2–6 weeks), balanced parameters.
-    - position: Long-term (1–3 months), conservative, stricter filters.
+    Sector Rotation Strategy presets.
     """
-
-    # ---------------- SWING ----------------
+    # ---------------- SWING (Aggressive) ----------------
     swing = {
-        "look_back_days": 30,                # Short lookback for recent momentum.
-        "num_sectors_to_select": 4,          # More sectors for diversification in short-term.
-        "rsi_period": 14,                    # Standard RSI.
-        "atr_period": 14,                    # ATR for volatility context.
-        "weights": {
-            "momentum": 0.6,                 # Momentum dominates short-term rotation.
-            "rsi": 0.25,                     # RSI secondary filter.
-            "volume_trend": 0.15,            # Volume trend less critical for quick rotations.
-        }
+        "look_back_days": 21,                # 1 Month Momentum
+        "num_sectors_to_select": 3,
+        "weights": {"momentum": 0.7, "rsi": 0.2, "volume_trend": 0.1}
     }
 
-    # ---------------- INTERMEDIATE ----------------
+    # ---------------- INTERMEDIATE (Standard) ----------------
     intermediate = {
-        "look_back_days": 60,                # Longer lookback for medium-term momentum.
-        "num_sectors_to_select": 3,          # Balanced diversification.
-        "rsi_period": 14,
-        "atr_period": 14,
-        "weights": {
-            "momentum": 0.5,                 # Balanced momentum weight.
-            "rsi": 0.3,                      # RSI more important for medium-term.
-            "volume_trend": 0.2,             # Volume trend matters more.
-        }
+        "look_back_days": 63,                # 1 Quarter Momentum
+        "num_sectors_to_select": 3,
+        "weights": {"momentum": 0.5, "rsi": 0.3, "volume_trend": 0.2}
     }
 
-    # ---------------- POSITION ----------------
+    # ---------------- POSITION (Conservative) ----------------
     position = {
-        "look_back_days": 90,                # Very long lookback for sustained trends.
-        "num_sectors_to_select": 2,          # Fewer sectors for concentrated bets.
-        "rsi_period": 14,
-        "atr_period": 14,
-        "weights": {
-            "momentum": 0.4,                 # Momentum still important but less dominant.
-            "rsi": 0.35,                     # RSI more critical for long-term positioning.
-            "volume_trend": 0.25,            # Volume trend strongly considered.
-        }
+        "look_back_days": 126,               # 6 Months Momentum
+        "num_sectors_to_select": 2,
+        "weights": {"momentum": 0.4, "rsi": 0.4, "volume_trend": 0.2}
     }
 
     return {

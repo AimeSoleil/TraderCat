@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from math import isinf, isnan
 import statistics
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
@@ -99,17 +98,23 @@ class TradingStrategy(ABC):
         volume_z = None
 
         try:
-            recent_window = max(1, min(window, len(vols)))
-            recent_vols = [v for v in vols[-recent_window:] if v is not None]
+            # 确保有足够的数据：至少需要 window + 1 个数据（历史 window 个 + 当前 1 个）
+            if len(vols) < window + 1:
+                return False, None
+            
+            # 取出用于计算基准的历史数据（不包含当前最新的一根）
+            # 例如：vols[-21:-1]
+            history_vols = [v for v in vols[-(window + 1):-1] if v is not None]
+            current_vol = vols[-1]
 
-            if recent_vols and len(recent_vols) >= 2 and vols[-1] is not None:
-                mean_v = sum(recent_vols) / len(recent_vols)
-                std_v = statistics.pstdev(recent_vols) if len(recent_vols) > 1 else 0.0
+            if len(history_vols) >= 2 and current_vol is not None:
+                mean_v = sum(history_vols) / len(history_vols)
+                # 使用样本标准差 (stdev) 而不是总体标准差 (pstdev)，对于抽样统计更准确
+                std_v = statistics.stdev(history_vols) if len(history_vols) > 1 else 0.0
 
                 if std_v > 0:
-                    volume_z = (vols[-1] - mean_v) / std_v
+                    volume_z = (current_vol - mean_v) / std_v
                     vol_ok = volume_z >= threshold
-
         except Exception:
             vol_ok = False
 
@@ -200,7 +205,7 @@ class TradingStrategy(ABC):
         self,
         adx_history: List[Optional[float]],
         window: int = 100,
-        quantiles: List[float] = [0.7, 0.3],
+        quantiles: Optional[List[float]] = None, # Fix
         min_adx: float = 20.0,
         min_history_for_quantile: int = 20,
         fallback_strong: float = 25.0,
@@ -361,7 +366,7 @@ class TradingStrategy(ABC):
         adx_val_history: List[Optional[float]],
         price_history: List[Optional[float]],
         window: int = 100,
-        mode: str = "trend", # 'trend', 'reversal', or 'exhaustion'
+        mode: Literal["trend", "reversal", "exhaustion"] = "trend",
         # parameters for trend
         trend_quantiles: List[float] = [0.7, 0.3],
         # parameters for exhaustion detection
@@ -411,37 +416,6 @@ class TradingStrategy(ABC):
         if abs(past) < EPS:
             return None
         return curr / past - 1.0
-    
-    def _make_exit_plan(
-        self,
-        side: str,
-        entry_price: float,
-        atr: Optional[float],
-        stop_atr_mult: float,
-        tp_atr_mult: float,
-        stop_fib_level: Optional[float] = None,
-    ) -> Dict[str, Any]:
-        plan = {"stop": None, "tp": None, "trailing": None, "atr": atr}
-        if atr is None or not self._is_finite(entry_price):
-            return plan
-        if side == "long":
-            # stop by ATR or by fib stop level if given (use tighter)
-            stop_atr = entry_price - stop_atr_mult * atr
-            if stop_fib_level is not None:
-                plan["stop"] = min(stop_atr, stop_fib_level)
-            else:
-                plan["stop"] = stop_atr
-            plan["tp"] = entry_price + tp_atr_mult * atr
-            plan["trailing"] = entry_price - 0.8 * atr
-        else:
-            stop_atr = entry_price + stop_atr_mult * atr
-            if stop_fib_level is not None:
-                plan["stop"] = max(stop_atr, stop_fib_level)
-            else:
-                plan["stop"] = stop_atr
-            plan["tp"] = entry_price - tp_atr_mult * atr
-            plan["trailing"] = entry_price + 0.8 * atr
-        return plan
     
     def _extract_latest_indicator_value(self, series: Optional[List[Any]], keys: List[str]) -> Optional[float]:
         """
@@ -531,115 +505,3 @@ class TradingStrategy(ABC):
             else:
                 out.append(None)
         return out
-
-class ExitPlanner:
-    def __init__(
-            self,
-            highs: List[float],
-            lows: List[float],
-            atr: float,
-            atr_period: Optional[int] = 14,
-            close_price: Optional[float ]= None,
-            atr_mult: float = 3.0,
-            atr_tp_mult: float = 2.0,        # Default ATR-based TP multiplier
-            fib_stop_ratio: float = 0.236,   # Default for stop-loss
-            fib_tp_ratio: float = 0.618,     # Default for take-profit
-    ):
-        """
-        Initialize ExitPlanner with ATR multiplier, Fibonacci ratios, and ATR-based TP multiplier.
-        """
-        self.highs = highs
-        self.lows = lows
-        self.atr = atr
-        self.atr_period = atr_period
-        self.close_price = close_price
-        self.atr_mult = atr_mult
-        self.fib_stop_ratio = fib_stop_ratio
-        self.fib_tp_ratio = fib_tp_ratio
-        self.atr_tp_mult = atr_tp_mult
-
-    def make_exit_plan(self, trading_signal: Literal['buy', 'sell']) -> Dict[str, Any]:
-        """
-        Create exit plan combining Chandelier Exit, Fibonacci stop, and take-profit levels.
-        """
-        plan = {
-            "atr": self.atr,
-            "atr_period": self.atr_period,
-            "atr_mult": self.atr_mult,
-            "fib_stop_ratio": self.fib_stop_ratio,
-            "fib_tp_ratio": self.fib_tp_ratio,
-            "atr_tp_mult": self.atr_tp_mult,
-        }
-        signal = trading_signal
-
-        if self.atr is None or not self.highs or not self.lows:
-            return plan
-
-        # Slice highs and lows based on lookback
-        lookback = self.atr_period
-        highs_slice = self.highs[-lookback:] if len(self.highs) >= lookback else self.highs
-        lows_slice = self.lows[-lookback:] if len(self.lows) >= lookback else self.lows
-
-        highest_high = max(highs_slice)
-        lowest_low = min(lows_slice)
-
-        # --- Stop Loss Calculation ---
-        if self.fib_stop_ratio is not None and self.close_price is not None:
-            if signal == "buy":
-                stop_fib_level = lowest_low + (highest_high - lowest_low) * self.fib_stop_ratio
-            else:
-                stop_fib_level = highest_high - (highest_high - lowest_low) * self.fib_stop_ratio
-            plan["fib_stop_loss_at"] = stop_fib_level
-
-        # Chandelier stop
-        if signal == "buy":
-            chandelier_stop = highest_high - self.atr_mult * self.atr
-        else:
-            chandelier_stop = lowest_low + self.atr_mult * self.atr
-        plan["chandelier_stop_loss_at"] = chandelier_stop
-
-        # --- Take Profit Calculation ---
-        tp_levels = {}
-
-        # ATR-based TP
-        if self.atr_tp_mult is not None and self.close_price is not None:
-            if signal == "buy":
-                tp_levels["atr_tp"] = self.close_price + self.atr_tp_mult * self.atr
-            else:
-                tp_levels["atr_tp"] = self.close_price - self.atr_tp_mult * self.atr
-
-        # Fibonacci-based TP
-        if self.fib_tp_ratio is not None and self.close_price is not None:
-            if signal == "buy":
-                tp_levels["fib_tp"] = lowest_low + (highest_high - lowest_low) * self.fib_tp_ratio
-            else:
-                tp_levels["fib_tp"] = highest_high - (highest_high - lowest_low) * self.fib_tp_ratio
-
-        if tp_levels:
-            plan["take_profit_levels"] = tp_levels
-
-        return plan
-
-
-class StrategyUtilities:
-
-    @staticmethod
-    def normalize(self, val: float, min_val: float, max_val: float) -> float:
-        if val is None or max_val <= min_val:
-            return 0.0
-        return (val - min_val) / (max_val - min_val)
-
-    @staticmethod
-    def is_finite(v: Any) -> bool:
-        try:
-            return v is not None and not (
-                isinstance(v, float) and (isnan(v) or isinf(v))
-            )
-        except Exception:
-            return False
-    @staticmethod
-    def highest(vals: List[float], n: int) -> float:
-        return max(vals[-n:]) if len(vals) >= n and n > 0 else max(vals)
-    @staticmethod
-    def lowest(vals: List[float], n: int) -> float:
-        return min(vals[-n:]) if len(vals) >= n and n > 0 else min(vals)

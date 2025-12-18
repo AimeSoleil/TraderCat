@@ -13,20 +13,19 @@ from trade_bot.strategy.divergence_strategy import DivergenceStrategy, make_dive
 from trade_bot.strategy.fibonacci_retracement_strategy import FibonacciRetracementStrategy, make_fibonacci_presets
 from trade_bot.strategy.momentum_strategy import MomentumTrendStrategy, make_momentum_presets
 from trade_bot.logger.logger import get_logger
-from trade_bot.strategy.sector_rotation_strategy import SectorRotationStrategy
 
 logger = get_logger(__name__)
 
 # 🔧 Configuration
 CONFIG = {
-    "symbols": ["PLTR"],  # Add more tickers as needed
+    "symbols": ["TSLA"],  # Add more tickers as needed
     "strategies": { # Strategy name to list of preset names
         # "BBBreakout": ["swing"],
         # "BBReversal": ["swing"],
-        "ReversalCandle": ["swing"],
+        # "ReversalCandle": ["swing"],
         # "Divergence": ["swing"],
-        # "Fibonacci": ["swing"],
-        # "Momentum": ["swing"],
+        "Fibonacci": ["swing"],
+        "Momentum": ["swing"],
 
         # "BBBreakout": ["intermediate"],
         # "BBReversal": ["intermediate"],

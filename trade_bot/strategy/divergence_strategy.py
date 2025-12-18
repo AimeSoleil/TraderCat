@@ -1,8 +1,9 @@
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Callable
 import statistics
 
+from trade_bot.strategy.exit_planner import ExitPlanner
 from trade_bot.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
-from trade_bot.strategy.trading_strategy import ExitPlanner, TradingStrategy, EPS
+from trade_bot.strategy.trading_strategy import TradingStrategy
 from trade_bot.strategy.signal_model import SignalModel
 from trade_bot.logger.logger import get_logger
 
@@ -10,22 +11,15 @@ logger = get_logger(__name__)
 
 class DivergenceStrategy(TradingStrategy):
     """
-    Divergence 策略（Regular + Hidden）
-    - 目标：在日线识别常规背离（regular divergence）与隐藏背离（hidden divergence），
-        用于捕捉反转（regular）与趋势延续（hidden）。
-    - 指标：默认 RSI（可选 MACD histogram）为主；可选 ADX/ATR 过滤。
-    - 逻辑要点：
-        * Regular Bearish: 价格做 HH，而指标未创新高（或下降） -> 顶背离 -> 做空/平多
-        * Regular Bullish: 价格做 LL，而指标未创新低 -> 底背离 -> 做多/平空
-        * Hidden Bullish: 价格做 higher-low，但指标做 lower-low -> 趋势延续多头
-        * Hidden Bearish: 价格做 lower-high，但指标做 higher-high -> 趋势延续空头
-    - 输出 SignalModel 包含 reason、confidence、建议止损/目标（基于最近 swing + ATR）
-    - 以日线为主；通过 presets 可切换短/中/长周期敏感度
+    Divergence Strategy (Refactored for Production)
+    - Fix: Added 'freshness' check to ensure signals are traded immediately upon fractal confirmation.
+    - Fix: Consolidated logic to reduce code duplication.
+    - Improvement: Added RSI context filters (Overbought/Oversold).
     """
 
     def __init__(
         self,
-        swing_window: int = 5,  # N-bar fractal window
+        swing_window: int = 5,
         lookback_swings: int = 60,
         rsi_period: int = 14,
         macd_params: Optional[Dict[str, int]] = None,
@@ -47,9 +41,8 @@ class DivergenceStrategy(TradingStrategy):
         self.score_threshold = float(score_threshold)
         self.provider = data_provider
 
-        # 指标字段命名（对应 provider 返回的属性）
+        # Fields
         self.macd_field = f"close_MACD_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}"
-        self.macd_signal_field = f"close_MACDs_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}"
         self.macd_hist_field = f"close_MACDh_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}"
         self.atr_field = f"ATRr_{self.atr_period}"
         self.rsi_field = f"close_RSI_{self.rsi_period}"
@@ -71,453 +64,217 @@ class DivergenceStrategy(TradingStrategy):
             + 5
         )
 
-    # Supported scoring factors
     def support_scoring_factors(self) -> List[FactorName]:
         return  [
             FactorName.DIVERGENCE,
             FactorName.TREND_STRENGTH,
             FactorName.VOLUME_CONFIRM,
-            FactorName.VOLUME_CONFIRM,
+            FactorName.MOMENTUM_CONFIRM,
             FactorName.CONFLUENCE_BONUS
         ]
-    
-    # ---------- 主逻辑 ----------
-    def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
-        """
-        输入:
-            candles: 日线序列（old..new），每条需含 high/low/open/close/volume/date
-        输出:
-            SignalModel(signal ∈ {'buy','sell','hold'}, confidence, reason, details)
-        """
-        if (
-            not candles
-            or not self.provider
-            or len(candles) < self.get_lookback_window()
-        ):
-            return SignalModel(
-                symbol=symbol,
-                strategy=self.get_name(),
-                signal="hold",
-                date=candles[-1].date if candles else None,
-                confidence=0.0,
-                reason="数据不足",
-            )
 
-        # indicators via provider
+    # --- Helper: Core Divergence Logic ---
+    def _check_divergence_logic(
+        self,
+        pts: List[Tuple[int, float]],
+        indicator_history: List[float],
+        candles_len: int,
+        compare_price: Callable[[float, float], bool],     # e.g. lambda p2, p1: p2 > p1
+        compare_indicator: Callable[[float, float], bool], # e.g. lambda i2, i1: i2 <= i1
+        freshness_threshold: int
+    ) -> Tuple[bool, Optional[float], Optional[float], int, int]:
+        """
+        Generic detector for divergence.
+        Returns: (found, val1, val2, idx1, idx2)
+        """
+        if len(pts) < 2:
+            return False, None, None, -1, -1
+        
+        (i1, p1), (i2, p2) = pts[-2], pts[-1]
+        
+        # 1. Freshness Check (Critical Fix)
+        # The pivot i2 is confirmed only after 'swing_window' bars.
+        # So the signal is valid if current_bar is exactly (or very close to) i2 + swing_window.
+        # We allow a small buffer (e.g., 1 bar) in case of calculation delays.
+        current_idx = candles_len - 1
+        confirmation_idx = i2 + self.swing_window
+        
+        if current_idx < confirmation_idx:
+            return False, None, None, -1, -1 # Pivot not confirmed yet (shouldn't happen if find_fractal is correct)
+        
+        if current_idx > confirmation_idx + 1:
+            return False, None, None, -1, -1 # Signal is stale (happened >1 bar ago)
+
+        # 2. Price Comparison
+        if not compare_price(p2, p1):
+            return False, None, None, -1, -1
+
+        # 3. Indicator Comparison
+        # Handle indicator alignment safely
+        hist_len = len(indicator_history)
+        offset = candles_len - hist_len
+        
+        # Map candle indices i1, i2 to indicator indices
+        ind_i1 = i1 - offset
+        ind_i2 = i2 - offset
+        
+        if ind_i1 < 0 or ind_i2 < 0 or ind_i2 >= hist_len:
+            return False, None, None, -1, -1
+            
+        val1 = indicator_history[ind_i1]
+        val2 = indicator_history[ind_i2]
+        
+        if val1 is None or val2 is None:
+            return False, None, None, -1, -1
+
+        if compare_indicator(val2, val1):
+            return True, val1, val2, i1, i2
+            
+        return False, None, None, -1, -1
+
+    # ---------- Main Logic ----------
+    def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
+        if not candles or len(candles) < self.get_lookback_window():
+            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Data insufficient")
+
+        # 1. Data Prep
         rsi_series = self.provider.get_indicator("rsi", candles, {"length": self.rsi_period})
         macd_series = self.provider.get_indicator("macd", candles, self.macd_params)
         atr_series = self.provider.get_indicator("atr", candles, {"length": self.atr_period})
         adx_series = self.provider.get_indicator("adx", candles, {"length": self.adx_period})
 
-        highs = [float(getattr(c, "high", 0)) for c in candles]
-        lows = [float(getattr(c, "low", 0)) for c in candles]
-        closes = [float(getattr(c, "close", 0)) for c in candles]
-        vols = [float(getattr(c, "volume", 0)) for c in candles]
-        dates = [getattr(c, "date", None) for c in candles]
+        highs = [float(c.high) for c in candles]
+        lows = [float(c.low) for c in candles]
+        closes = [float(c.close) for c in candles]
+        vols = [float(c.volume) for c in candles]
+        dates = [c.date for c in candles]
         close = closes[-1]
-        atr_val_history = [getattr(a, self.atr_field, None) for a in atr_series]
-        adx_val_history = [getattr(a, self.adx_field, None) for a in adx_series]
-        rsi_val_history = [getattr(r, self.rsi_field, None) for r in rsi_series]
-        macd_hist_val_history = [getattr(m, self.macd_hist_field, None) for m in macd_series] if macd_series else []
-        current_atr_val = atr_val_history[-1]
 
-        # 成交量 z-score 确认
-        recent_window = max(1, min(self.vol_zscore_window, len(vols)))
-        vol_ok, volume_z = self._check_volume_zscore(
-            vols, recent_window, self.vol_zscore_threshold
-        )
+        atr_hist = [getattr(x, self.atr_field, None) for x in atr_series]
+        adx_hist = [getattr(x, self.adx_field, None) for x in adx_series]
+        rsi_hist = [getattr(x, self.rsi_field, None) for x in rsi_series]
+        macd_hist = [getattr(x, self.macd_hist_field, None) for x in macd_series] if macd_series else []
+        
+        curr_atr = atr_hist[-1] if atr_hist else 0.0
 
-        # find fractals (use lookback window slice to reduce noise)
-        use_highs = highs[-(self.lookback_swings + self.swing_window * 2 + 5) :]
-        use_lows = lows[-(self.lookback_swings + self.swing_window * 2 + 5) :]
-        high_pts, low_pts = self._find_fractal_swings(use_highs, use_lows, self.swing_window)
-        # rebase indices to full candles
-        base = len(highs) - len(use_highs)
-        high_pts = [(i + base, v) for (i, v) in high_pts]
-        low_pts = [(i + base, v) for (i, v) in low_pts]
+        # 2. Volume Check
+        vol_ok, vol_z = self._check_volume_zscore(vols, self.vol_zscore_window, self.vol_zscore_threshold)
 
-        # helper to get last two relevant swings (most recent two)
-        def last_two(points: List[Tuple[int, float]]):
-            if len(points) < 2:
-                return None
-            return points[-2], points[-1]
+        # 3. Find Fractals
+        # Use a slice to speed up, but ensure enough buffer
+        slice_start = max(0, len(highs) - self.lookback_swings - 50)
+        high_pts, low_pts = self._find_fractal_swings(highs[slice_start:], lows[slice_start:], self.swing_window)
+        # Rebase indices
+        high_pts = [(i + slice_start, v) for i, v in high_pts]
+        low_pts = [(i + slice_start, v) for i, v in low_pts]
 
-
-        details: Dict[str, Any] = {
-            "close": close,
-            "atr": atr_val_history[-1],
-            "vol_z": volume_z
-        }
-        result: ScoringResult = None
-        # ---- check bearish / bullish on regular & hidden using highs and lows ----
+        # 4. Detect Divergences
+        # We check all 4 types, but prioritize Regular > Hidden
+        
+        div_type = None
         found = False
-        h2 = last_two(high_pts)
-        if h2:
-            (i1, p1), (i2, p2) = h2
-            if i2 > i1 and p2 > p1 + EPS:
-                # price made higher high -> possible regular bearish if indicator did not make HH
-                # locate indicator values at approx indices (map into rsi_hist slice)
-                r1, r2 = self._get_indicator_values_at_indices(
-                    rsi_val_history, [i1, i2], len(candles)
-                )
-                macd1, macd2 = (None, None)
-                if macd_hist_val_history:
-                    macd1, macd2 = self._get_indicator_values_at_indices(
-                        macd_hist_val_history, [i1, i2], len(candles)
-                    )
+        ind_vals = (None, None)
+        swing_dates = (None, None)
+        
+        # Logic Definitions
+        # Regular Bear: Price HH, Ind Lower
+        # Regular Bull: Price LL, Ind Higher
+        # Hidden Bear:  Price LH, Ind Higher
+        # Hidden Bull:  Price HL, Ind Lower
+        
+        check_configs = [
+            # (Type, Points, PriceComp, IndComp, Side)
+            ("regular_bear", high_pts, lambda p2, p1: p2 > p1, lambda i2, i1: i2 <= i1, "short"),
+            ("regular_bull", low_pts,  lambda p2, p1: p2 < p1, lambda i2, i1: i2 >= i1, "long"),
+            ("hidden_bear",  high_pts, lambda p2, p1: p2 < p1, lambda i2, i1: i2 > i1,  "short"),
+            ("hidden_bull",  low_pts,  lambda p2, p1: p2 > p1, lambda i2, i1: i2 < i1,  "long"),
+        ]
 
-                indicator_failed_to_confirm = False
-                if r1 is not None and r2 is not None:
-                    indicator_failed_to_confirm = r2 <= r1 + EPS
-                elif macd1 is not None and macd2 is not None:
-                    indicator_failed_to_confirm = macd2 <= macd1 + EPS
-                else:
-                    indicator_failed_to_confirm = False
-
-                # Mark divergence found = True
-                if indicator_failed_to_confirm:
-                    found = True
-                
-                # momentum confirm: prefer RSI falling or macd hist negative
-                mom_ok = self._momentum_confirm(
-                    rsi_val_history=rsi_val_history, 
-                    macd_hist_val_history=macd_hist_val_history, 
-                    prefer="short"
-                )
-
-                # 趋势强度
-                trend_strength = self._check_trend_and_volatility(
-                    atr_val_history=atr_val_history,
-                    adx_val_history=adx_val_history,
-                    price_history=closes,
-                    window=100,
-                    mode='reversal',
-                    trend_quantiles=[0.6, 0.4]
-                )
-
-                details.update(
-                    {
-                        "type": "regular_bear",
-                        "swing1": (dates[i1], p1),
-                        "swing2": (dates[i2], p2),
-                        "indicator_r1": r1,
-                        "indicator_r2": r2,
-                    }
-                )
-
-                # ---------- 评分系统 ----------
-                factors = [
-                    Factor(FactorName.DIVERGENCE, "Bearish背离触发", 0.4, indicator_failed_to_confirm),
-                    Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.2, trend_strength.signal),
-                    Factor(FactorName.MOMENTUM_CONFIRM, "动量确认方向确认", 0.2, mom_ok),
-                    Factor(FactorName.VOLUME_CONFIRM, "成交量放大确认", 0.15, vol_ok),
-                    Factor(FactorName.CONFLUENCE_BONUS, "三重共振加分", 0.05, mom_ok and trend_strength.signal)
-                ]
-
-                # Compute score using ScoringEngine
-                engine = ScoringEngine(
-                    base_threshold=self.score_threshold, 
-                    required_factors=self.support_scoring_factors(),
-                    determined_factors=[
-                        FactorName.DIVERGENCE
-                    ],
-                    is_volatility_ok=trend_strength.volatility['signal']
-                )
-                result = engine.compute_score(factors, side="short")
-
-                # 计算入场止损与 trailing stop
-                if result.signal != 'hold':
-                    planner = ExitPlanner(
-                        highs=highs,
-                        lows=lows,
-                        atr=current_atr_val,
-                        close_price=close
-                    )
-                    plan = planner.make_exit_plan(trading_signal=result.signal)
-                    details.update({"plan": plan})
-        # Regular bullish / hidden bullish (use last two lows)
-        l2 = last_two(low_pts)
-        if not found and l2:
-            (j1, q1), (j2, q2) = l2
-            if j2 > j1 and q2 < q1 - EPS:
-                # price made lower low -> possible regular bullish if indicator did not make LL
-                r1 = r2 = None
-                if rsi_val_history:
-                    rel_base = len(candles) - len(rsi_val_history)
-                    try:
-                        r1 = (
-                            rsi_val_history[j1 - rel_base]
-                            if 0 <= j1 - rel_base < len(rsi_val_history)
-                            else None
-                        )
-                        r2 = (
-                            rsi_val_history[j2 - rel_base]
-                            if 0 <= j2 - rel_base < len(rsi_val_history)
-                            else None
-                        )
-                    except Exception:
-                        r1 = r2 = None
-                macd1 = macd2 = None
-                if macd_hist_val_history:
-                    rel_base = len(candles) - len(macd_hist_val_history)
-                    try:
-                        macd1 = (
-                            macd_hist_val_history[j1 - rel_base]
-                            if 0 <= j1 - rel_base < len(macd_hist_val_history)
-                            else None
-                        )
-                        macd2 = (
-                            macd_hist_val_history[j2 - rel_base]
-                            if 0 <= j2 - rel_base < len(macd_hist_val_history)
-                            else None
-                        )
-                    except Exception:
-                        macd1 = macd2 = None
-
-                indicator_failed = False
-                if r1 is not None and r2 is not None:
-                    indicator_failed = r2 >= r1 - EPS
-                elif macd1 is not None and macd2 is not None:
-                    indicator_failed = macd2 >= macd1 - EPS
-                else:
-                    indicator_failed = False
-                
-                # Mark divergence found = True
-                if indicator_failed:
-                    found = True
-                
-                # momentum confirm: prefer RSI falling or macd hist negative
-                mom_ok = self._momentum_confirm(
-                    rsi_val_history=rsi_val_history, 
-                    macd_hist_val_history=macd_hist_val_history, 
-                    prefer="long"
-                )
-
-                # 趋势强度
-                trend_strength = self._check_trend_and_volatility(
-                    atr_val_history=atr_val_history,
-                    adx_val_history=adx_val_history,
-                    price_history=closes,
-                    window=100,
-                    mode='reversal',
-                    trend_quantiles=[0.6, 0.4]
-                )
-
-                details.update(
-                    {
-                        "type": "regular_bull",
-                        "swing1": (dates[j1], q1),
-                        "swing2": (dates[j2], q2),
-                        "indicator_r1": r1,
-                        "indicator_r2": r2,
-                    }
-                )
-                
-                # ---------- 评分系统 ----------
-                result: ScoringResult = None
-                factors = [
-                    Factor(FactorName.DIVERGENCE, "Bullish背离触发", 0.4, indicator_failed),
-                    Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.2, trend_strength.signal),
-                    Factor(FactorName.MOMENTUM_CONFIRM, "动量确认方向确认", 0.2, mom_ok),
-                    Factor(FactorName.VOLUME_CONFIRM, "成交量放大确认", 0.15, vol_ok),
-                    Factor(FactorName.CONFLUENCE_BONUS, "三重共振加分", 0.05, mom_ok and trend_strength.signal)
-                ]
-
-                # Compute score using ScoringEngine
-                engine = ScoringEngine(
-                    base_threshold=self.score_threshold, 
-                    required_factors=self.support_scoring_factors(),
-                    determined_factors=[
-                        FactorName.DIVERGENCE
-                    ],
-                    is_volatility_ok=trend_strength.volatility['signal']
-                )
-                result = engine.compute_score(factors, side="long")
-
-                # 计算入场止损与 trailing stop
-                if result.signal != 'hold':
-                    planner = ExitPlanner(
-                        highs=highs,
-                        lows=lows,
-                        atr=current_atr_val,
-                        close_price=close
-                    )
-                    plan = planner.make_exit_plan(trading_signal=result.signal)
-                    details.update({"plan": plan})
-        # Hidden divergences: detect trend continuation signals
-        if not found:
-            # Hidden bullish: price makes higher-low (HL) while indicator makes lower-low
-            if len(low_pts) >= 2:
-                (a_idx, a_val), (b_idx, b_val) = low_pts[-2], low_pts[-1]
-                if b_idx > a_idx and b_val > a_val + EPS:
-                    # price HL -> check indicator made lower-low
-                    r1, r2 = self._get_indicator_values_at_indices(
-                        rsi_val_history, [a_idx, b_idx], len(candles)
-                    )
-                    macd1, macd2 = (None, None)
-                    if macd_hist_val_history:
-                        macd1, macd2 = self._get_indicator_values_at_indices(
-                            macd_hist_val_history, [a_idx, b_idx], len(candles)
-                        )
-                    indicator_lower = False
-                    if r1 is not None and r2 is not None:
-                        indicator_lower = r2 < r1 - EPS
-                    elif macd1 is not None and macd2 is not None:
-                        indicator_lower = macd2 < macd1 - EPS
-                    
-                    # Mark divergence found = True
-                    if indicator_lower:
-                        found = True
-                    
-                    # momentum confirm: prefer RSI falling or macd hist negative
-                    mom_ok = self._momentum_confirm(
-                        rsi_val_history=rsi_val_history, 
-                        macd_hist_val_history=macd_hist_val_history, 
-                        prefer="long"
-                    )
-                    # 趋势强度
-                    trend_strength = self._check_trend_and_volatility(
-                        atr_val_history=atr_val_history,
-                        adx_val_history=adx_val_history,
-                        price_history=closes,
-                        window=100,
-                        mode='trend',
-                        trend_quantiles=[0.6, 0.4]
-                    )
-
-                    details.update(
-                        {
-                            "type": "hidden_bull",
-                            "swing_prev": (dates[a_idx], a_val),
-                            "swing_latest": (dates[b_idx], b_val),
-                        }
-                    )
-
-                    # ---------- 评分系统 ----------
-                    result: ScoringResult = None
-                    factors = [
-                        Factor(FactorName.DIVERGENCE, "隐藏Bullish背离触发", 0.3, indicator_lower),
-                        Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.25, trend_strength.signal),
-                        Factor(FactorName.MOMENTUM_CONFIRM, "动量确认方向确认", 0.2, mom_ok),
-                        Factor(FactorName.VOLUME_CONFIRM, "成交量放大确认", 0.15, vol_ok),
-                        Factor(FactorName.CONFLUENCE_BONUS, "三重共振加分", 0.1, mom_ok and trend_strength.signal)
-                    ]
-
-                    # Compute score using ScoringEngine
-                    engine = ScoringEngine(
-                        base_threshold=self.score_threshold, 
-                        required_factors=self.support_scoring_factors(),
-                        determined_factors=[
-                            FactorName.DIVERGENCE
-                        ],
-                        is_volatility_ok=trend_strength.volatility['signal']
-                    )
-                    result = engine.compute_score(factors, side="long")
-
-                    # 计算入场止损与 trailing stop
-                    if result.signal != 'hold':
-                        planner = ExitPlanner(
-                            highs=highs,
-                            lows=lows,
-                            atr=current_atr_val,
-                            close_price=close
-                        )
-                        plan = planner.make_exit_plan(trading_signal=result.signal)
-                        details.update({"plan": plan})
-            # Hidden bearish
-            if not found and len(high_pts) >= 2:
-                (a_idx, a_val), (b_idx, b_val) = high_pts[-2], high_pts[-1]
-                if b_idx > a_idx and b_val < a_val - EPS:
-                    r1, r2 = self._get_indicator_values_at_indices(
-                        rsi_val_history, [a_idx, b_idx], len(candles)
-                    )
-                    macd1, macd2 = (None, None)
-                    if macd_hist_val_history:
-                        macd1, macd2 = self._get_indicator_values_at_indices(
-                            macd_hist_val_history, [a_idx, b_idx], len(candles)
-                        )
-                    indicator_higher = False
-                    if r1 is not None and r2 is not None:
-                        indicator_higher = r2 > r1 + EPS
-                    elif macd1 is not None and macd2 is not None:
-                        indicator_higher = macd2 > macd1 + EPS
-                    
-                    # Mark divergence found = True
-                    if indicator_higher:
-                        found = True
-
-                    # momentum confirm: prefer RSI falling or macd hist negative
-                    mom_ok = self._momentum_confirm(
-                        rsi_val_history=rsi_val_history, 
-                        macd_hist_val_history=macd_hist_val_history, 
-                        prefer="short"
-                    )
-                    # 趋势强度
-                    trend_strength = self._check_trend_and_volatility(
-                        atr_val_history=atr_val_history,
-                        adx_val_history=adx_val_history,
-                        price_history=closes,
-                        window=100,
-                        mode='trend',
-                        trend_quantiles=[0.6, 0.4]
-                    )
-
-                    details.update(
-                        {
-                            "type": "hidden_bear",
-                            "swing_prev": (dates[a_idx], a_val),
-                            "swing_latest": (dates[b_idx], b_val),
-                        }
-                    )
-
-                    # ---------- 评分系统 ----------
-                    result: ScoringResult = None
-                    factors = [
-                        Factor(FactorName.DIVERGENCE, "隐藏Bearish背离触发", 0.3, indicator_higher),
-                        Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.25, trend_strength.signal),
-                        Factor(FactorName.MOMENTUM_CONFIRM, "动量确认方向确认", 0.2, mom_ok),
-                        Factor(FactorName.VOLUME_CONFIRM, "成交量放大确认", 0.15, vol_ok),
-                        Factor(FactorName.CONFLUENCE_BONUS, "三重共振加分", 0.1, mom_ok and trend_strength.signal)
-                    ]
-
-                    # Compute score using ScoringEngine
-                    engine = ScoringEngine(
-                        base_threshold=self.score_threshold, 
-                        required_factors=self.support_scoring_factors(),
-                        determined_factors=[
-                            FactorName.DIVERGENCE
-                        ],
-                        is_volatility_ok=trend_strength.volatility['signal']
-                    )
-                    result = engine.compute_score(factors, side="short")
-
-                    # 计算入场止损与 trailing stop
-                    if result.signal != 'hold':
-                        planner = ExitPlanner(
-                            highs=highs,
-                            lows=lows,
-                            atr=current_atr_val,
-                            close_price=close
-                        )
-                        plan = planner.make_exit_plan(trading_signal=result.signal)
-                        details.update({"plan": plan})
-        # usage notes & failsafe
-        details.setdefault(
-            "notes",
-            "常规背离用于反转；隐藏背离用于趋势延续。建议结合多周期确认与新闻/流动性过滤；",
-        )
-        if not found:
-            result = ScoringResult(
-                score=0.0, threshold=self.score_threshold, signal="hold", reasons=["未检测到背离"]
+        best_result = None
+        
+        for name, pts, p_comp, i_comp, side in check_configs:
+            # Try RSI first
+            is_div, v1, v2, idx1, idx2 = self._check_divergence_logic(
+                pts, rsi_hist, len(candles), p_comp, i_comp, self.swing_window
             )
             
+            # If no RSI div, try MACD Hist
+            if not is_div and macd_hist:
+                is_div, v1, v2, idx1, idx2 = self._check_divergence_logic(
+                    pts, macd_hist, len(candles), p_comp, i_comp, self.swing_window
+                )
+            
+            if is_div:
+                # [Optimization] RSI Context Filter
+                # Filter weak signals: e.g. Regular Bearish should ideally happen when RSI is high
+                rsi_val = rsi_hist[-1] if rsi_hist else 50
+                if name == "regular_bear" and rsi_val < 50: continue # Weak top
+                if name == "regular_bull" and rsi_val > 50: continue # Weak bottom
+
+                found = True
+                div_type = name
+                ind_vals = (v1, v2)
+                swing_dates = (dates[idx1], dates[idx2])
+                
+                # Calculate Score
+                mom_ok = self._momentum_confirm(rsi_hist, macd_hist, prefer=side)
+                trend_strength = self._check_trend_and_volatility(
+                    atr_hist, adx_hist, closes, 100, 
+                    mode='reversal' if 'regular' in name else 'trend'
+                )
+                
+                factors = [
+                    Factor(FactorName.DIVERGENCE, f"{name} Triggered", 0.4, True),
+                    Factor(FactorName.TREND_STRENGTH, "Trend/Vol OK", 0.2, trend_strength.signal),
+                    Factor(FactorName.MOMENTUM_CONFIRM, "Momentum OK", 0.2, mom_ok),
+                    Factor(FactorName.VOLUME_CONFIRM, "Volume OK", 0.15, vol_ok),
+                    Factor(FactorName.CONFLUENCE_BONUS, "Bonus", 0.05, mom_ok and trend_strength.signal)
+                ]
+                
+                engine = ScoringEngine(
+                    base_threshold=self.score_threshold,
+                    required_factors=[FactorName.DIVERGENCE],
+                    determined_factors=[FactorName.DIVERGENCE],
+                    is_volatility_ok=trend_strength.volatility['signal']
+                )
+                
+                res: ScoringResult = engine.compute_score(factors, side=side)
+                
+                # Priority: Regular > Hidden. If we found Regular, stop.
+                if 'regular' in name:
+                    best_result = (res, name, swing_dates, ind_vals)
+                    break
+                else:
+                    # Keep hidden result but continue checking for regular
+                    if best_result is None:
+                        best_result = (res, name, swing_dates, ind_vals)
+
+        # 5. Final Output
+        if not best_result or best_result[0].signal == 'hold':
+            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=dates[-1], confidence=0.0, reason="No divergence")
+
+        res, d_type, s_dates, i_vals = best_result
+        
+        details = {
+            "type": d_type,
+            "swing_dates": s_dates,
+            "indicator_vals": i_vals,
+            "atr": curr_atr,
+            "vol_z": vol_z
+        }
+
+        if res.signal != 'hold':
+            planner = ExitPlanner(highs=highs, lows=lows, atr=curr_atr, close_price=close)
+            plan = planner.make_exit_plan(trading_signal=res.signal)
+            details["plan"] = plan
+
         return SignalModel(
             symbol=symbol,
             strategy=self.get_name(),
-            signal=result.signal,
+            signal=res.signal,
             date=dates[-1],
-            confidence=round(result.score, 3),
-            reason=" | ".join(result.reasons),
+            confidence=round(res.score, 3),
+            reason=" | ".join(res.reasons),
             details=details,
         )
 
@@ -539,7 +296,7 @@ def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
         "adx_period": 14,                   # ADX for trend strength filter.
         "vol_zscore_window": 20,            # Volume z-score window matches ATR period.
         "vol_zscore_threshold": 1.5,        # Moderate volume spike confirmation.
-        "score_threshold": 0.6              # Higher threshold for divergence confidence.
+        "score_threshold": 0.65             # Higher threshold for divergence confidence.
     }
 
     # ---------------- INTERMEDIATE ----------------
@@ -552,7 +309,7 @@ def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
         "adx_period": 14,
         "vol_zscore_window": 30,            # Longer volume window for stability.
         "vol_zscore_threshold": 2.0,        # Stricter volume confirmation.
-        "score_threshold": 0.8              # Balanced confidence threshold.
+        "score_threshold": 0.75              # Balanced confidence threshold.
     }
 
     # ---------------- POSITION ----------------
