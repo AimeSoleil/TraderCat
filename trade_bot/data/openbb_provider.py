@@ -11,8 +11,11 @@ logger = get_logger(__name__)
 
 class OpenBBProvider(MarketDataProvider):
     def get_price_data(self, symbol: str, interval: str, lookback: int):
-        #df = obb.equity.price.historical(symbol=symbol, interval=interval, period=f"{lookback}d", provider="tiingo")
         df = obb.equity.price.historical(symbol=symbol, interval=interval, period=f"{lookback}d")
+        return df.results # list[EquityPrice]
+
+    def get_price_data_by_range(self, symbol: str, start_date: str, end_date: str, interval: str='1d'):
+        df = obb.equity.price.historical(symbol=symbol, start_date=start_date, end_date=end_date, interval=interval)
         return df.results # list[EquityPrice]
 
     # For indicators, please refer to https://docs.openbb.co/platform/reference/technical

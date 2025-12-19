@@ -264,50 +264,61 @@ def make_momentum_presets() -> Dict[str, Dict[str, Any]]:
     """
     MomentumTrend strategy presets.
     """
-    # ---------------- SWING ----------------
+    
+    # ---------------- MID-TERM TREND (Optimized for Months) ----------------
+    # Goal: Capture Quarterly (3-month) to Semi-Annual trends.
+    # Holding Period: 4 weeks to 12 weeks.
     swing = {
-        "L": 21,                           # 1 Month Momentum
-        "ema_fast": 8,                     
-        "ema_slow": 21,                    
-        "ht_ema_fast": 8,                  # Higher Timeframe (Weekly) Fast
-        "ht_ema_slow": 21,                 # Higher Timeframe (Weekly) Slow
+        # --- Momentum Lookback ---
+        # 63 trading days = ~1 Quarter. 
+        # We want stocks that have outperformed over the last quarter.
+        "L": 63,                           
+
+        # --- Daily Trend Filter ---
+        # 20 EMA (approx 1 month) vs 50 EMA (approx 1 quarter).
+        # The 20/50 cross is the classic "Intermediate Trend" signal.
+        # It filters out short-term noise better than 9/21.
+        "ema_fast": 20,                     
+        "ema_slow": 50,                    
+
+        # --- Higher Timeframe (Weekly) Filter ---
+        # Aggregated 5-day bars (Weekly).
+        # 13 Weekly EMA (~1 Quarter) vs 26 Weekly EMA (~2 Quarters).
+        # Ensures the "Big Picture" is bullish.
+        "ht_ema_fast": 13,                  
+        "ht_ema_slow": 26,                 
+
+        # --- Filters ---
         "adx_period": 14,                  
         "atr_period": 14,                  
+
+        # --- Volume ---
+        # For mid-term trends, we don't need a massive explosion (Z > 2.0).
+        # We just need healthy volume (Z > 1.0) to confirm participation.
         "vol_zscore_window": 20,           
-        "vol_zscore_threshold": 1.5,       
-        "score_threshold": 0.6             
+        "vol_zscore_threshold": 1.0,       
+
+        # --- Scoring ---
+        # High threshold. We are looking for the "Best of the Best" leaders.
+        "score_threshold": 0.70             
     }
 
-    # ---------------- INTERMEDIATE ----------------
-    intermediate = {
-        "L": 63,                           # 1 Quarter Momentum
-        "ema_fast": 13,                    
-        "ema_slow": 34,                    
-        "ht_ema_fast": 13,
-        "ht_ema_slow": 34,
-        "adx_period": 14,
-        "atr_period": 14,
-        "vol_zscore_window": 30,           
-        "vol_zscore_threshold": 2.0,       
-        "score_threshold": 0.75            
-    }
-
-    # ---------------- POSITION ----------------
+    # ---------------- LONG-TERM POSITION ----------------
+    # Goal: Capture Annual trends (Golden Cross).
     position = {
-        "L": 126,                          # 6 Months Momentum
-        "ema_fast": 50,                    # Golden Cross settings
-        "ema_slow": 200,                    
-        "ht_ema_fast": 21,
-        "ht_ema_slow": 55,
+        "L": 126,                          # 6 Months (Half-Year) Momentum
+        "ema_fast": 50,                    # Institutional Support
+        "ema_slow": 200,                   # The "Bull/Bear" Line
+        "ht_ema_fast": 21,                 # Weekly ~ 100 days
+        "ht_ema_slow": 52,                 # Weekly ~ 1 Year
         "adx_period": 14,
         "atr_period": 14,
         "vol_zscore_window": 40,           
-        "vol_zscore_threshold": 2.5,       
-        "score_threshold": 0.85            
+        "vol_zscore_threshold": 1.0,       
+        "score_threshold": 0.80            
     }
 
     return {
-        "swing": swing,
-        "intermediate": intermediate,
+        "swing": swing,       # Actually "Mid-Term Trend" now
         "position": position
     }

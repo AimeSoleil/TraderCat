@@ -278,70 +278,52 @@ class BollingerBreakoutStrategy(TradingStrategy):
 def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
     """
     Bollinger Band breakout strategy presets based on algo trading best practices:
-    - swing: Short-term (1–2 weeks), aggressive entry, tighter thresholds.
-    - intermediate: Medium-term (2–6 weeks), balanced parameters.
-    - position: Long-term (1–3 months), conservative, stricter filters.
+    - swing: Short-term (2 days - 2 weeks), optimized for capturing volatility expansion.
     """
 
-    # ---------------- SWING TRADING ----------------
+    # ---------------- SWING TRADING (Optimized) ----------------
     swing = {
+        # --- Core BB Settings ---
         "bb_period": 20,
         "bb_std": 2.0,
-        "trailing_bw_window": 60,
-        "bw_percentile_threshold": 30.0,
-        "ema_fast": 8,
+
+        # --- Squeeze Logic (Crucial for Swing) ---
+        # Look back 6 months (approx 120 trading days) to find true low volatility.
+        # Only trigger if bandwidth is in the bottom 15% of that history.
+        "trailing_bw_window": 120,
+        "bw_percentile_threshold": 15.0,
+
+        # --- Trend Filter ---
+        # Standard swing trading EMAs.
+        "ema_fast": 9,
         "ema_slow": 21,
+
+        # --- Indicators ---
         "atr_period": 14,
         "adx_period": 14,
         "rsi_period": 14,
         "prior_swing_bars": 5,
+
+        # --- Volume Confirmation ---
+        # Breakouts must be accompanied by significant volume (2 std dev above mean).
         "vol_zscore_window": 20,
-        "vol_zscore_threshold": 1.5,
-        "score_threshold": 0.6,
-        # [New]
-        "min_atr_percent": 0.5,      # Allow slightly lower vol for swings
-        "breakout_margin_atr": 0.1   # Faster entry
+        "vol_zscore_threshold": 2.0,
+
+        # --- Scoring ---
+        # Slightly stricter threshold to filter noise.
+        "score_threshold": 0.65,
+
+        # --- [New] Filters ---
+        # Dead Stock Filter: ATR must be > 1.0% of price (ensure stock moves enough to profit).
+        "min_atr_percent": 1.0,       # Dead Stock Filter: ATR must be > 1.0% of price
+        "breakout_margin_atr": 0.2,   # Breakout Margin: Close > BBU + 0.2 * ATR
     }
 
     # ---------------- INTERMEDIATE TERM ----------------
-    intermediate = {
-        "bb_period": 20,
-        "bb_std": 2.0,
-        "trailing_bw_window": 80,
-        "bw_percentile_threshold": 25.0,
-        "ema_fast": 13,
-        "ema_slow": 34,
-        "atr_period": 14,
-        "adx_period": 14,
-        "rsi_period": 14,
-        "prior_swing_bars": 5,
-        "vol_zscore_window": 30,
-        "vol_zscore_threshold": 2.5,
-        "score_threshold": 0.7,
-        # [New]
-        "min_atr_percent": 0.8,      # Standard filter
-        "breakout_margin_atr": 0.2   # Standard confirmation
-    }
+    intermediate = { }
 
     # ---------------- POSITION TRADING ----------------
-    position = {
-        "bb_period": 20,
-        "bb_std": 2.0,
-        "trailing_bw_window": 100,
-        "bw_percentile_threshold": 30.0,
-        "ema_fast": 21,
-        "ema_slow": 55,
-        "atr_period": 14,
-        "adx_period": 14,
-        "rsi_period": 14,
-        "prior_swing_bars": 7,
-        "vol_zscore_window": 40,
-        "vol_zscore_threshold": 3.0,
-        "score_threshold": 0.8,
-        # [New]
-        "min_atr_percent": 1.0,      # 高波动率过滤
-        "breakout_margin_atr": 0.3   # 更严格的突破确认
-    }
+    position = { }
 
     return {
         "swing": swing,

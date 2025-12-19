@@ -156,6 +156,7 @@ class FibonacciRetracementStrategy(TradingStrategy):
         # Data Extraction
         highs = [float(c.high) for c in candles]
         lows = [float(c.low) for c in candles]
+        opens = [float(c.open) for c in candles]
         closes = [float(c.close) for c in candles]
         vols = [float(c.volume) for c in candles]
         dates = [c.date for c in candles]
@@ -263,8 +264,20 @@ class FibonacciRetracementStrategy(TradingStrategy):
             # Let's use: Breakout of Zone High (0.382) implies retracement is over.
             # OR: Price is in zone AND Candle is Green AND RSI hooking up.
             
-            breakout_confirm = curr_close > zone_high
-            bounce_confirm = in_zone and (curr_close > closes[-2]) # Simple bounce
+            # [Optimization] Breakout Confirmation
+            # Instead of just Close > Zone High, we can require Close > EMA Fast (9).
+            # This confirms that short-term momentum has realigned with the major trend.
+            
+            # breakout_confirm = curr_close > zone_high  <-- Old logic (can be too late if zone is wide)
+            
+            # New Logic:
+            # 1. Price is above the "Deep" part of the zone (e.g. > 0.618 level in uptrend)
+            # 2. Price reclaims the Fast EMA (9)
+            
+            breakout_confirm = (curr_close > zone_low) and (curr_close > ema_fast_val)
+            
+            # Bounce confirm remains useful for early entry
+            bounce_confirm = in_zone and (curr_close > closes[-2]) and (curr_close > opens[-1]) # Green candle
             
             if breakout_confirm or bounce_confirm:
                 signal_triggered = True
@@ -338,61 +351,42 @@ class FibonacciRetracementStrategy(TradingStrategy):
 def make_fibonacci_presets() -> Dict[str, Dict[str, Any]]:
     """
     Fibonacci retracement strategy presets based on algo trading best practices:
-    - swing: Short-term (1–2 weeks), aggressive entry, tighter retracement zone.
-    - intermediate: Medium-term (2–6 weeks), balanced parameters.
-    - position: Long-term (1–3 months), conservative, stricter filters.
+    - swing: Optimized for "Buy the Dip" in established trends.
     """
 
-    # ---------------- SWING ----------------
+    # ---------------- SWING TRADING (Optimized) ----------------
     swing = {
-        "lookback_swings": 20,               # Short lookback for recent swings.
-        "swing_window": 5,                   # Minimum bars for pivot confirmation.
-        "fib_zone": (0.382, 0.618),          # Golden zone for retracement entries.
-        "ema_fast": 8,                       # Fast EMA for short-term trend.
-        "ema_slow": 21,                      # Slow EMA for trend confirmation.
-        "atr_period": 14,                    # ATR for volatility context.
-        "rsi_period": 14,                    # RSI for momentum filter.
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD.
-        "adx_period": 14,                    # ADX for trend strength.
-        "vol_zscore_window": 20,             # Volume z-score window matches EMA period.
-        "vol_zscore_threshold": 1.5,         # Moderate volume spike confirmation.
-        "score_threshold": 0.6               # Slightly lenient threshold for swing entries.
-    }
+        # --- Swing Detection ---
+        # 5 bars (1 week) is standard for identifying significant swing points.
+        "lookback_swings": 40,               # Look back ~2 months to find the major impulse.
+        "swing_window": 5,                   
 
-    # ---------------- INTERMEDIATE ----------------
-    intermediate = {
-        "lookback_swings": 40,               # Longer lookback for medium-term swings.
-        "swing_window": 7,                   # More bars for stronger pivot confirmation.
-        "fib_zone": (0.382, 0.618),          # Golden zone remains standard.
-        "ema_fast": 13,                      # Slightly slower EMA for medium-term trend.
-        "ema_slow": 34,                      # Slower EMA for confirmation.
-        "atr_period": 14,
-        "rsi_period": 14,
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-        "adx_period": 14,
-        "vol_zscore_window": 30,             # Longer volume window for stability.
-        "vol_zscore_threshold": 2.0,         # Stricter volume confirmation.
-        "score_threshold": 0.75              # Balanced confidence threshold.
-    }
+        # --- Fib Zone ---
+        # The "Golden Pocket" is between 0.5 and 0.618. 
+        # But for strong trends, 0.382 is common. We keep the wide zone.
+        "fib_zone": (0.382, 0.618),          
 
-    # ---------------- POSITION ----------------
-    position = {
-        "lookback_swings": 80,               # Very long lookback for major trend retracements.
-        "swing_window": 9,                   # Strong pivot confirmation for position trades.
-        "fib_zone": (0.382, 0.618),          # Golden zone remains standard.
-        "ema_fast": 21,                      # Slow EMA for position trend.
-        "ema_slow": 55,                      # Very slow EMA for strong trend confirmation.
-        "atr_period": 14,
-        "rsi_period": 14,
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-        "adx_period": 14,
-        "vol_zscore_window": 40,             # Long volume window for position trades.
-        "vol_zscore_threshold": 2.5,         # Very strict volume confirmation.
-        "score_threshold": 0.85              # High confidence threshold for position entries.
+        # --- Trend Filter ---
+        # Use 9/21 EMA. Price should be respecting the 21 EMA in a healthy swing trend.
+        "ema_fast": 9,                       
+        "ema_slow": 21,                      
+
+        # --- Indicators ---
+        "atr_period": 14,                    
+        "rsi_period": 14,                    
+        "macd_params": {"fast": 12, "slow": 26, "signal": 9}, 
+        "adx_period": 14,                    
+
+        # --- Volume Confirmation ---
+        # The bounce from the Fib level needs volume validation.
+        "vol_zscore_window": 20,             
+        "vol_zscore_threshold": 1.5,         
+
+        # --- Scoring ---
+        # Set to 0.65. We need Trend + Fib Level + Bounce Confirmation.
+        "score_threshold": 0.65               
     }
 
     return {
-        "swing": swing,
-        "intermediate": intermediate,
-        "position": position
+        "swing": swing
     }

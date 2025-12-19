@@ -262,52 +262,38 @@ class CandlestickReversalStrategy(TradingStrategy):
 
 def make_candlestick_reversal_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Candlestick Reversal Presets (Optimized).
+    Candlestick Reversal Presets (Optimized for Algo Trading).
     """
 
-    # ---------------- SWING (Aggressive / Pullback) ----------------
-    # Catching quick dips in strong trends.
+    # ---------------- SWING TRADING (Optimized) ----------------
+    # Strategy: "Buy the Dip" in an Uptrend / "Sell the Rally" in a Downtrend.
     swing = {
-        "ema_fast": 9,                     # 9 EMA 更适合日线 swing（减少假信号）
-        "ema_slow": 20,                    # 20 SMA 是经典支撑/阻力位
-        "atr_period": 14,
-        "rsi_period": 14,                  # 14 RSI 标准，避免过度敏感
-        "adx_period": 14,
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9},  # 标准 MACD
-        "vol_zscore_window": 20,
-        "vol_zscore_threshold": 1.5,       # 提高成交量门槛（避免假突破）
-        "score_threshold": 0.60,           # 略提高信号质量
-    }
+        # --- Trend Filter ---
+        # Use 9/21 EMA. This is the standard "Swing Trader's Zone".
+        # We only look for Bullish patterns when EMA 9 > EMA 21.
+        "ema_fast": 9,
+        "ema_slow": 21,
 
-    # ---------------- INTERMEDIATE (Balanced) ----------------
-    intermediate = {
-        "ema_fast": 13,
-        "ema_slow": 34,
+        # --- Volatility & Momentum ---
         "atr_period": 14,
-        "rsi_period": 14,
-        "adx_period": 14,
+        "rsi_period": 14,       # Standard RSI. Look for oversold dips (RSI < 40) in uptrends.
+        "adx_period": 14,       # ADX helps filter out ranging markets.
+
+        # --- MACD (Momentum Confirmation) ---
         "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-        "vol_zscore_window": 30,
+
+        # --- Volume Confirmation ---
+        # Reversal candles (e.g., Hammer) need volume validation.
+        # 1.5 std devs above mean ensures institutions are stepping in.
+        "vol_zscore_window": 20,
         "vol_zscore_threshold": 1.5,
+
+        # --- Scoring ---
+        # Set to 0.65 to filter out weak patterns.
+        # We want Confluence: Trend + Pattern + Volume + Momentum.
         "score_threshold": 0.65,
     }
 
-    # ---------------- POSITION (Major Trend Reversal) ----------------
-    # Trading with the "Golden Cross" logic.
-    position = {
-        "ema_fast": 50,                    # Institutional trend line.
-        "ema_slow": 200,                   # Major market baseline.
-        "atr_period": 21,
-        "rsi_period": 14,
-        "adx_period": 14,
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-        "vol_zscore_window": 50,
-        "vol_zscore_threshold": 2.0,       # Significant volume required.
-        "score_threshold": 0.75,
-    }
-
     return {
-        "swing": swing,
-        "intermediate": intermediate,
-        "position": position
+        "swing": swing
     }

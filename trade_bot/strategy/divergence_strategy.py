@@ -205,11 +205,22 @@ class DivergenceStrategy(TradingStrategy):
                 )
             
             if is_div:
-                # [Optimization] RSI Context Filter
-                # Filter weak signals: e.g. Regular Bearish should ideally happen when RSI is high
+                # [Optimization] RSI Context Filter (Enhanced for Swing)
                 rsi_val = rsi_hist[-1] if rsi_hist else 50
-                if name == "regular_bear" and rsi_val < 50: continue # Weak top
-                if name == "regular_bull" and rsi_val > 50: continue # Weak bottom
+                
+                # Regular Bear (Top Reversal): Ideally RSI should be Overbought (>60) to be significant.
+                # If RSI is 52 and diverging, it's weak.
+                if name == "regular_bear" and rsi_val < 60: continue 
+                
+                # Regular Bull (Bottom Reversal): Ideally RSI should be Oversold (<40).
+                if name == "regular_bull" and rsi_val > 40: continue 
+
+                # Hidden Divergence (Trend Continuation):
+                # Hidden Bull: Price HL, RSI Lower. Ideally happens in Bull Trend (RSI > 40).
+                if name == "hidden_bull" and rsi_val < 40: continue
+                
+                # Hidden Bear: Price LH, RSI Higher. Ideally happens in Bear Trend (RSI < 60).
+                if name == "hidden_bear" and rsi_val > 60: continue
 
                 found = True
                 div_type = name
@@ -281,52 +292,36 @@ class DivergenceStrategy(TradingStrategy):
 def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
     """
     Divergence strategy presets based on algo trading best practices:
-    - swing: Short-term (1–2 weeks), sensitive detection, quick confirmation.
-    - intermediate: Medium-term (2–6 weeks), balanced parameters.
-    - position: Long-term (1–3 months), stricter filters, longer lookback.
+    - swing: Optimized for catching trend reversals (Regular) and trend continuations (Hidden).
     """
 
-    # ---------------- SWING ----------------
+    # ---------------- SWING TRADING (Optimized) ----------------
     swing = {
-        "swing_window": 4,                  # Minimum bars for swing pivot → quick detection.
-        "lookback_swings": 30,              # Look back for divergence detection → short-term context.
-        "rsi_period": 14,                   # RSI for momentum divergence.
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9}, # Standard MACD.
-        "atr_period": 14,                   # ATR for volatility context.
-        "adx_period": 14,                   # ADX for trend strength filter.
-        "vol_zscore_window": 20,            # Volume z-score window matches ATR period.
-        "vol_zscore_threshold": 1.5,        # Moderate volume spike confirmation.
-        "score_threshold": 0.65             # Higher threshold for divergence confidence.
-    }
+        # --- Pivot Detection ---
+        # 5 bars left/right is standard for identifying significant swing points.
+        "swing_window": 5,                  
+        "lookback_swings": 60,              # Look back ~3 months for context.
 
-    # ---------------- INTERMEDIATE ----------------
-    intermediate = {
-        "swing_window": 6,                  # More bars for stronger pivot confirmation.
-        "lookback_swings": 50,              # Longer lookback for medium-term divergence.
-        "rsi_period": 14,
+        # --- Indicators ---
+        "rsi_period": 14,                   # Standard RSI.
         "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+        
+        # --- Context Filters ---
         "atr_period": 14,
-        "adx_period": 14,
-        "vol_zscore_window": 30,            # Longer volume window for stability.
-        "vol_zscore_threshold": 2.0,        # Stricter volume confirmation.
-        "score_threshold": 0.75              # Balanced confidence threshold.
-    }
+        "adx_period": 14,                   
+        # Note: In code logic, we should ideally ignore Regular Divergence if ADX > 40 (Strong Trend).
 
-    # ---------------- POSITION ----------------
-    position = {
-        "swing_window": 8,                  # Strong pivot confirmation for position trades.
-        "lookback_swings": 80,              # Very long lookback for major trend reversals.
-        "rsi_period": 14,
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-        "atr_period": 14,
-        "adx_period": 14,
-        "vol_zscore_window": 40,            # Long volume window for position trades.
-        "vol_zscore_threshold": 2.5,        # Very strict volume confirmation.
-        "score_threshold": 0.85             # High confidence threshold for position entries.
+        # --- Volume Confirmation ---
+        # Divergence needs volume validation to confirm the momentum shift.
+        "vol_zscore_window": 20,
+        "vol_zscore_threshold": 1.5,        
+
+        # --- Scoring ---
+        # Divergence is subjective and prone to false signals. 
+        # We set a high bar (0.70) to ensure multiple factors align.
+        "score_threshold": 0.70             
     }
 
     return {
-        "swing": swing,
-        "intermediate": intermediate,
-        "position": position
+        "swing": swing
     }

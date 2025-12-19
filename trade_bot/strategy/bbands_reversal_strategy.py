@@ -326,61 +326,50 @@ class BBandsReversalStrategy(TradingStrategy):
 
 def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Bollinger Band reversal strategy presets (Optimized).
+    Bollinger Band reversal strategy presets based on algo trading best practices:
+    - swing: Optimized for catching mean-reversion moves while avoiding strong trends.
     """
-    # ---------------- SWING ----------------
+    
+    # ---------------- SWING TRADING (Optimized) ----------------
     swing = {
-        "bb_period": 20,
-        "bb_std": 2.0,
-        # [Opt] Dynamic touch: 0.5 ATR is generous for swings
-        "touch_atr_multiplier": 0.5,    
-        "rsi_period": 9,
-        "atr_period": 14,
-        "adx_period": 14,
-        "adx_threshold": 35.0,
-        "max_time_bars": 3,
-        "vol_zscore_window": 20,
-        "vol_zscore_threshold": 1.2,
-        "macd_params": {"fast": 8, "slow": 17, "signal": 9},
-        "score_threshold": 0.55
-    }
+        # --- Core BB Settings ---
+        "bb_period": 20,            # 标准布林带周期
+        "bb_std": 2.0,              # 2倍标准差，覆盖95%的价格行为
 
-    # ---------------- INTERMEDIATE ----------------
-    intermediate = {
-        "bb_period": 20,
-        "bb_std": 2.0,
-        # [Opt] Stricter touch: 0.3 ATR
-        "touch_atr_multiplier": 0.3,    
-        "rsi_period": 14,
-        "atr_period": 14,
+        # --- Proximity Logic ---
+        # [Optimization] 0.5 ATR. 
+        # Price doesn't need to touch the band perfectly. 
+        # Within 0.5 ATR is considered "Testing the Band".
+        "touch_atr_multiplier": 0.5,    
+
+        # --- Trend Filter (Crucial for Reversals) ---
+        # [Optimization] ADX < 30. 
+        # We ONLY trade reversals when the trend is weak or maturing.
+        # If ADX > 30, it's a strong trend -> DO NOT FADE (Don't catch a falling knife).
         "adx_period": 14,
-        "adx_threshold": 30.0,
-        "max_time_bars": 5,
+        "adx_threshold": 30.0,      
+
+        # --- Pattern Recognition ---
+        # Look for rejection candles (Hammer, Shooting Star) in the last 3 days.
+        "max_time_bars": 3,
+
+        # --- Volume Confirmation ---
+        # Reversals need conviction. Volume should be 1.5 std devs above mean (Climax/Exhaustion).
         "vol_zscore_window": 20,
         "vol_zscore_threshold": 1.5,
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-        "score_threshold": 0.65
-    }
 
-    # ---------------- POSITION ----------------
-    position = {
-        "bb_period": 20,
-        "bb_std": 2.2,
-        # [Opt] Very strict touch: 0.1 ATR (Must almost hit the band)
-        "touch_atr_multiplier": 0.1,    
-        "rsi_period": 21,
-        "atr_period": 21,
-        "adx_period": 14,
-        "adx_threshold": 25.0,
-        "max_time_bars": 8,
-        "vol_zscore_window": 40,
-        "vol_zscore_threshold": 1.8,
+        # --- Momentum Indicators ---
+        "rsi_period": 14,           # Standard RSI for divergence/overbought checks
+        "atr_period": 14,
+        
+        # MACD settings (Standard)
         "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-        "score_threshold": 0.75
+
+        # --- Scoring ---
+        # Reversals are riskier than trend following, so we set a moderate threshold.
+        "score_threshold": 0.60
     }
 
     return {
-        "swing": swing,
-        "intermediate": intermediate,
-        "position": position
+        "swing": swing
     }
