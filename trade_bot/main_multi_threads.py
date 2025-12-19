@@ -93,9 +93,9 @@ async def run_all_bots(symbols, executor, discord_notifier, max_concurrency: int
                             })
             except Exception:
                 if isinstance(bot, TradeBot):
-                    logger.info(f"Error running bot[{index}] for symbol {bot.symbol}: {traceback.format_exc()}")
+                    logger.error(f"Error running bot[{index}] for symbol {bot.symbol}: {traceback.format_exc()}")
                 else:
-                    logger.info(f'Error running global bot[{index}]: {traceback.format_exc()}')
+                    logger.error(f'Error running global bot[{index}]: {traceback.format_exc()}')
             finally:
                 if isinstance(bot, TradeBot):
                     logger.info(f'✅ Finish bot[{index}] for symbol: {bot.symbol}')

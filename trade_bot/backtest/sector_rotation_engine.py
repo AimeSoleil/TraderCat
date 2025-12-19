@@ -1,6 +1,7 @@
 import sys
 import os
 from datetime import datetime, timedelta
+import traceback
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -44,6 +45,7 @@ class BacktestOpenBBProvider(MarketDataProvider):
                     end_date=end_date, 
                     interval="1d"
                 )
+                logger.info(f"Fetched {len(candles)} candles for {sym}")
                 
                 # Convert to DataFrame for easy slicing
                 data = []
@@ -67,7 +69,7 @@ class BacktestOpenBBProvider(MarketDataProvider):
                     self.data_cache[sym] = df
                     
             except Exception as e:
-                print(f"Failed to fetch data for {sym}: {e}")
+                logger.error(f"Failed to fetch data for {sym}: {traceback.format_exc()}")
 
     def set_current_date(self, date):
         self.current_date = date
@@ -150,6 +152,10 @@ def run_sector_rotation_backtest(
     rebalance_freq: str = "W-FRI",
     initial_capital: float = 10000.0
 ):
+    # [FIX] Handle deprecated 'M' frequency automatically
+    if rebalance_freq == 'M':
+        rebalance_freq = 'ME'
+        
     logger.info("--- Starting Sector Rotation Backtest (OpenBB Powered) ---")
     logger.info(f"Config: {preset_name.upper()} | Freq: {rebalance_freq} | Range: {start_date} to {end_date}")
 
@@ -218,7 +224,7 @@ def run_sector_rotation_backtest(
         try:
             signal = strategy.generate_signal()
         except Exception as e:
-            logger.error(f"Error on {current_date}: {e}")
+            logger.error(f"Error on {current_date}: {traceback.format_exc()}")
             continue
 
         # Execute Rebalance
@@ -255,18 +261,50 @@ def run_sector_rotation_backtest(
     # 6. Results
     if not history:
         logger.warning("No history generated. Check data fetching.")
-        return
+        return None  # [Changed] Return None on failure
 
     df_res = pd.DataFrame(history)
     df_res.set_index("date", inplace=True)
     
     total_return = (portfolio_value - initial_capital) / initial_capital * 100
+    
+    # [NEW] Calculate Max Drawdown for reporting
+    running_max = df_res['portfolio_value'].cummax()
+    drawdown = (df_res['portfolio_value'] - running_max) / running_max * 100
+    max_dd = abs(drawdown.min())
+
     logger.info(f"\n--- Backtest Finished ---")
     logger.info(f"Final Value: ${portfolio_value:.2f}")
     logger.info(f"Total Return: {total_return:.2f}%")
+    logger.info(f"Max Drawdown: {max_dd:.2f}%")
     
-    df_res['portfolio_value'].plot(title=f"Sector Rotation ({preset_name.upper()}) Backtest", figsize=(10, 6))
-    plt.show()
+    # [MODIFIED] Plotting and Saving Logic
+    plt.figure(figsize=(12, 6))
+    df_res['portfolio_value'].plot(title=f"Sector Rotation ({preset_name.upper()}) Backtest")
+    plt.ylabel("Portfolio Value ($)")
+    plt.grid(True, alpha=0.3)
+    
+    # Create charts directory if it doesn't exist
+    output_dir = "charts"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Generate filename with timestamp to avoid overwriting
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{output_dir}/sector_rotation_{preset_name}_{timestamp}.png"
+    
+    plt.savefig(filename)
+    logger.info(f"Chart saved to: {filename}")
+    
+    # Optional: Still show the plot if running interactively
+    # plt.show()
+
+    # [NEW] Return metrics dictionary
+    return {
+        "final_value": portfolio_value,
+        "net_profit": portfolio_value - initial_capital,
+        "total_return": total_return,
+        "max_drawdown": max_dd
+    }
 
 if __name__ == "__main__":
     # Backtest Configuration
@@ -274,13 +312,13 @@ if __name__ == "__main__":
     # start_date:      Start date of the backtest (YYYY-MM-DD)
     # end_date:        End date of the backtest (YYYY-MM-DD)
     # preset_name:     Strategy preset to use ('swing' or 'position')
-    # rebalance_freq:  Frequency of rebalancing ('W-FRI' for weekly Friday, 'M' for month end)
+    # rebalance_freq:  Frequency of rebalancing ('W-FRI' for weekly Friday, 'ME' for month end)
     # initial_capital: Starting capital in USD
     
     run_sector_rotation_backtest(
         start_date='2020-01-01',
         end_date=datetime.now().strftime("%Y-%m-%d"),
         preset_name='swing',       # Options: 'swing', 'position'
-        rebalance_freq='M',    # Options: 'W-FRI', 'M', 'Q'
+        rebalance_freq='ME',       # [FIX] Changed 'M' to 'ME'
         initial_capital=10000.0
     )

@@ -1,154 +1,225 @@
 # main.py
-import threading
+import sys
+import os
 import time
 import traceback
+from dataclasses import dataclass, field
+from typing import List, Dict
+from datetime import datetime
 from tabulate import tabulate
-from tqdm import tqdm
-from trade_bot.backtest.backtest_engine import BacktestRunner
+
+# Add project root
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+
+from trade_bot.logger.logger import get_logger
 from trade_bot.data.openbb_provider import OpenBBProvider
+
+# --- Import Strategies ---
 from trade_bot.strategy.bbands_breakout_strategy import BollingerBreakoutStrategy, make_bbands_breakout_presets
 from trade_bot.strategy.bbands_reversal_strategy import BBandsReversalStrategy, make_bbands_reversal_presets
 from trade_bot.strategy.candlestick_reversal_strategy import CandlestickReversalStrategy, make_candlestick_reversal_presets
 from trade_bot.strategy.divergence_strategy import DivergenceStrategy, make_divergence_presets
 from trade_bot.strategy.fibonacci_retracement_strategy import FibonacciRetracementStrategy, make_fibonacci_presets
 from trade_bot.strategy.momentum_strategy import MomentumTrendStrategy, make_momentum_presets
-from trade_bot.logger.logger import get_logger
+from trade_bot.strategy.sector_rotation_strategy import SectorRotationStrategy, make_sector_rotation_presets
+
+# --- Import Runners ---
+from trade_bot.backtest.backtest_engine import BacktestRunner
+from trade_bot.backtest.sector_rotation_engine import run_sector_rotation_backtest
 
 logger = get_logger(__name__)
 
-# 🔧 Configuration
-CONFIG = {
-    "symbols": ["TSLA"],  # Add more tickers as needed
-    "strategies": { # Strategy name to list of preset names
-        # "BBBreakout": ["swing"],
-        # "BBReversal": ["swing"],
-        # "ReversalCandle": ["swing"],
-        # "Divergence": ["swing"],
-        "Fibonacci": ["swing"],
-        "Momentum": ["swing"],
+# ==========================================
+# 1. Configuration
+# ==========================================
 
-        # "BBBreakout": ["intermediate"],
-        # "BBReversal": ["intermediate"],
-        # "ReversalCandle": ["intermediate"],
-        # "Divergence": ["intermediate"],
-        # "Fibonacci": ["intermediate"],
-        # "Momentum": ["intermediate"],
+@dataclass
+class BacktestConfig:
+    # Global Settings
+    start_date: str = "2025-01-01"
+    end_date: str = datetime.now().strftime("%Y-%m-%d")
+    initial_cash: float = 100000.0
+    save_charts: bool = True
+    
+    # For Single Asset Strategies (e.g., Momentum, BB)
+    # target_symbols: List[str] = field(default_factory=lambda: ["TSLA", "NVDA", "AAPL"])
+    target_symbols: List[str] = field(default_factory=lambda: []) 
+    
+    # Active Strategies to Run
+    # Format: { "StrategyName": ["preset1", "preset2"] }
+    active_strategies: Dict[str, List[str]] = field(default_factory=lambda: {
+        # --- Single Asset Strategies ---
+        # "Momentum": ["swing"],
+        # "Fibonacci": ["swing"],
+        
+        # --- Portfolio Strategies ---
+        "SectorRotation": ["swing", "position"], 
+    })
 
-        # "BBBreakout": ["position"],
-        # "BBReversal": ["position"],
-        # "ReversalCandle": ["position"],
-        # "Divergence": ["position"],
-        # "Fibonacci": ["position"],
-        # "Momentum": ["position"]
-    },
-    "interval": "1d",
-    "initial_cash": 100000,
-    "save_charts": True,  # Flag to save charts as PNG files
-}
+# ==========================================
+# 2. Strategy Registry
+# ==========================================
 
-def run_configured_presets():
-    data_provider = OpenBBProvider()
+class StrategyRegistry:
+    def __init__(self):
+        self._registry = {}
 
-    strategy_registry = {
-        "BBBreakout": (BollingerBreakoutStrategy, make_bbands_breakout_presets()),
-        "BBReversal": (BBandsReversalStrategy, make_bbands_reversal_presets()),
-        "Divergence": (DivergenceStrategy, make_divergence_presets()),
-        "ReversalCandle": (CandlestickReversalStrategy, make_candlestick_reversal_presets()),
-        "Fibonacci": (FibonacciRetracementStrategy, make_fibonacci_presets()),
-        "Momentum": (MomentumTrendStrategy, make_momentum_presets()),
-    }
+    def register(self, name, cls, preset_func, strat_type="single"):
+        """
+        strat_type: 
+            'single' = Runs on specific symbols (BacktestRunner)
+            'portfolio' = Runs on a universe of assets (SectorRotationRunner)
+        """
+        self._registry[name] = {
+            "class": cls,
+            "presets": preset_func(),
+            "type": strat_type
+        }
 
-    total_results = {}
-    for strategy_name, preset_names in CONFIG["strategies"].items():
-        strategy_class, all_presets = strategy_registry[strategy_name]
+    def get(self, name):
+        return self._registry.get(name)
 
-        for preset_name in preset_names:
-            if preset_name not in all_presets:
-                logger.info(
-                    f"⚠️ Skipping unknown preset '{preset_name}' for strategy '{strategy_name}'"
-                )
+def setup_registry() -> StrategyRegistry:
+    registry = StrategyRegistry()
+    
+    # Register Single Asset Strategies
+    registry.register("BBBreakout", BollingerBreakoutStrategy, make_bbands_breakout_presets, "single")
+    registry.register("BBReversal", BBandsReversalStrategy, make_bbands_reversal_presets, "single")
+    registry.register("Divergence", DivergenceStrategy, make_divergence_presets, "single")
+    registry.register("ReversalCandle", CandlestickReversalStrategy, make_candlestick_reversal_presets, "single")
+    registry.register("Fibonacci", FibonacciRetracementStrategy, make_fibonacci_presets, "single")
+    registry.register("Momentum", MomentumTrendStrategy, make_momentum_presets, "single")
+    
+    # Register Portfolio Strategies
+    registry.register("SectorRotation", SectorRotationStrategy, make_sector_rotation_presets, "portfolio")
+    
+    return registry
+
+# ==========================================
+# 3. Main Execution Logic
+# ==========================================
+
+def run_backtests():
+    config = BacktestConfig()
+    registry = setup_registry()
+    data_provider = OpenBBProvider() # Shared provider for single asset strategies
+
+    total_results = []
+
+    logger.info("=" * 60)
+    logger.info(f"🚀 STARTING BACKTEST SESSION")
+    logger.info(f"📅 Range: {config.start_date} to {config.end_date}")
+    logger.info(f"💰 Capital: ${config.initial_cash:,.2f}")
+    logger.info(f"📝 Strategies to Run: {list(config.active_strategies.keys())}")
+    logger.info(f"🔢 Target Symbols: {config.target_symbols}")
+    logger.info("=" * 60)
+
+    for strat_name, presets in config.active_strategies.items():
+        strat_info = registry.get(strat_name)
+        
+        if not strat_info:
+            logger.warning(f"⚠️ Strategy '{strat_name}' not found in registry.")
+            continue
+
+        strat_class = strat_info["class"]
+        available_presets = strat_info["presets"]
+        strat_type = strat_info["type"]
+
+        for preset_name in presets:
+            if preset_name not in available_presets:
+                logger.warning(f"⚠️ Preset '{preset_name}' not found for {strat_name}")
                 continue
 
-            logger.info("\n" + "=" * 80)
-            logger.info(f"🧪 Running backtest for strategy: {strategy_name}")
-            logger.info(f"🔧 Using preset: {preset_name}")
-            logger.info("=" * 80)
-
-            try:
-                start_time = time.time() # For measuring backtest duration
-
-                strategy = strategy_class(
-                    data_provider=data_provider, **all_presets[preset_name]
-                )
-
-                runner = BacktestRunner(
-                    strategy=strategy,
-                    preset_name=preset_name,
-                    symbols=CONFIG["symbols"],
-                    provider=data_provider,
-                    interval=CONFIG["interval"],
-                    lookback_days=max(365, strategy.get_lookback_window() * 2),
-                    initial_cash=CONFIG["initial_cash"],
-                )
-
-                stop_event = threading.Event()
-                progress_thread = threading.Thread(target=animate_progress_bar, args=(stop_event,))
-                progress_thread.start()
-
-                prefix = f"{strategy_name}_{preset_name}".lower()
-                results = runner.run()    # Actual backtest logic
-                total_results[prefix] = results
-
-                stop_event.set()
-                progress_thread.join()
-
-                runner.visualize(save=CONFIG.get("save_charts", False), output_dir="charts", file_prefix=prefix)
-
-                end_time = time.time()
-                duration = end_time - start_time
-                logger.info(f"✅ Finished backtest for {strategy_name} - {preset_name}")
-                logger.info(f"⏱ Duration: {duration:.2f} seconds")
-            except Exception as e:
-                stop_event.set()
-                logger.info(f"❌ Error during backtest for {strategy_name} - {preset_name}: {traceback.format_exc()}")
-
-    if total_results:
-        print_total_results(total_results)
+            logger.info(f"\n▶️ Running {strat_name} ({preset_name}) [Type: {strat_type.upper()}]")
             
-def print_total_results(total_results):
-    if total_results is None:
-        logger.info("No results to display.")
-        return
-    
-    table = []
-    for preset_key, results in total_results.items():
-        for symbol, result in results.items():
-            report = {k: v for k, v in result.items() if k != 'trade_hist'}
-            table.append([
-                preset_key or "N/A",
-                symbol,
-                round(report["final_value"], 2),
-                round(report["net_profit"], 2),
-                report["num_trades"],
-                report["win_rate"],
-                report["avg_win"],
-                report["avg_loss"],
-                report["max_drawdown"]
-            ])
-    headers = ["Preset", "Symbol", "Final Value", "Net Profit", "Trades", "Win Rate", "Avg Win", "Avg Loss", "Max Drawdown"]
-    logger.info("\n📊 Overall Strategy Performance Dashboard")
-    logger.info(f"\n{tabulate(table, headers=headers, tablefmt="pretty")}")
+            try:
+                start_time = time.time()
+                
+                # -------------------------------------------------
+                # BRANCH 1: Standard Single-Asset Strategies
+                # -------------------------------------------------
+                if strat_type == "single":
+                    # Initialize Strategy
+                    strategy_instance = strat_class(
+                        data_provider=data_provider, 
+                        **available_presets[preset_name]
+                    )
+                    
+                    runner = BacktestRunner(
+                        strategy=strategy_instance,
+                        preset_name=preset_name,
+                        symbols=config.target_symbols,
+                        provider=data_provider,
+                        interval="1d",
+                        start_date=config.start_date,
+                        end_date=config.end_date,
+                        initial_cash=config.initial_cash
+                    )
+                    
+                    # [FIX] Removed threading/fake progress bar logic
+                    # The runner itself should handle progress logging
+                    results = runner.run()
 
-def animate_progress_bar(stop_event, prefix='Progress', total=100):
-    with tqdm(total=total, desc=prefix, bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}", ncols=70) as p_bar:
-        while not stop_event.is_set():
-            time.sleep(0.5) # Adjust the sleep time as needed   
-            p_bar.update(1)
-            if p_bar.n >= total:
-                p_bar.n = 0
-                p_bar.refresh()
-        p_bar.n = total
-        p_bar.refresh()
+                    # Visualize
+                    if config.save_charts:
+                        prefix = f"{strat_name}_{preset_name}".lower()
+                        runner.visualize(save=True, output_dir="charts", file_prefix=prefix)
+
+                    # Collect Results
+                    for sym, res in results.items():
+                        total_results.append({
+                            "Strategy": strat_name,
+                            "Preset": preset_name,
+                            "Symbol": sym,
+                            "Final Value": round(res['final_value'], 2),
+                            "Net Profit": round(res['net_profit'], 2),
+                            "Win Rate": res.get('win_rate', 0),
+                            "Trades": res.get('num_trades', 0),
+                            "Max DD": res.get('max_drawdown', 0)
+                        })
+
+                # -------------------------------------------------
+                # BRANCH 2: Portfolio Strategies (Sector Rotation)
+                # -------------------------------------------------
+                elif strat_type == "portfolio":
+                    logger.info("⚡️ Delegating to Portfolio Runner...")
+                    logger.info(f"  - Preset: {preset_name}")
+                    logger.info(f"  - Rebalance Frequency: {'W-FRI' if preset_name == 'swing' else 'ME'}")
+                    
+                    # [MODIFIED] Capture the return value (metrics)
+                    metrics = run_sector_rotation_backtest(
+                        start_date=config.start_date,
+                        end_date=config.end_date,
+                        preset_name=preset_name,
+                        rebalance_freq="W-FRI" if preset_name == "swing" else "M",
+                        initial_capital=config.initial_cash
+                    )
+                    
+                    # [MODIFIED] Populate table with real data
+                    if metrics:
+                        total_results.append({
+                            "Strategy": strat_name,
+                            "Preset": preset_name,
+                            "Symbol": "PORTFOLIO (ETF)",
+                            "Final Value": round(metrics['final_value'], 2),
+                            "Net Profit": round(metrics['net_profit'], 2),
+                            "Win Rate": "N/A", # Win rate is complex for rebalancing strategies
+                            "Trades": "N/A",   # Trade count is less relevant for portfolio rebalancing
+                            "Max DD": round(metrics['max_drawdown'], 2)
+                        })
+                    else:
+                        logger.warning(f"No metrics returned for {strat_name}")
+
+                duration = time.time() - start_time
+                logger.info(f"✅ Completed {strat_name} in {duration:.2f}s")
+
+            except Exception as e:
+                logger.error(f"❌ Failed: {traceback.format_exc()}")
+
+    # Print Summary Table
+    if total_results:
+        logger.info("\n📊 FINAL BACKTEST SUMMARY")
+        logger.info(tabulate(total_results, headers="keys", tablefmt="pretty"))
 
 if __name__ == "__main__":
-    run_configured_presets()
+    run_backtests()

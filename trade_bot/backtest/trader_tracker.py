@@ -1,103 +1,122 @@
+from datetime import datetime
+import pandas as pd
 from trade_bot.logger.logger import get_logger
 from trade_bot.strategy.signal_model import SignalModel
 
 logger = get_logger(__name__)
 
 class TradeTracker:
-    def __init__(self, symbol, initial_cash=100000):
+    def __init__(self, symbol, initial_cash=100000, commission_rate=0.001):
         self.symbol = symbol
         self.cash = initial_cash
         self.position = 0
-        self.entry_price = 0
+        self.avg_entry_price = 0.0 # Track average cost basis
         self.trades = []
         self.portfolio_values = []
+        self.commission_rate = commission_rate # e.g., 0.1% per trade
 
-    def execute(self, signal_mode: SignalModel, price: float, index: int):
-        action = signal_mode.signal.lower()
+    def execute(self, signal_model: SignalModel, price: float, index: int):
+        action = signal_model.signal.lower()
+        
+        # Handle date formatting safely
+        date_str = signal_model.date
+        if isinstance(date_str, (datetime, pd.Timestamp)):
+            date_str = date_str.strftime("%Y-%m-%d")
 
-        if action == "buy" or action == "sell":
-            logger.info(f"*********** [{signal_mode.date}] Executing signal: {action} at price {price} for symbol {self.symbol}:")
-
+        # --- BUY LOGIC ---
         if action == "buy":
-            trade_position = self.cash // price
-            if trade_position == 0:
-                # Mark a buy action but with zero shares due to insufficient cash
-                self.trades.append({
-                    "date": signal_mode.date.strftime("%Y-%m-%d"),
-                    "symbol": self.symbol,
-                    "type": "buy",
-                    "price": price,
-                    "index": index,
-                    "shares": 0, # which means no shares bought
-                    "note": "No cash",
-                    "cash_after": self.cash
-                })
-            else:
-                self.entry_price = price
-                self.position += trade_position
-                self.cash -= trade_position * price
-                self.trades.append({
-                    "date": signal_mode.date.strftime("%Y-%m-%d"),
-                    "symbol": self.symbol,
-                    "type": "buy",
-                    "price": price,
-                    "index": index,
-                    "shares": self.position,
-                    "cash_after": self.cash
-                })
+            # Position Sizing: Currently defaults to 95% of cash to leave room for fees/slippage
+            # In future, pass 'size' in SignalModel
+            invest_amount = self.cash * 0.95 
+            shares_to_buy = int(invest_amount // price)
 
-        elif action == "sell":
-            if self.position == 0:
-                self.trades.append({
-                    "date": signal_mode.date.strftime("%Y-%m-%d"),
-                    "symbol": self.symbol,
-                    "type": "sell",
-                    "price": price,
-                    "index": index,
-                    "shares": 0, # which means no position
-                    "entry_price": self.entry_price,
-                    "profit": 0,
-                    "note": "No pos",
-                    "cash_after": self.cash
-                })
+            if shares_to_buy > 0:
+                cost = shares_to_buy * price
+                commission = cost * self.commission_rate
+                total_cost = cost + commission
+
+                if self.cash >= total_cost:
+                    # Update Average Entry Price
+                    current_value = self.position * self.avg_entry_price
+                    new_value = shares_to_buy * price
+                    self.avg_entry_price = (current_value + new_value) / (self.position + shares_to_buy)
+
+                    self.cash -= total_cost
+                    self.position += shares_to_buy
+                    
+                    self._log_trade(date_str, "buy", price, shares_to_buy, index, commission=commission)
+                else:
+                    self._log_trade(date_str, "buy", price, 0, index, note="Insufficient Cash")
             else:
-                self.cash += self.position * price
-                profit = (price - self.entry_price) * self.position
-                self.trades.append({
-                    "date": signal_mode.date.strftime("%Y-%m-%d"),
-                    "symbol": self.symbol,
-                    "type": "sell",
-                    "price": price,
-                    "index": index,
-                    "shares": self.position,
-                    "entry_price": self.entry_price,
-                    "profit": profit,
-                    "cash_after": self.cash
-                })
-                self.position = 0
+                 self._log_trade(date_str, "buy", price, 0, index, note="Low Cash")
+
+        # --- SELL LOGIC ---
+        elif action == "sell":
+            if self.position > 0:
+                # Default to selling ALL shares
+                shares_to_sell = self.position
+                
+                proceeds = shares_to_sell * price
+                commission = proceeds * self.commission_rate
+                net_proceeds = proceeds - commission
+                
+                # Calculate Profit based on Average Entry Price
+                gross_profit = (price - self.avg_entry_price) * shares_to_sell
+                net_profit = gross_profit - commission # Subtract exit commission
+
+                self.cash += net_proceeds
+                self.position -= shares_to_sell # Should be 0 if selling all
+                
+                if self.position == 0:
+                    self.avg_entry_price = 0 # Reset if flat
+
+                self._log_trade(
+                    date_str, "sell", price, shares_to_sell, index, 
+                    profit=net_profit, 
+                    entry_price=self.avg_entry_price,
+                    commission=commission
+                )
+            else:
+                self._log_trade(date_str, "sell", price, 0, index, note="No Position")
+
+    def _log_trade(self, date, type_, price, shares, index, profit=0, entry_price=0, commission=0, note=""):
+        """Helper to append trade record."""
+        self.trades.append({
+            "date": date,
+            "symbol": self.symbol,
+            "type": type_,
+            "price": price,
+            "index": index,
+            "shares": shares,
+            "entry_price": entry_price,
+            "profit": profit,
+            "commission": commission,
+            "cash_after": self.cash,
+            "note": note
+        })
+        
+        if shares > 0:
+            logger.info(f"[{date}] {type_.upper()} {self.symbol}: {shares} @ {price:.2f} | Cash: {self.cash:.2f}")
 
     def record_portfolio(self, price):
-        value = self.cash + (self.position * price if self.position > 0 else 0)
-        self.portfolio_values.append(value)
+        # Mark-to-Market Value
+        market_value = self.position * price
+        total_equity = self.cash + market_value
+        self.portfolio_values.append(total_equity)
 
     def get_trade_table(self):
-        """
-        Returns a list of trade records suitable for tabular display.
-        Each record includes: index, type, price, shares, profit (if applicable), cash_after.
-        """
         table = []
         for trade in self.trades:
-            row = {
-                "Index": trade.get("index"),
-                "Date": trade.get("date", "N/A"),
-                "Symbol": trade.get("symbol", "N/A"),
-                "Type": trade.get("type").upper(),
-                "Price": round(trade.get("price", 0), 2),
-                "Shares": trade.get("shares", 0),
-                "Entry Price": round(trade.get("entry_price", 0), 2) if "entry_price" in trade else "",
-                "Profit": round(trade.get("profit", 0), 2) if "profit" in trade else "",
-                "Cash After": round(trade.get("cash_after", 0), 2) if "cash_after" in trade else trade.get("cash", ""),
-                "Note": trade.get("note", "")
-            }
-            table.append(row)
+            # Only show executed trades in the summary table
+            if trade['shares'] > 0:
+                row = {
+                    "Date": trade.get("date"),
+                    "Type": trade.get("type").upper(),
+                    "Price": f"${trade.get('price', 0):.2f}",
+                    "Shares": trade.get("shares"),
+                    "Profit": f"${trade.get('profit', 0):.2f}" if trade['type'] == 'sell' else "-",
+                    "Comm": f"${trade.get('commission', 0):.2f}",
+                    "Cash": f"${trade.get('cash_after', 0):.0f}"
+                }
+                table.append(row)
         return table
