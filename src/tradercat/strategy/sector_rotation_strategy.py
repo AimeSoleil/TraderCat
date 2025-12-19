@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any, Union, Literal
 from pydantic import BaseModel
 from scipy.stats import zscore
 import numpy as np
@@ -8,6 +8,7 @@ from tradercat.data.market_data_provider import MarketDataProvider
 from tradercat.strategy.trading_strategy import TradingStrategy
 from tradercat.strategy.signal_model import SignalModel
 from tradercat.logger.logger import get_logger
+from tradercat.strategy.strategy_presets import SectorRotationPreset
 
 logger = get_logger(__name__)
 
@@ -266,36 +267,37 @@ class SectorRotationStrategy(TradingStrategy):
             details=details,
         )
 
-def make_sector_rotation_presets() -> Dict[str, Dict[str, Any]]:
+def make_sector_rotation_presets(preset: SectorRotationPreset) -> Dict[str, Any]:
     """
-    Sector Rotation Strategy presets.
+    Returns the configuration for a specific Sector Rotation preset.
+    
+    Args:
+        preset: 'swing' (Sub-sectors, faster) or 'position' (Broad sectors, slower).
     """
     
-    # ---------------- SWING TRADING (Sub-Sectors) ----------------
-    swing = {
-        "universe": "sub_sector",            # [New] Use Heated Sub-Sectors
-        "look_back_days": 20,                
-        "regime_sma_period": 50,
-        "num_sectors_to_select": 3,
-        "weights": {"momentum": 0.6, "rsi": 0.1, "volume_trend": 0.3},
-        "max_entry_rsi": 85.0,
-        "safe_haven_symbol": "SHY",  # Cash equivalent for short-term safety
-        "benchmark_symbol": "SPY"
-    }
+    if preset == "swing":
+        return {
+            "universe": "sub_sector",            # Use Heated Sub-Sectors
+            "look_back_days": 20,                
+            "regime_sma_period": 50,
+            "num_sectors_to_select": 3,
+            "weights": {"momentum": 0.6, "rsi": 0.1, "volume_trend": 0.3},
+            "max_entry_rsi": 85.0,
+            "safe_haven_symbol": "SHY",  # Cash equivalent for short-term safety
+            "benchmark_symbol": "SPY"
+        }
+    
+    elif preset == "position":
+        return {
+            "universe": "broad",                 # Use GICS Sectors
+            "look_back_days": 126,               
+            "regime_sma_period": 200,            
+            "num_sectors_to_select": 2,          
+            "weights": {"momentum": 0.7, "rsi": 0.1, "volume_trend": 0.2},
+            "max_entry_rsi": 95.0,
+            "safe_haven_symbol": "IEF",  # 7-10 Year Treasury for hedging
+            "benchmark_symbol": "SPY"
+        }
 
-    # ---------------- POSITION (Broad Sectors) ----------------
-    position = {
-        "universe": "broad",                 # [New] Use GICS Sectors
-        "look_back_days": 126,               
-        "regime_sma_period": 200,            
-        "num_sectors_to_select": 2,          
-        "weights": {"momentum": 0.7, "rsi": 0.1, "volume_trend": 0.2},
-        "max_entry_rsi": 95.0,
-        "safe_haven_symbol": "IEF",  # [Optimization] 7-10 Year Treasury for hedging in long-term holds
-        "benchmark_symbol": "SPY"
-    }
-
-    return {
-        "swing": swing,
-        "position": position
-    }
+    else:
+        raise ValueError(f"Unknown preset: {preset}")

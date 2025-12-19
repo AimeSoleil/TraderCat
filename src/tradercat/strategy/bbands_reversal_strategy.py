@@ -1,5 +1,6 @@
 from typing import List, Literal, Optional, Dict, Any
 
+from tradercat.strategy.strategy_presets import StrategyPreset
 from tradercat.strategy.candle_pattern.pattern_detector import PatternResult
 from tradercat.strategy.candle_pattern.pattern_detector_orch import PatternDetectorsOrchestrator
 from tradercat.strategy.exit_planner import ExitPlanner
@@ -324,52 +325,58 @@ class BBandsReversalStrategy(TradingStrategy):
             details=details,
         )
 
-def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
+def make_bbands_reversal_presets(preset: StrategyPreset) -> Dict[str, Any]:
     """
     Bollinger Band reversal strategy presets based on algo trading best practices:
     - swing: Optimized for catching mean-reversion moves while avoiding strong trends.
     """
     
-    # ---------------- SWING TRADING (Optimized) ----------------
-    swing = {
-        # --- Core BB Settings ---
-        "bb_period": 20,            # 标准布林带周期
-        "bb_std": 2.0,              # 2倍标准差，覆盖95%的价格行为
+    if preset == "swing":
+        # ---------------- SWING TRADING (Optimized) ----------------
+        return {
+            # --- Core BB Settings ---
+            "bb_period": 20,            # 标准布林带周期
+            "bb_std": 2.0,              # 2倍标准差，覆盖95%的价格行为
 
-        # --- Proximity Logic ---
-        # [Optimization] 0.5 ATR. 
-        # Price doesn't need to touch the band perfectly. 
-        # Within 0.5 ATR is considered "Testing the Band".
-        "touch_atr_multiplier": 0.5,    
+            # --- Proximity Logic ---
+            # [Optimization] 0.5 ATR. 
+            # Price doesn't need to touch the band perfectly. 
+            # Within 0.5 ATR is considered "Testing the Band".
+            "touch_atr_multiplier": 0.5,    
 
-        # --- Trend Filter (Crucial for Reversals) ---
-        # [Optimization] ADX < 30. 
-        # We ONLY trade reversals when the trend is weak or maturing.
-        # If ADX > 30, it's a strong trend -> DO NOT FADE (Don't catch a falling knife).
-        "adx_period": 14,
-        "adx_threshold": 30.0,      
+            # --- Trend Filter (Crucial for Reversals) ---
+            # [Optimization] ADX < 30. 
+            # We ONLY trade reversals when the trend is weak or maturing.
+            # If ADX > 30, it's a strong trend -> DO NOT FADE (Don't catch a falling knife).
+            "adx_period": 14,
+            "adx_threshold": 30.0,      
 
-        # --- Pattern Recognition ---
-        # Look for rejection candles (Hammer, Shooting Star) in the last 3 days.
-        "max_time_bars": 3,
+            # --- Pattern Recognition ---
+            # Look for rejection candles (Hammer, Shooting Star) in the last 3 days.
+            "max_time_bars": 3,
 
-        # --- Volume Confirmation ---
-        # Reversals need conviction. Volume should be 1.5 std devs above mean (Climax/Exhaustion).
-        "vol_zscore_window": 20,
-        "vol_zscore_threshold": 1.5,
+            # --- Volume Confirmation ---
+            # Reversals need conviction. Volume should be 1.5 std devs above mean (Climax/Exhaustion).
+            "vol_zscore_window": 20,
+            "vol_zscore_threshold": 1.5,
 
-        # --- Momentum Indicators ---
-        "rsi_period": 14,           # Standard RSI for divergence/overbought checks
-        "atr_period": 14,
-        
-        # MACD settings (Standard)
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+            # --- Momentum Indicators ---
+            "rsi_period": 14,           # Standard RSI for divergence/overbought checks
+            "atr_period": 14,
+            
+            # MACD settings (Standard)
+            "macd_params": {"fast": 12, "slow": 26, "signal": 9},
 
-        # --- Scoring ---
-        # Reversals are riskier than trend following, so we set a moderate threshold.
-        "score_threshold": 0.60
-    }
+            # --- Scoring ---
+            # Reversals are riskier than trend following, so we set a moderate threshold.
+            "score_threshold": 0.60
+        }
+    
+    elif preset == "position":
+        return { }
+    
+    elif preset == "scalp":
+        return { }
 
-    return {
-        "swing": swing
-    }
+    else:
+        raise ValueError(f"Unknown preset: {preset}")

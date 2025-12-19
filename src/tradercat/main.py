@@ -96,24 +96,28 @@ async def send_discord_summary(discord_notifier: DiscordNotifier, all_signals: L
 # --- Core Logic ---
 
 async def run_trading_session(symbols: List[str], executor: TradeExecutor, discord_notifier: DiscordNotifier, 
-                            max_concurrency: int = 5, stagger_sec: int = 2):
+                            max_concurrency: int = 5, stagger_sec: int = 2, run_portfolio: bool = True):
     """
     Orchestrates the entire trading session:
-    1. Runs Portfolio Strategies (Global)
+    1. Runs Portfolio Strategies (Global) - Optional
     2. Runs Single-Asset Strategies (Concurrent)
     3. Aggregates results -> CSV -> Discord
     """
     start_time = datetime.now()
     bot = TraderBot(executor=executor)
     all_results = []
+    logger.info(f"run_portfolio: {run_portfolio}")
 
     # 1. Run Portfolio Strategies (Sequential, usually fast)
-    try:
-        portfolio_signals = await bot.process_portfolio()
-        if portfolio_signals:
-            all_results.append({"symbol": "PORTFOLIO", "signals": portfolio_signals})
-    except Exception as e:
-        logger.error(f"Error in portfolio strategies: {e}")
+    if run_portfolio:
+        try:
+            portfolio_signals = await bot.process_portfolio()
+            if portfolio_signals:
+                all_results.append({"symbol": "PORTFOLIO", "signals": portfolio_signals})
+        except Exception as e:
+            logger.error(f"Error in portfolio strategies: {e}")
+    else:
+        logger.info("Skipping Portfolio Strategies.")
 
     # 2. Run Single-Asset Strategies (Concurrent)
     semaphore = asyncio.Semaphore(max_concurrency)
@@ -154,7 +158,7 @@ async def start_scheduler(symbols, executor, notifier, args):
     scheduler = AsyncIOScheduler(timezone=pytz.timezone('US/Eastern'))
     
     job_fn = lambda: asyncio.create_task(
-        run_trading_session(symbols, executor, notifier, args.concurrency, args.stagger)
+        run_trading_session(symbols, executor, notifier, args.concurrency, args.stagger, not args.skip_portfolio)
     )
     
     scheduler.add_job(job_fn, CronTrigger(hour=args.schedule_hour, minute=args.schedule_minute))
@@ -179,6 +183,7 @@ def main():
     parser.add_argument("-M", "--schedule-minute", type=int, default=0, help="Schedule Minute (ET)")
     parser.add_argument("-c", "--concurrency", type=int, default=5, help="Max concurrent bots")
     parser.add_argument("-S", "--stagger", type=int, default=2, help="Stagger seconds")
+    parser.add_argument("--skip-portfolio", action="store_true", help="Skip running portfolio strategies")
 
     args = parser.parse_args()
     
@@ -193,7 +198,7 @@ def main():
     notifier = DiscordNotifier()
 
     if args.mode == "once":
-        asyncio.run(run_trading_session(symbols, executor, notifier, args.concurrency, args.stagger))
+        asyncio.run(run_trading_session(symbols, executor, notifier, args.concurrency, args.stagger, not args.skip_portfolio))
     else:
         asyncio.run(start_scheduler(symbols, executor, notifier, args))
 

@@ -102,6 +102,7 @@ tradercat -m schedule -f symbols.txt
 | `-M` | `--schedule-minute` | **(Schedule Mode)** Minute (0-59) to run. | `0` |
 | `-c` | `--concurrency` | Max number of bots running at the same time. | `5` |
 | `-S` | `--stagger` | Seconds to wait between starting bots (prevents API rate limits). | `5` |
+|| `--skip-portfolio` | Skip running portfolio-level strategies (e.g., Sector Rotation). | `False` |
 
 ## 🧠 Strategies
 

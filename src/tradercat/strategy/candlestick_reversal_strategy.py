@@ -1,5 +1,6 @@
 from typing import List, Optional, Dict, Any, Literal
 
+from tradercat.strategy.strategy_presets import StrategyPreset
 from tradercat.strategy.candle_pattern.pattern_detector_orch import PatternDetectorsOrchestrator
 from tradercat.strategy.exit_planner import ExitPlanner
 from tradercat.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
@@ -260,40 +261,46 @@ class CandlestickReversalStrategy(TradingStrategy):
             details=details
         )
 
-def make_candlestick_reversal_presets() -> Dict[str, Dict[str, Any]]:
+def make_candlestick_reversal_presets(preset: StrategyPreset) -> Dict[str, Any]:
     """
     Candlestick Reversal Presets (Optimized for Algo Trading).
     """
 
-    # ---------------- SWING TRADING (Optimized) ----------------
-    # Strategy: "Buy the Dip" in an Uptrend / "Sell the Rally" in a Downtrend.
-    swing = {
-        # --- Trend Filter ---
-        # Use 9/21 EMA. This is the standard "Swing Trader's Zone".
-        # We only look for Bullish patterns when EMA 9 > EMA 21.
-        "ema_fast": 9,
-        "ema_slow": 21,
+    if preset == "swing":
+        # ---------------- SWING TRADING (Optimized) ----------------
+        # Strategy: "Buy the Dip" in an Uptrend / "Sell the Rally" in a Downtrend.
+        return {
+            # --- Trend Filter ---
+            # Use 9/21 EMA. This is the standard "Swing Trader's Zone".
+            # We only look for Bullish patterns when EMA 9 > EMA 21.
+            "ema_fast": 9,
+            "ema_slow": 21,
 
-        # --- Volatility & Momentum ---
-        "atr_period": 14,
-        "rsi_period": 14,       # Standard RSI. Look for oversold dips (RSI < 40) in uptrends.
-        "adx_period": 14,       # ADX helps filter out ranging markets.
+            # --- Volatility & Momentum ---
+            "atr_period": 14,
+            "rsi_period": 14,       # Standard RSI. Look for oversold dips (RSI < 40) in uptrends.
+            "adx_period": 14,       # ADX helps filter out ranging markets.
 
-        # --- MACD (Momentum Confirmation) ---
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+            # --- MACD (Momentum Confirmation) ---
+            "macd_params": {"fast": 12, "slow": 26, "signal": 9},
 
-        # --- Volume Confirmation ---
-        # Reversal candles (e.g., Hammer) need volume validation.
-        # 1.5 std devs above mean ensures institutions are stepping in.
-        "vol_zscore_window": 20,
-        "vol_zscore_threshold": 1.5,
+            # --- Volume Confirmation ---
+            # Reversal candles (e.g., Hammer) need volume validation.
+            # 1.5 std devs above mean ensures institutions are stepping in.
+            "vol_zscore_window": 20,
+            "vol_zscore_threshold": 1.5,
 
-        # --- Scoring ---
-        # Set to 0.65 to filter out weak patterns.
-        # We want Confluence: Trend + Pattern + Volume + Momentum.
-        "score_threshold": 0.65,
-    }
+            # --- Scoring ---
+            # Set to 0.65 to filter out weak patterns.
+            # We want Confluence: Trend + Pattern + Volume + Momentum.
+            "score_threshold": 0.65,
+        }
+    
+    elif preset == "position":
+        return { }
+    
+    elif preset == "scalp":
+        return { }
 
-    return {
-        "swing": swing
-    }
+    else:
+        raise ValueError(f"Unknown preset: {preset}")

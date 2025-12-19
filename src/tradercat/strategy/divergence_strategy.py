@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any, Tuple, Callable
 import statistics
 
+from tradercat.strategy.strategy_presets import StrategyPreset
 from tradercat.strategy.exit_planner import ExitPlanner
 from tradercat.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
 from tradercat.strategy.trading_strategy import TradingStrategy
@@ -289,39 +290,45 @@ class DivergenceStrategy(TradingStrategy):
             details=details,
         )
 
-def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
+def make_divergence_presets(preset: StrategyPreset) -> Dict[str, Any]:
     """
     Divergence strategy presets based on algo trading best practices:
     - swing: Optimized for catching trend reversals (Regular) and trend continuations (Hidden).
     """
 
-    # ---------------- SWING TRADING (Optimized) ----------------
-    swing = {
-        # --- Pivot Detection ---
-        # 5 bars left/right is standard for identifying significant swing points.
-        "swing_window": 5,                  
-        "lookback_swings": 60,              # Look back ~3 months for context.
+    if preset == "swing":
+        # ---------------- SWING TRADING (Optimized) ----------------
+        return {
+            # --- Pivot Detection ---
+            # 5 bars left/right is standard for identifying significant swing points.
+            "swing_window": 5,                  
+            "lookback_swings": 60,              # Look back ~3 months for context.
 
-        # --- Indicators ---
-        "rsi_period": 14,                   # Standard RSI.
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-        
-        # --- Context Filters ---
-        "atr_period": 14,
-        "adx_period": 14,                   
-        # Note: In code logic, we should ideally ignore Regular Divergence if ADX > 40 (Strong Trend).
+            # --- Indicators ---
+            "rsi_period": 14,                   # Standard RSI.
+            "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+            
+            # --- Context Filters ---
+            "atr_period": 14,
+            "adx_period": 14,                   
+            # Note: In code logic, we should ideally ignore Regular Divergence if ADX > 40 (Strong Trend).
 
-        # --- Volume Confirmation ---
-        # Divergence needs volume validation to confirm the momentum shift.
-        "vol_zscore_window": 20,
-        "vol_zscore_threshold": 1.5,        
+            # --- Volume Confirmation ---
+            # Divergence needs volume validation to confirm the momentum shift.
+            "vol_zscore_window": 20,
+            "vol_zscore_threshold": 1.5,        
 
-        # --- Scoring ---
-        # Divergence is subjective and prone to false signals. 
-        # We set a high bar (0.70) to ensure multiple factors align.
-        "score_threshold": 0.70             
-    }
+            # --- Scoring ---
+            # Divergence is subjective and prone to false signals. 
+            # We set a high bar (0.70) to ensure multiple factors align.
+            "score_threshold": 0.70             
+        }
+    
+    elif preset == "position":
+        return { }
+    
+    elif preset == "scalp":
+        return { }
 
-    return {
-        "swing": swing
-    }
+    else:
+        raise ValueError(f"Unknown preset: {preset}")

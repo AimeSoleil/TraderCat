@@ -2,6 +2,7 @@ from typing import List, Optional, Dict, Any, Tuple
 import math
 import statistics
 
+from tradercat.strategy.strategy_presets import StrategyPreset
 from tradercat.strategy.exit_planner import ExitPlanner
 from tradercat.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
 from tradercat.strategy.trading_strategy import TradingStrategy
@@ -348,45 +349,51 @@ class FibonacciRetracementStrategy(TradingStrategy):
             details=details
         )
 
-def make_fibonacci_presets() -> Dict[str, Dict[str, Any]]:
+def make_fibonacci_presets(preset: StrategyPreset) -> Dict[str, Any]:
     """
     Fibonacci retracement strategy presets based on algo trading best practices:
     - swing: Optimized for "Buy the Dip" in established trends.
     """
 
-    # ---------------- SWING TRADING (Optimized) ----------------
-    swing = {
-        # --- Swing Detection ---
-        # 5 bars (1 week) is standard for identifying significant swing points.
-        "lookback_swings": 40,               # Look back ~2 months to find the major impulse.
-        "swing_window": 5,                   
+    if preset == "swing":
+        # ---------------- SWING TRADING (Optimized) ----------------
+        return {
+            # --- Swing Detection ---
+            # 5 bars (1 week) is standard for identifying significant swing points.
+            "lookback_swings": 40,               # Look back ~2 months to find the major impulse.
+            "swing_window": 5,                   
 
-        # --- Fib Zone ---
-        # The "Golden Pocket" is between 0.5 and 0.618. 
-        # But for strong trends, 0.382 is common. We keep the wide zone.
-        "fib_zone": (0.382, 0.618),          
+            # --- Fib Zone ---
+            # The "Golden Pocket" is between 0.5 and 0.618. 
+            # But for strong trends, 0.382 is common. We keep the wide zone.
+            "fib_zone": (0.382, 0.618),          
 
-        # --- Trend Filter ---
-        # Use 9/21 EMA. Price should be respecting the 21 EMA in a healthy swing trend.
-        "ema_fast": 9,                       
-        "ema_slow": 21,                      
+            # --- Trend Filter ---
+            # Use 9/21 EMA. Price should be respecting the 21 EMA in a healthy swing trend.
+            "ema_fast": 9,                       
+            "ema_slow": 21,                      
 
-        # --- Indicators ---
-        "atr_period": 14,                    
-        "rsi_period": 14,                    
-        "macd_params": {"fast": 12, "slow": 26, "signal": 9}, 
-        "adx_period": 14,                    
+            # --- Indicators ---
+            "atr_period": 14,                    
+            "rsi_period": 14,                    
+            "macd_params": {"fast": 12, "slow": 26, "signal": 9}, 
+            "adx_period": 14,                    
 
-        # --- Volume Confirmation ---
-        # The bounce from the Fib level needs volume validation.
-        "vol_zscore_window": 20,             
-        "vol_zscore_threshold": 1.5,         
+            # --- Volume Confirmation ---
+            # The bounce from the Fib level needs volume validation.
+            "vol_zscore_window": 20,             
+            "vol_zscore_threshold": 1.5,         
 
-        # --- Scoring ---
-        # Set to 0.65. We need Trend + Fib Level + Bounce Confirmation.
-        "score_threshold": 0.65               
-    }
+            # --- Scoring ---
+            # Set to 0.65. We need Trend + Fib Level + Bounce Confirmation.
+            "score_threshold": 0.65               
+        }
+    
+    elif preset == "position":
+        return { }
+    
+    elif preset == "scalp":
+        return { }
 
-    return {
-        "swing": swing
-    }
+    else:
+        raise ValueError(f"Unknown preset: {preset}")
