@@ -14,6 +14,7 @@ from tradercat.notification.discord import DiscordNotifier
 from tradercat.execution.trade_execution import TradeExecutor
 from tradercat.bot import TraderBot
 from tradercat.strategy.signal_model import SignalModel
+from tradercat.storage.google_drive import GoogleDriveStorage
 
 logger = get_logger(__name__)
 
@@ -41,11 +42,10 @@ def load_symbols(args) -> List[str]:
         if DEFAULT_SYMBOLS_STR:
             symbols = [s.strip().upper() for s in DEFAULT_SYMBOLS_STR.split(",") if s.strip()]
     
-    # Remove duplicates while preserving order
     return list(dict.fromkeys(symbols))
 
-def save_signals_to_csv(all_signals: List[Dict]):
-    """Exports collected signals to a CSV file."""
+def save_signals_to_csv(all_signals: List[Dict], drive_storage: GoogleDriveStorage):
+    """Exports collected signals to a CSV file and uploads to Drive."""
     rows = []
     for entry in all_signals:
         for signal in entry["signals"]:
@@ -66,6 +66,9 @@ def save_signals_to_csv(all_signals: List[Dict]):
     filename = f"trade_signals_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
     df.to_csv(filename, index=False, encoding='utf-8-sig')
     logger.info(f"📄 Signals CSV created: {filename}")
+
+    # 使用新的存储类上传
+    drive_storage.upload_file(filename)
 
 async def send_discord_summary(discord_notifier: DiscordNotifier, all_signals: List[Dict]):
     """Formats and sends a summary to Discord."""
@@ -95,20 +98,22 @@ async def send_discord_summary(discord_notifier: DiscordNotifier, all_signals: L
 
 # --- Core Logic ---
 
-async def run_trading_session(symbols: List[str], executor: TradeExecutor, discord_notifier: DiscordNotifier, 
-                            max_concurrency: int = 5, stagger_sec: int = 2, run_portfolio: bool = True):
+async def run_trading_session(symbols: List[str], 
+                              executor: TradeExecutor, 
+                              discord_notifier: DiscordNotifier, 
+                              drive_storage: GoogleDriveStorage,
+                              max_concurrency: int = 5, 
+                              stagger_sec: int = 2, 
+                              run_portfolio: bool = True):
     """
-    Orchestrates the entire trading session:
-    1. Runs Portfolio Strategies (Global) - Optional
-    2. Runs Single-Asset Strategies (Concurrent)
-    3. Aggregates results -> CSV -> Discord
+    Orchestrates the entire trading session.
     """
     start_time = datetime.now()
     bot = TraderBot(executor=executor)
     all_results = []
     logger.info(f"run_portfolio: {run_portfolio}")
 
-    # 1. Run Portfolio Strategies (Sequential, usually fast)
+    # 1. Run Portfolio Strategies
     if run_portfolio:
         try:
             portfolio_signals = await bot.process_portfolio()
@@ -119,7 +124,7 @@ async def run_trading_session(symbols: List[str], executor: TradeExecutor, disco
     else:
         logger.info("Skipping Portfolio Strategies.")
 
-    # 2. Run Single-Asset Strategies (Concurrent)
+    # 2. Run Single-Asset Strategies
     semaphore = asyncio.Semaphore(max_concurrency)
 
     async def worker(symbol):
@@ -144,7 +149,7 @@ async def run_trading_session(symbols: List[str], executor: TradeExecutor, disco
 
     # 3. Reporting
     if all_results:
-        save_signals_to_csv(all_results)
+        save_signals_to_csv(all_results, drive_storage)
         await send_discord_summary(discord_notifier, all_results)
     else:
         logger.info("No signals generated this session.")
@@ -154,11 +159,13 @@ async def run_trading_session(symbols: List[str], executor: TradeExecutor, disco
 
 # --- Scheduler ---
 
-async def start_scheduler(symbols, executor, notifier, args):
+async def start_scheduler(symbols, executor, notifier, drive_storage, args):
     scheduler = AsyncIOScheduler(timezone=pytz.timezone('US/Eastern'))
     
+    # 将 drive_storage 传递给任务
     job_fn = lambda: asyncio.create_task(
-        run_trading_session(symbols, executor, notifier, args.concurrency, args.stagger, not args.skip_portfolio)
+        run_trading_session(symbols, executor, notifier, drive_storage, 
+                            args.concurrency, args.stagger, not args.skip_portfolio)
     )
     
     scheduler.add_job(job_fn, CronTrigger(hour=args.schedule_hour, minute=args.schedule_minute))
@@ -194,13 +201,17 @@ def main():
 
     logger.info(f"Loaded {len(symbols)} unique symbols.")
     
+    # 初始化主要组件
     executor = TradeExecutor()
     notifier = DiscordNotifier()
+    # 实例化 Google Drive Storage
+    drive_storage = GoogleDriveStorage()
 
     if args.mode == "once":
-        asyncio.run(run_trading_session(symbols, executor, notifier, args.concurrency, args.stagger, not args.skip_portfolio))
+        asyncio.run(run_trading_session(symbols, executor, notifier, drive_storage, 
+                                        args.concurrency, args.stagger, not args.skip_portfolio))
     else:
-        asyncio.run(start_scheduler(symbols, executor, notifier, args))
+        asyncio.run(start_scheduler(symbols, executor, notifier, drive_storage, args))
 
 if __name__ == "__main__":
     main()

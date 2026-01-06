@@ -87,3 +87,8 @@ charts/
 
 # Ignore test output
 test-output/
+
+# Google Drive Secrets
+credentials.json
+token.json
+client_secret*.json

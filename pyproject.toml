@@ -26,7 +26,10 @@ dependencies = [
     "azure-functions>=1.15.0",
     "mplfinance>=0.12.9b7",
     "pymongo>=4.15.3",
-    "colorama>=0.4.6"
+    "colorama>=0.4.6",
+    "google-api-python-client>=2.0.0",
+    "google-auth-httplib2>=0.1.0",
+    "google-auth-oauthlib>=1.0.0"
 ]
 
 [project.optional-dependencies]
