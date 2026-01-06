@@ -91,7 +91,7 @@ class TraderBot:
             logger.warning(f"⚠️ No candle data found for {symbol}")
             return []
 
-        logger.debug(f"Fetched {len(candles)} candles for {symbol}")
+        logger.info(f"Fetched {len(candles)} candles for {symbol}")
 
         # 3. Generate Signals
         signals = []
@@ -100,6 +100,7 @@ class TraderBot:
                 # Pass only the required window to the strategy
                 strategy_lookback = strategy.get_lookback_window()
                 signal = strategy.generate_signal(symbol, candles=candles[-strategy_lookback:])
+                logger.info(f"Strategy {strategy.__class__.__name__} generated signal: {signal.signal} for {symbol}")
                 signals.append(signal)
             except Exception as e:
                 logger.error(f"Error running {strategy.__class__.__name__} on {symbol}: {e}")
@@ -140,5 +141,7 @@ class TraderBot:
         Filter or combine signals. 
         Currently returns all valid signals, but can be extended for voting logic.
         """
-        valid_signals = [s for s in signals if s and s.signal != "hold"]
-        return valid_signals
+        # valid_signals = [s for s in signals if s and s.signal != "hold"]
+        # return valid_signals
+
+        return signals

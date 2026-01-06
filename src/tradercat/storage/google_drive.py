@@ -1,5 +1,5 @@
 import os
-import logging
+from datetime import datetime
 from typing import Optional
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -7,8 +7,9 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from googleapiclient.errors import HttpError
+from tradercat.logger.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class GoogleDriveStorage:
     SCOPES = ['https://www.googleapis.com/auth/drive.file']
@@ -41,7 +42,7 @@ class GoogleDriveStorage:
             or "token.json"
         )
         
-        self.folder_id = folder_id or os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
+        self.folder_id = folder_id or os.environ.get("GOOGLE_DRIVE_FOLDER_ID") or "1VWv8UEtyZ1JGkKX4YqlFw2ASeq59t1FI"
         self._service = None
 
     @property
@@ -102,12 +103,13 @@ class GoogleDriveStorage:
             return self._service
         return None
 
-    def upload_file(self, filepath: str, mime_type: str = 'text/csv') -> Optional[str]:
+    def upload_file(self, filepath: str, mime_type: str = 'text/csv', use_daily_folder: bool = True) -> Optional[str]:
         """
         Uploads a file to Google Drive.
         
         :param filepath: Local path to the file.
         :param mime_type: MIME type of the file.
+        :param use_daily_folder: If True, uploads to a subfolder named YYYY-MM-DD.
         :return: File ID if successful, None otherwise.
         """
         if not self.is_available:
@@ -116,14 +118,23 @@ class GoogleDriveStorage:
 
         service = self.get_service()
         if not service:
+            logger.warning("⚠️ Could not establish Google Drive service.")
             return None
 
         try:
             filename = os.path.basename(filepath)
             file_metadata = {'name': filename}
             
-            if self.folder_id:
-                file_metadata['parents'] = [self.folder_id]
+            # Determine parent folder
+            parent_id = self.folder_id
+            
+            if use_daily_folder:
+                daily_folder_id = self.create_daily_folder()
+                if daily_folder_id:
+                    parent_id = daily_folder_id
+            
+            if parent_id:
+                file_metadata['parents'] = [parent_id]
 
             media = MediaFileUpload(filepath, mimetype=mime_type)
             
@@ -141,5 +152,55 @@ class GoogleDriveStorage:
             logger.error(f"❌ Google Drive HTTP Error: {error}")
         except Exception as e:
             logger.error(f"❌ Upload failed: {e}")
+        
+        return None
+
+    def create_daily_folder(self) -> Optional[str]:
+        """
+        Creates a new folder named with the current date (YYYY-MM-DD) under the configured folder_id.
+        If a folder with that name already exists, returns its ID instead of creating a duplicate.
+        """
+        if not self.is_available:
+            logger.warning("⚠️ Google Drive setup incomplete (missing credentials).")
+            return None
+
+        service = self.get_service()
+        if not service:
+            return None
+
+        folder_name = datetime.now().strftime('%Y-%m-%d')
+        
+        try:
+            # 1. Check if folder already exists to avoid duplicates
+            query = f"name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            if self.folder_id:
+                query += f" and '{self.folder_id}' in parents"
+                
+            response = service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+            existing_files = response.get('files', [])
+            
+            if existing_files:
+                folder_id = existing_files[0]['id']
+                logger.debug(f"📂 Daily folder '{folder_name}' already exists (ID: {folder_id})")
+                return folder_id
+
+            # 2. Create the folder if it doesn't exist
+            file_metadata = {
+                'name': folder_name,
+                'mimeType': 'application/vnd.google-apps.folder'
+            }
+            
+            if self.folder_id:
+                file_metadata['parents'] = [self.folder_id]
+
+            file = service.files().create(body=file_metadata, fields='id').execute()
+            folder_id = file.get('id')
+            logger.info(f"📂 Created daily folder '{folder_name}' (ID: {folder_id})")
+            return folder_id
+            
+        except HttpError as error:
+            logger.error(f"❌ Google Drive HTTP Error: {error}")
+        except Exception as e:
+            logger.error(f"❌ Folder creation failed: {e}")
         
         return None

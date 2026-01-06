@@ -92,6 +92,8 @@ class CandlestickReversalStrategy(TradingStrategy):
 
     # ---------- 主决策逻辑 ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
+        logger.info(f"🔍 Generating Candlestick Reversal signal for {symbol}...")
+        
         if not candles or len(candles) < max(self.ema_slow, self.atr_period, 3):
             return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold",
                                 date=None, reason="insufficient data", confidence=0.0)

@@ -153,6 +153,8 @@ class SectorRotationStrategy(TradingStrategy):
         return (closes[-1] / closes[-lookback]) - 1
 
     def generate_signal(self, symbol: str = None, candles: List[Any] = None) -> SignalModel:
+        logger.info("🔍 Generating Sector Rotation signal...")
+        
         etf_indicators: Dict[str, Indicators] = {}
         
         # 1. Market Regime

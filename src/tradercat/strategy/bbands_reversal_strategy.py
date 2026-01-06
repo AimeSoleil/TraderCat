@@ -124,6 +124,8 @@ class BBandsReversalStrategy(TradingStrategy):
 
     # ---------- 主逻辑 ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
+        logger.info(f"🔍 Generating Bollinger Reversal signal for {symbol}...")
+        
         if not candles or len(candles) < self.get_lookback_window():
             return SignalModel(
                 symbol=symbol,
