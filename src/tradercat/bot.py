@@ -34,7 +34,6 @@ from tradercat.strategy.sector_rotation_strategy import SectorRotationStrategy, 
 
 logger = get_logger(__name__)
 
-
 class StrategyFactory:
     """
     Centralized place to initialize strategies. 
@@ -45,19 +44,19 @@ class StrategyFactory:
         # [FIX] Explicitly name 'data_provider' to avoid collision with positional args
         # if the strategy class definition changed.
         return [
-            BollingerBreakoutStrategy(data_provider=data_provider, **make_bbands_breakout_presets(preset)),
-            BBandsReversalStrategy(data_provider=data_provider, **make_bbands_reversal_presets(preset)),
-            DivergenceStrategy(data_provider=data_provider, **make_divergence_presets(preset)),
-            CandlestickReversalStrategy(data_provider=data_provider, **make_candlestick_reversal_presets(preset)),
-            FibonacciRetracementStrategy(data_provider=data_provider, **make_fibonacci_presets(preset)),
-            MomentumTrendStrategy(data_provider=data_provider, **make_momentum_presets(preset)),
+            BollingerBreakoutStrategy(data_provider=data_provider, **make_bbands_breakout_presets()[preset]),
+            BBandsReversalStrategy(data_provider=data_provider, **make_bbands_reversal_presets()[preset]),
+            DivergenceStrategy(data_provider=data_provider, **make_divergence_presets()[preset]),
+            CandlestickReversalStrategy(data_provider=data_provider, **make_candlestick_reversal_presets()[preset]),
+            FibonacciRetracementStrategy(data_provider=data_provider, **make_fibonacci_presets()[preset]),
+            MomentumTrendStrategy(data_provider=data_provider, **make_momentum_presets()[preset]),
         ]
 
     @staticmethod
     def get_portfolio_strategies(data_provider: OpenBBProvider, preset: SectorRotationPreset = "swing") -> List:
         # Note: make_sector_rotation_presets() now accepts preset_name directly
         return [
-            SectorRotationStrategy(data_provider=data_provider, **make_sector_rotation_presets(preset)),
+            SectorRotationStrategy(data_provider=data_provider, **make_sector_rotation_presets()[preset]),
         ]
 
 

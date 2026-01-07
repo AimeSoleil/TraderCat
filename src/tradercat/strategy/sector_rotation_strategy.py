@@ -269,37 +269,54 @@ class SectorRotationStrategy(TradingStrategy):
             details=details,
         )
 
-def make_sector_rotation_presets(preset: SectorRotationPreset) -> Dict[str, Any]:
+def make_sector_rotation_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Returns the configuration for a specific Sector Rotation preset.
-    
-    Args:
-        preset: 'swing' (Sub-sectors, faster) or 'position' (Broad sectors, slower).
+    Returns a dictionary of all available presets for Sector Rotation Strategy.
     """
-    
-    if preset == "swing":
-        return {
+    return {
+        "swing": {
+            # ---------------- SWING ROTATION (Aggressive / Tactical) ----------------
+            # Focus: Sub-sectors (Heated themes like Semi, Cyber, Bio).
+            # Timeframe: Monthly adjustments (20 days).
             "universe": "sub_sector",            # Use Heated Sub-Sectors
-            "look_back_days": 20,                
-            "regime_sma_period": 50,
-            "num_sectors_to_select": 3,
-            "weights": {"momentum": 0.6, "rsi": 0.1, "volume_trend": 0.3},
-            "max_entry_rsi": 85.0,
-            "safe_haven_symbol": "SHY",  # Cash equivalent for short-term safety
-            "benchmark_symbol": "SPY"
-        }
-    
-    elif preset == "position":
-        return {
-            "universe": "broad",                 # Use GICS Sectors
-            "look_back_days": 126,               
-            "regime_sma_period": 200,            
-            "num_sectors_to_select": 2,          
-            "weights": {"momentum": 0.7, "rsi": 0.1, "volume_trend": 0.2},
-            "max_entry_rsi": 95.0,
-            "safe_haven_symbol": "IEF",  # 7-10 Year Treasury for hedging
-            "benchmark_symbol": "SPY"
-        }
+            
+            # --- Lookback ---
+            "look_back_days": 20,                # 1 Month momentum
+            "regime_sma_period": 50,             # Shorter-term bull/bear filter (50-day SMA)
 
-    else:
-        raise ValueError(f"Unknown preset: {preset}")
+            # --- Selection ---
+            "num_sectors_to_select": 3,          # Diversify into top 3 hot themes
+            
+            # --- Scoring Weights ---
+            # Heavily favor recent momentum and volume drift.
+            "weights": {"momentum": 0.6, "rsi": 0.1, "volume_trend": 0.3},
+            
+            # --- Risk Management ---
+            "max_entry_rsi": 85.0,               # Allow entering hot moves, but not total blow-offs
+            "safe_haven_symbol": "SHY",          # Short-term Treasury (Cash equivalent)
+            "benchmark_symbol": "SPY"
+        },
+
+        "position": {
+            # ---------------- CYCLE ROTATION (Strategic / Core) ----------------
+            # Focus: Broad GICS Sectors (Tech, Financials, Health, etc.).
+            # Timeframe: Quarterly/Semi-Annual adjustments (6 months).
+            "universe": "broad",                 # Use GICS Sectors
+            
+            # --- Lookback ---
+            "look_back_days": 126,               # 6 Months momentum (Standard relative strength lookback)
+            "regime_sma_period": 200,            # Standard 200-day trend filter
+
+            # --- Selection ---
+            "num_sectors_to_select": 2,          # Concentrated bets on leading phases of the economy
+            
+            # --- Scoring Weights ---
+            # Pure momentum is key for long-term trends.
+            "weights": {"momentum": 0.7, "rsi": 0.1, "volume_trend": 0.2},
+            
+            # --- Risk Management ---
+            "max_entry_rsi": 95.0,
+            "safe_haven_symbol": "IEF",          # 7-10 Year Treasury for hedging
+            "benchmark_symbol": "SPY"
+        }
+    }

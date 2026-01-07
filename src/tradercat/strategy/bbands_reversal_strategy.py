@@ -1,6 +1,5 @@
 from typing import List, Literal, Optional, Dict, Any
 
-from tradercat.strategy.strategy_presets import StrategyPreset
 from tradercat.strategy.candle_pattern.pattern_detector import PatternResult
 from tradercat.strategy.candle_pattern.pattern_detector_orch import PatternDetectorsOrchestrator
 from tradercat.strategy.exit_planner import ExitPlanner
@@ -124,7 +123,7 @@ class BBandsReversalStrategy(TradingStrategy):
 
     # ---------- 主逻辑 ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
-        logger.info(f"🔍 Generating Bollinger Reversal signal for {symbol}...")
+        logger.info(f"🔍 Generating Bollinger Reversal signal for {symbol} at {candles[-1].date if candles else 'N/A'}...")
         
         if not candles or len(candles) < self.get_lookback_window():
             return SignalModel(
@@ -327,18 +326,21 @@ class BBandsReversalStrategy(TradingStrategy):
             details=details,
         )
 
-def make_bbands_reversal_presets(preset: StrategyPreset) -> Dict[str, Any]:
+def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Bollinger Band reversal strategy presets based on algo trading best practices:
-    - swing: Optimized for catching mean-reversion moves while avoiding strong trends.
+    Returns a dictionary of all available presets for Bollinger Band Reversal Strategy.
+    Key: Preset Name (e.g., 'swing')
+    Value: Dictionary of constructor arguments.
     """
-    
-    if preset == "swing":
-        # ---------------- SWING TRADING (Optimized) ----------------
-        return {
+    return {
+        "swing": {
+            # ---------------- SWING TRADING (Optimized) ----------------
+            # --- BB Reversal Strategy Best Practices ---
+            # Catching reversion-to-mean moves while avoiding fading strong trends (ADX filter).
+            
             # --- Core BB Settings ---
-            "bb_period": 20,            # 标准布林带周期
-            "bb_std": 2.0,              # 2倍标准差，覆盖95%的价格行为
+            "bb_period": 20,            # Standard BB period
+            "bb_std": 2.0,              # 2 std deviations (95% coverage)
 
             # --- Proximity Logic ---
             # [Optimization] 0.5 ATR. 
@@ -346,39 +348,60 @@ def make_bbands_reversal_presets(preset: StrategyPreset) -> Dict[str, Any]:
             # Within 0.5 ATR is considered "Testing the Band".
             "touch_atr_multiplier": 0.5,    
 
-            # --- Trend Filter (Crucial for Reversals) ---
+            # --- Trend Filter (Crucial) ---
             # [Optimization] ADX < 30. 
-            # We ONLY trade reversals when the trend is weak or maturing.
-            # If ADX > 30, it's a strong trend -> DO NOT FADE (Don't catch a falling knife).
+            # ONLY trade reversals when trend is weak or maturing.
+            # If ADX > 30, it is a strong trend -> DO NOT FADE.
             "adx_period": 14,
             "adx_threshold": 30.0,      
 
             # --- Pattern Recognition ---
-            # Look for rejection candles (Hammer, Shooting Star) in the last 3 days.
+            # Look for rejection candles (Hammer, etc.) in the last 3 days.
             "max_time_bars": 3,
 
             # --- Volume Confirmation ---
-            # Reversals need conviction. Volume should be 1.5 std devs above mean (Climax/Exhaustion).
+            # Reversals need conviction (1.5 std devs above mean volume).
             "vol_zscore_window": 20,
             "vol_zscore_threshold": 1.5,
 
             # --- Momentum Indicators ---
-            "rsi_period": 14,           # Standard RSI for divergence/overbought checks
+            "rsi_period": 14,
             "atr_period": 14,
-            
-            # MACD settings (Standard)
             "macd_params": {"fast": 12, "slow": 26, "signal": 9},
 
             # --- Scoring ---
-            # Reversals are riskier than trend following, so we set a moderate threshold.
             "score_threshold": 0.60
-        }
-    
-    elif preset == "position":
-        return { }
-    
-    elif preset == "scalp":
-        return { }
+        },
 
-    else:
-        raise ValueError(f"Unknown preset: {preset}")
+        "position": {
+            # ---------------- POSITION TRADING (Mean Reversion in Range) ----------------
+            "bb_period": 50,
+            "bb_std": 2.5,              # 2.5 std devs = rare extremes
+            "touch_atr_multiplier": 1.0,
+            "adx_period": 14,
+            "adx_threshold": 25.0,      # Strict range requirement
+            "max_time_bars": 5,
+            "vol_zscore_window": 50,
+            "vol_zscore_threshold": 1.5,
+            "rsi_period": 14,
+            "atr_period": 14,
+            "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+            "score_threshold": 0.70
+        },
+
+        "scalp": {
+            # ---------------- SCALPING (Fading Extremes) ----------------
+            "bb_period": 20,
+            "bb_std": 2.2,              # Slightly wider than standard to reduce fakeouts in noise
+            "touch_atr_multiplier": 0.2, # Must be very close or touching
+            "adx_period": 14,
+            "adx_threshold": 20.0,      # Pure chop markets only
+            "max_time_bars": 2,         # Immediate reaction expected
+            "vol_zscore_window": 10,
+            "vol_zscore_threshold": 2.0,
+            "rsi_period": 7,            # Fast RSI
+            "atr_period": 10,
+            "macd_params": {"fast": 6, "slow": 13, "signal": 4}, # Fast MACD
+            "score_threshold": 0.55     # Speed over perfection
+        }
+    }

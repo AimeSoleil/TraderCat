@@ -1,7 +1,5 @@
 from typing import List, Optional, Dict, Any, Tuple, Callable
-import statistics
 
-from tradercat.strategy.strategy_presets import StrategyPreset
 from tradercat.strategy.exit_planner import ExitPlanner
 from tradercat.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
 from tradercat.strategy.trading_strategy import TradingStrategy
@@ -135,7 +133,7 @@ class DivergenceStrategy(TradingStrategy):
 
     # ---------- Main Logic ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
-        logger.info(f"🔍 Generating Divergence signal for {symbol}...")
+        logger.info(f"🔍 Generating Divergence signal for {symbol} at {candles[-1].date if candles else 'N/A'}...")
         
         if not candles or len(candles) < self.get_lookback_window():
             return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Data insufficient")
@@ -292,15 +290,13 @@ class DivergenceStrategy(TradingStrategy):
             details=details,
         )
 
-def make_divergence_presets(preset: StrategyPreset) -> Dict[str, Any]:
+def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Divergence strategy presets based on algo trading best practices:
-    - swing: Optimized for catching trend reversals (Regular) and trend continuations (Hidden).
+    Returns a dictionary of all available presets for Divergence Strategy.
     """
-
-    if preset == "swing":
-        # ---------------- SWING TRADING (Optimized) ----------------
-        return {
+    return {
+        "swing": {
+            # ---------------- SWING TRADING (Optimized) ----------------
             # --- Pivot Detection ---
             # 5 bars left/right is standard for identifying significant swing points.
             "swing_window": 5,                  
@@ -324,13 +320,31 @@ def make_divergence_presets(preset: StrategyPreset) -> Dict[str, Any]:
             # Divergence is subjective and prone to false signals. 
             # We set a high bar (0.70) to ensure multiple factors align.
             "score_threshold": 0.70             
+        },
+    
+        "position": {
+            # ---------------- POSITION TRADING (Major Tops/Bottoms) ----------------
+            "swing_window": 10,                # Significant pivots
+            "lookback_swings": 120,            # 6 months context
+            "rsi_period": 14,
+            "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+            "atr_period": 14,
+            "adx_period": 14,
+            "vol_zscore_window": 50,
+            "vol_zscore_threshold": 1.2,
+            "score_threshold": 0.75
+        },
+        
+        "scalp": {
+            # ---------------- SCALPING (Micro Divergence) ----------------
+            "swing_window": 2,                 # Local fractals
+            "lookback_swings": 30,             # Last hour or so (on lower TFs)
+            "rsi_period": 7,
+            "macd_params": {"fast": 6, "slow": 13, "signal": 4},
+            "atr_period": 5,
+            "adx_period": 7,
+            "vol_zscore_window": 10,
+            "vol_zscore_threshold": 1.5,
+            "score_threshold": 0.60
         }
-    
-    elif preset == "position":
-        return { }
-    
-    elif preset == "scalp":
-        return { }
-
-    else:
-        raise ValueError(f"Unknown preset: {preset}")
+    }

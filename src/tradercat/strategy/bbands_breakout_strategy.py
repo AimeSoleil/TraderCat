@@ -1,6 +1,5 @@
 from typing import List, Optional, Dict, Any, Tuple
 
-from tradercat.strategy.strategy_presets import StrategyPreset
 from tradercat.strategy.exit_planner import ExitPlanner
 from tradercat.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
 from tradercat.strategy.trading_strategy import TradingStrategy
@@ -118,8 +117,8 @@ class BollingerBreakoutStrategy(TradingStrategy):
         return curr_bw, bw_list, u_curr, l_curr, m_curr
 
     # --- 主逻辑 ---
-    def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
-        logger.info(f"🔍 Generating Bollinger Breakout signal for {symbol}...")
+    def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:   
+        logger.info(f"🔍 Generating Bollinger Breakout signal for {symbol} at {candles[-1].date if candles else 'N/A'}...")
         
         # 基本数据校验
         if not candles or len(candles) < self.get_lookback_window():
@@ -131,7 +130,7 @@ class BollingerBreakoutStrategy(TradingStrategy):
                 reason="数据不足",
                 confidence=0.0,
             )
-
+        
         # 获取指标（依赖 provider）
         bb_series = self.provider.get_indicator(
             "bbands", candles, {"length": self.bb_period, "std": self.bb_std}
@@ -278,27 +277,24 @@ class BollingerBreakoutStrategy(TradingStrategy):
             details=details,
         )
 
-def make_bbands_breakout_presets(preset: StrategyPreset) -> Dict[str, Any]:
+def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Bollinger Band breakout strategy presets based on algo trading best practices:
-    - swing: Short-term (2 days - 2 weeks), optimized for capturing volatility expansion.
+    Returns a dictionary of all available presets for Bollinger Breakout Strategy.
+    Key: Preset Name (e.g., 'swing')
+    Value: Dictionary of constructor arguments.
     """
-
-    if preset == "swing":
-        # ---------------- SWING TRADING (Optimized) ----------------
-        return {
+    return {
+        "swing": {
+            # ---------------- SWING TRADING (Optimized) ----------------
             # --- Core BB Settings ---
             "bb_period": 20,
             "bb_std": 2.0,
 
             # --- Squeeze Logic (Crucial for Swing) ---
-            # Look back 6 months (approx 120 trading days) to find true low volatility.
-            # Only trigger if bandwidth is in the bottom 15% of that history.
             "trailing_bw_window": 120,
             "bw_percentile_threshold": 15.0,
 
             # --- Trend Filter ---
-            # Standard swing trading EMAs.
             "ema_fast": 9,
             "ema_slow": 21,
 
@@ -309,27 +305,54 @@ def make_bbands_breakout_presets(preset: StrategyPreset) -> Dict[str, Any]:
             "prior_swing_bars": 5,
 
             # --- Volume Confirmation ---
-            # Breakouts must be accompanied by significant volume (2 std dev above mean).
             "vol_zscore_window": 20,
             "vol_zscore_threshold": 2.0,
 
             # --- Scoring ---
-            # Slightly stricter threshold to filter noise.
             "score_threshold": 0.65,
 
-            # --- [New] Filters ---
-            # Dead Stock Filter: ATR must be > 1.0% of price (ensure stock moves enough to profit).
-            "min_atr_percent": 1.0,       # Dead Stock Filter: ATR must be > 1.0% of price
-            "breakout_margin_atr": 0.2,   # Breakout Margin: Close > BBU + 0.2 * ATR
+            # --- Filters ---
+            "min_atr_percent": 1.0,
+            "breakout_margin_atr": 0.2,
+        },
+        
+        "position": {
+            # ---------------- POSITION TRADING (Trend Following) ----------------
+            # Longer timeframe, wider bands, capturing major moves.
+            "bb_period": 50,
+            "bb_std": 2.5,                  # Wider bands to avoid noise
+            "trailing_bw_window": 200,      # Long-term volatility baseline
+            "bw_percentile_threshold": 20.0,
+            "ema_fast": 20,
+            "ema_slow": 50,
+            "atr_period": 14,
+            "adx_period": 14,
+            "rsi_period": 14,
+            "prior_swing_bars": 10,
+            "vol_zscore_window": 50,
+            "vol_zscore_threshold": 1.5,
+            "score_threshold": 0.70,        # Higher conviction
+            "min_atr_percent": 0.5,
+            "breakout_margin_atr": 0.5,     # Require stronger breakout
+        },
+        
+        "scalp": {
+            # ---------------- SCALPING (High Frequency / Noise Trading) ----------------
+            # Very short timeframe (requires 1m/5m bars), quick reactions.
+            "bb_period": 20,
+            "bb_std": 2.0,
+            "trailing_bw_window": 50,
+            "bw_percentile_threshold": 10.0, # Tighter squeeze needed
+            "ema_fast": 5,
+            "ema_slow": 13,
+            "atr_period": 10,
+            "adx_period": 10,
+            "rsi_period": 10,
+            "prior_swing_bars": 3,
+            "vol_zscore_window": 10,
+            "vol_zscore_threshold": 2.5,    # Explosive volume required
+            "score_threshold": 0.60,
+            "min_atr_percent": 0.2,         # Can trade lower volatility if volume is huge
+            "breakout_margin_atr": 0.1,
         }
-
-    elif preset == "position":
-        # ---------------- POSITION TRADING ----------------
-        return { }
-    
-    elif preset == "scalp":
-        # ---------------- SCALP TRADING ----------------
-        return { }
-
-    else:
-        raise ValueError(f"Unknown preset: {preset}")
+    }

@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 @dataclass
 class BacktestConfig:
     # Global Settings
-    start_date: str = "2024-01-01"
+    start_date: str = "2025-01-01"
     end_date: str = datetime.now().strftime("%Y-%m-%d")
     initial_cash: float = 100000.0
     save_charts: bool = True

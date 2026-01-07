@@ -1,8 +1,6 @@
 from typing import List, Optional, Dict, Any
 import statistics
-import math
 
-from tradercat.strategy.strategy_presets import StrategyPreset
 from tradercat.strategy.exit_planner import ExitPlanner
 from tradercat.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
 from tradercat.strategy.trading_strategy import TradingStrategy
@@ -147,7 +145,7 @@ class MomentumTrendStrategy(TradingStrategy):
 
     # ---------- Main Logic ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
-        logger.info(f"🔍 Generating Momentum Trend signal for {symbol}...")
+        logger.info(f"🔍 Generating Momentum Trend signal for {symbol} at {candles[-1].date if candles else 'N/A'}...")
         
         if not candles or len(candles) < self.get_lookback_window():
             return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Data insufficient")
@@ -263,16 +261,15 @@ class MomentumTrendStrategy(TradingStrategy):
             details=details,
         )
 
-def make_momentum_presets(preset: StrategyPreset) -> Dict[str, Any]:
+def make_momentum_presets() -> Dict[str, Dict[str, Any]]:
     """
-    MomentumTrend strategy presets.
+    Returns a dictionary of all available presets for Momentum Trend Strategy.
     """
-    
-    if preset == "swing":
-        # ---------------- MID-TERM TREND (Optimized for Months) ----------------
-        # Goal: Capture Quarterly (3-month) to Semi-Annual trends.
-        # Holding Period: 4 weeks to 12 weeks.
-        return {
+    return {
+        "swing": {
+            # ---------------- MID-TERM TREND (Optimized for Months) ----------------
+            # Goal: Capture Quarterly (3-month) to Semi-Annual trends.
+            # Holding Period: 4 weeks to 12 weeks.
             # --- Momentum Lookback ---
             # 63 trading days = ~1 Quarter. 
             # We want stocks that have outperformed over the last quarter.
@@ -305,12 +302,11 @@ def make_momentum_presets(preset: StrategyPreset) -> Dict[str, Any]:
             # --- Scoring ---
             # High threshold. We are looking for the "Best of the Best" leaders.
             "score_threshold": 0.70             
-        }
+        },
 
-    elif preset == "position":
-        # ---------------- LONG-TERM POSITION ----------------
-        # Goal: Capture Annual trends (Golden Cross).
-        return {
+        "position": {
+            # ---------------- LONG-TERM POSITION ----------------
+            # Goal: Capture Annual trends (Golden Cross).
             "L": 126,                          # 6 Months (Half-Year) Momentum
             "ema_fast": 50,                    # Institutional Support
             "ema_slow": 200,                   # The "Bull/Bear" Line
@@ -321,10 +317,20 @@ def make_momentum_presets(preset: StrategyPreset) -> Dict[str, Any]:
             "vol_zscore_window": 40,           
             "vol_zscore_threshold": 1.0,       
             "score_threshold": 0.80            
+        },
+        
+        "scalp": {
+            # ---------------- MOMENTUM SCALPING (Day Trading) ----------------
+            # Goal: Ride the intraday gappers / movers.
+            "L": 10,                           # 10 bars momentum
+            "ema_fast": 5,
+            "ema_slow": 13,
+            "ht_ema_fast": 8,                  # Higher timeframe proxy
+            "ht_ema_slow": 21,
+            "adx_period": 7,
+            "atr_period": 5,
+            "vol_zscore_window": 10,
+            "vol_zscore_threshold": 2.0,       # High volume demand
+            "score_threshold": 0.60
         }
-    
-    elif preset == "scalp":
-        return { }
-
-    else:
-        raise ValueError(f"Unknown preset: {preset}")
+    }

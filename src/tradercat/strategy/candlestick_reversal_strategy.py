@@ -1,6 +1,5 @@
 from typing import List, Optional, Dict, Any, Literal
 
-from tradercat.strategy.strategy_presets import StrategyPreset
 from tradercat.strategy.candle_pattern.pattern_detector_orch import PatternDetectorsOrchestrator
 from tradercat.strategy.exit_planner import ExitPlanner
 from tradercat.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
@@ -92,7 +91,7 @@ class CandlestickReversalStrategy(TradingStrategy):
 
     # ---------- 主决策逻辑 ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
-        logger.info(f"🔍 Generating Candlestick Reversal signal for {symbol}...")
+        logger.info(f"🔍 Generating Candlestick Reversal signal for {symbol} at {candles[-1].date if candles else 'N/A'}...")
         
         if not candles or len(candles) < max(self.ema_slow, self.atr_period, 3):
             return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold",
@@ -263,15 +262,15 @@ class CandlestickReversalStrategy(TradingStrategy):
             details=details
         )
 
-def make_candlestick_reversal_presets(preset: StrategyPreset) -> Dict[str, Any]:
+def make_candlestick_reversal_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Candlestick Reversal Presets (Optimized for Algo Trading).
+    Returns a dictionary of all available presets for Candlestick Reversal Strategy.
     """
-
-    if preset == "swing":
-        # ---------------- SWING TRADING (Optimized) ----------------
-        # Strategy: "Buy the Dip" in an Uptrend / "Sell the Rally" in a Downtrend.
-        return {
+    return {
+        "swing": {
+            # ---------------- SWING TRADING (Optimized) ----------------
+            # Strategy: "Buy the Dip" in an Uptrend / "Sell the Rally" in a Downtrend.
+            
             # --- Trend Filter ---
             # Use 9/21 EMA. This is the standard "Swing Trader's Zone".
             # We only look for Bullish patterns when EMA 9 > EMA 21.
@@ -296,13 +295,33 @@ def make_candlestick_reversal_presets(preset: StrategyPreset) -> Dict[str, Any]:
             # Set to 0.65 to filter out weak patterns.
             # We want Confluence: Trend + Pattern + Volume + Momentum.
             "score_threshold": 0.65,
-        }
-    
-    elif preset == "position":
-        return { }
-    
-    elif preset == "scalp":
-        return { }
+        },
 
-    else:
-        raise ValueError(f"Unknown preset: {preset}")
+        "position": {
+            # ---------------- POSITION TRADING ----------------
+            # Weekly/Monthly reversals
+            "ema_fast": 50,
+            "ema_slow": 200,
+            "atr_period": 14,
+            "rsi_period": 14,
+            "adx_period": 14,
+            "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+            "vol_zscore_window": 50,
+            "vol_zscore_threshold": 2.0, # High conviction accumulation
+            "score_threshold": 0.75
+        },
+
+        "scalp": {
+            # ---------------- SCALPING ----------------
+            # 1m/5m timeframe reversals
+            "ema_fast": 5,
+            "ema_slow": 13,
+            "atr_period": 10,
+            "rsi_period": 7,
+            "adx_period": 7,
+            "macd_params": {"fast": 6, "slow": 13, "signal": 4},
+            "vol_zscore_window": 10,
+            "vol_zscore_threshold": 2.5, # Volume spike essential for scalp reversals
+            "score_threshold": 0.60
+        }
+    }
