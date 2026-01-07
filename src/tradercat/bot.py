@@ -1,5 +1,4 @@
 from typing import List, Optional
-from regex import P
 from tradercat.data.openbb_provider import OpenBBProvider
 from tradercat.logger.logger import get_logger
 from tradercat.strategy.signal_model import SignalModel

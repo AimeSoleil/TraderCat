@@ -1,4 +1,5 @@
 from datetime import date
+import traceback
 from openbb import obb
 from tradercat.data.market_data_provider import MarketDataProvider
 from tradercat.logger.logger import get_logger
@@ -23,7 +24,7 @@ class OpenBBProvider(MarketDataProvider):
         try:
             return func(data = data, **params).results
         except Exception as e:
-            logger.info(f"Error fetching indicator {indicator} with params {params}: {e}")
+            logger.info(f"Error fetching indicator {indicator} with params {params}: {traceback.format_exc()}")
             return None
 
     # https://docs.openbb.co/platform/reference/derivatives/options/chains

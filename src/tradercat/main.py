@@ -13,7 +13,6 @@ from tradercat.logger.logger import get_logger
 from tradercat.notification.discord import DiscordNotifier
 from tradercat.execution.trade_execution import TradeExecutor
 from tradercat.bot import TraderBot
-from tradercat.strategy.signal_model import SignalModel
 from tradercat.storage.google_drive import GoogleDriveStorage
 
 logger = get_logger(__name__)

@@ -93,10 +93,11 @@ class DivergenceStrategy(TradingStrategy):
         
         # 1. Freshness Check (Critical Fix)
         # The pivot i2 is confirmed only after 'swing_window' bars.
-        # So the signal is valid if current_bar is exactly (or very close to) i2 + swing_window.
-        # We allow a small buffer (e.g., 1 bar) in case of calculation delays.
+        # freshness_threshold passed here represents the swing_window needed for confirmation.
         current_idx = candles_len - 1
-        confirmation_idx = i2 + self.swing_window
+        
+        # FIX: Use the passed argument instead of self.swing_window
+        confirmation_idx = i2 + freshness_threshold
         
         if current_idx < confirmation_idx:
             return False, None, None, -1, -1 # Pivot not confirmed yet (shouldn't happen if find_fractal is correct)
