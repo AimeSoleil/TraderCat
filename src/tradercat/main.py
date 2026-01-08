@@ -4,8 +4,6 @@ import pandas as pd
 from datetime import datetime
 import yaml
 import os
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 import pytz
 from typing import List, Dict
 
@@ -43,7 +41,7 @@ def load_symbols(args) -> List[str]:
     
     return list(dict.fromkeys(symbols))
 
-def save_signals_to_csv(all_signals: List[Dict], drive_storage: GoogleDriveStorage):
+def save_signals_to_csv(all_signals: List[Dict], drive_storage: GoogleDriveStorage, scope: str = "all"):
     """Exports collected signals to a CSV file and uploads to Drive."""
     rows = []
     for entry in all_signals:
@@ -62,7 +60,8 @@ def save_signals_to_csv(all_signals: List[Dict], drive_storage: GoogleDriveStora
         return
 
     df = pd.DataFrame(rows)
-    filename = f"trade_signals_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
+    # Update filename to include scope
+    filename = f"trade_signals_{scope}_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
     df.to_csv(filename, index=False, encoding='utf-8-sig')
     logger.info(f"📄 Signals CSV created: {filename}")
 
@@ -103,17 +102,18 @@ async def run_trading_session(symbols: List[str],
                               drive_storage: GoogleDriveStorage,
                               max_concurrency: int = 5, 
                               stagger_sec: int = 2, 
-                              run_portfolio: bool = True):
+                              scope: str = "all"):
     """
     Orchestrates the entire trading session.
+    :param scope: "all", "single", or "portfolio"
     """
     start_time = datetime.now()
     bot = TraderBot(executor=executor)
     all_results = []
-    logger.info(f"run_portfolio: {run_portfolio}")
+    logger.info(f"Session Scope: {scope}")
 
     # 1. Run Portfolio Strategies
-    if run_portfolio:
+    if scope in ["all", "portfolio"]:
         try:
             portfolio_signals = await bot.process_portfolio()
             if portfolio_signals:
@@ -121,30 +121,34 @@ async def run_trading_session(symbols: List[str],
         except Exception as e:
             logger.error(f"Error in portfolio strategies: {e}")
     else:
-        logger.info("Skipping Portfolio Strategies.")
+        logger.info("Skipping Portfolio Strategies per scope.")
 
     # 2. Run Single-Asset Strategies
-    semaphore = asyncio.Semaphore(max_concurrency)
+    if scope in ["all", "single"]:
+        semaphore = asyncio.Semaphore(max_concurrency)
 
-    async def worker(symbol):
-        async with semaphore:
-            # Stagger start to be nice to APIs
-            await asyncio.sleep(stagger_sec * (symbols.index(symbol) % max_concurrency)) 
-            try:
-                signals = await bot.process_symbol(symbol)
-                if signals:
-                    return {"symbol": symbol, "signals": signals}
-            except Exception as e:
-                logger.error(f"Error processing {symbol}: {e}")
-            return None
+        async def worker(symbol):
+            async with semaphore:
+                # Stagger start to be nice to APIs
+                await asyncio.sleep(stagger_sec * (symbols.index(symbol) % max_concurrency)) 
+                try:
+                    signals = await bot.process_symbol(symbol)
+                    if signals:
+                        return {"symbol": symbol, "signals": signals}
+                except Exception as e:
+                    logger.error(f"Error processing {symbol}: {e}")
+                return None
 
-    tasks = [worker(sym) for sym in symbols]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+        if symbols:
+            tasks = [worker(sym) for sym in symbols]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # Filter out failures and empty results
-    for res in results:
-        if isinstance(res, dict):
-            all_results.append(res)
+            # Filter out failures and empty results
+            for res in results:
+                if isinstance(res, dict):
+                    all_results.append(res)
+    else:
+        logger.info("Skipping Single-Asset Strategies per scope.")
 
     # 3. Reporting
     if all_results:
@@ -156,40 +160,19 @@ async def run_trading_session(symbols: List[str],
     duration = datetime.now() - start_time
     logger.info(f"✅ Session finished in {duration.total_seconds():.2f}s")
 
-# --- Scheduler ---
-
-async def start_scheduler(symbols, executor, notifier, drive_storage, args):
-    scheduler = AsyncIOScheduler(timezone=pytz.timezone('US/Eastern'))
-    
-    # 将 drive_storage 传递给任务
-    job_fn = lambda: asyncio.create_task(
-        run_trading_session(symbols, executor, notifier, drive_storage, 
-                            args.concurrency, args.stagger, not args.skip_portfolio)
-    )
-    
-    scheduler.add_job(job_fn, CronTrigger(hour=args.schedule_hour, minute=args.schedule_minute))
-    
-    logger.info(f"⏰ Scheduler started. Next run at {args.schedule_hour:02d}:{args.schedule_minute:02d} ET.")
-    scheduler.start()
-    
-    try:
-        while True:
-            await asyncio.sleep(3600)
-    except (KeyboardInterrupt, SystemExit):
-        pass
-
 # --- Entry Point ---
 
 def main():
     parser = argparse.ArgumentParser(description="TraderCat Bot Runner")
-    parser.add_argument("-m", "--mode", choices=["once", "schedule"], default="once", help="Run mode")
+    # Removed "schedule" mode as it is better handled by system Cron/Systemd
     parser.add_argument("-s", "--symbols", type=str, help="Comma separated symbols")
     parser.add_argument("-f", "--symbols-file", type=str, help="Path to symbols file")
-    parser.add_argument("-H", "--schedule-hour", type=int, default=16, help="Schedule Hour (ET)")
-    parser.add_argument("-M", "--schedule-minute", type=int, default=0, help="Schedule Minute (ET)")
     parser.add_argument("-c", "--concurrency", type=int, default=5, help="Max concurrent bots")
     parser.add_argument("-S", "--stagger", type=int, default=2, help="Stagger seconds")
-    parser.add_argument("--skip-portfolio", action="store_true", help="Skip running portfolio strategies")
+    
+    # 替换 skip-portfolio 为 scope
+    parser.add_argument("--scope", choices=["all", "single", "portfolio"], default="all", 
+                        help="Execution scope: 'all' (default), 'single' (assets), or 'portfolio' strategies.")
 
     args = parser.parse_args()
     
@@ -206,11 +189,10 @@ def main():
     # 实例化 Google Drive Storage
     drive_storage = GoogleDriveStorage()
 
-    if args.mode == "once":
-        asyncio.run(run_trading_session(symbols, executor, notifier, drive_storage, 
-                                        args.concurrency, args.stagger, not args.skip_portfolio))
-    else:
-        asyncio.run(start_scheduler(symbols, executor, notifier, drive_storage, args))
+    # Always run once. Scheduling is handled externally (Cron/Systemd).
+    asyncio.run(run_trading_session(symbols, executor, notifier, drive_storage, 
+                                    args.concurrency, args.stagger, args.scope))
+
 
 if __name__ == "__main__":
     main()

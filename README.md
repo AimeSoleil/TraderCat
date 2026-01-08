@@ -9,7 +9,6 @@
 *   **Modular Design**: Clean separation of concerns between Data, Strategy, Execution, and Notification layers.
 *   **Backtesting Engine**: Built-in framework to test strategies against historical data.
 *   **Notifications**: Integrated Discord support for real-time trade alerts.
-*   **Scheduling**: Built-in scheduler to run jobs at specific market times (e.g., market close).
 *   **OpenBB Integration**: Uses the OpenBB SDK for high-quality financial data.
 
 ## 📂 Project Structure
@@ -81,28 +80,42 @@ After installation, the `tradercat` command is available in your terminal.
 Run the bot immediately for a specific set of symbols.
 
 ```bash
-tradercat -m once -s "AAPL,MSFT,GOOG"
+# Run for specific symbols
+tradercat -s "AAPL,MSFT,GOOG"
+
+# Run using a symbols file
+tradercat -f symbols.yml
+
+# Run only Single Asset strategies
+tradercat -f symbols.yml --scope single
+
+# Run only Portfolio strategies
+tradercat -f symbols.yml --scope portfolio
 ```
 
-### Run with Scheduler
-Schedule the bot to run daily (default is 16:00 US Eastern Time).
+### Automation (Cron / Systemd)
 
-```bash
-tradercat -m schedule -f symbols.txt
+Since the internal scheduler has been removed in favor of robust system-level tools, use **Cron** (Linux/macOS) to schedule daily runs.
+
+**Example Crontab (Run Mon-Fri at 5:00 PM ET):**
+
+```cron
+# Set Timezone
+CRON_TZ=America/New_York
+
+# Run daily jobs
+0 17 * * 1-5 cd /path/to/TraderCat && /path/to/python -m tradercat -f symbols.yml >> bot.log 2>&1
 ```
 
 ### CLI Options
 
 | Option | Long Option | Description | Default |
 | :--- | :--- | :--- | :--- |
-| `-m` | `--mode` | Run mode: `once` (immediate) or `schedule` (daily loop). | `once` |
 | `-s` | `--symbols` | Comma-separated list of symbols (e.g., `AAPL,TSLA`). | `None` |
 | `-f` | `--symbols-file` | Path to a `.txt` or `.yaml` file containing symbols. | `None` |
-| `-H` | `--schedule-hour` | **(Schedule Mode)** Hour (0-23) to run in US/Eastern time. | `16` (4 PM) |
-| `-M` | `--schedule-minute` | **(Schedule Mode)** Minute (0-59) to run. | `0` |
 | `-c` | `--concurrency` | Max number of bots running at the same time. | `5` |
-| `-S` | `--stagger` | Seconds to wait between starting bots (prevents API rate limits). | `5` |
-|| `--skip-portfolio` | Skip running portfolio-level strategies (e.g., Sector Rotation). | `False` |
+| `-S` | `--stagger` | Seconds to wait between starting bots (prevents API rate limits). | `2` |
+|| `--scope` | Execution scope: `all` (default), `single`, or `portfolio`. | `all` |
 
 ## 🧠 Strategies
 
