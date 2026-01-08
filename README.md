@@ -97,14 +97,19 @@ tradercat -f symbols.yml --scope portfolio
 
 Since the internal scheduler has been removed in favor of robust system-level tools, use **Cron** (Linux/macOS) to schedule daily runs.
 
-**Example Crontab (Run Mon-Fri at 5:00 PM ET):**
+**Example Crontab:**
 
 ```cron
-# Set Timezone
+# Set Timezone to ensure 5:00 PM is always New York time
 CRON_TZ=America/New_York
 
-# Run daily jobs
-0 17 * * 1-5 cd /path/to/TraderCat && /path/to/python -m tradercat -f symbols.yml >> bot.log 2>&1
+# 1. Daily Swing Trading Signals (Mon-Fri at 5:00 PM)
+# Runs single asset strategies on a daily basis
+0 17 * * 1-5 cd /path/to/TraderCat && /path/to/python -m tradercat -f symbols.yml --scope single >> daily_swing.log 2>&1
+
+# 2. Weekly Portfolio Rebalancing (Fridays at 5:00 PM)
+# Runs sector rotation / portfolio strategies once a week
+0 17 * * 5 cd /path/to/TraderCat && /path/to/python -m tradercat --scope portfolio >> weekly_portfolio.log 2>&1
 ```
 
 ### CLI Options

@@ -1,17 +1,13 @@
 import asyncio
 import argparse
-import pandas as pd
-from datetime import datetime
-import yaml
 import os
-import pytz
+import sys
+from datetime import datetime
 from typing import List, Dict
+import yaml
 
+# 仅保留轻量级的 logger, 以避免启动时的性能开销
 from tradercat.logger.logger import get_logger
-from tradercat.notification.discord import DiscordNotifier
-from tradercat.execution.trade_execution import TradeExecutor
-from tradercat.bot import TraderBot
-from tradercat.storage.google_drive import GoogleDriveStorage
 
 logger = get_logger(__name__)
 
@@ -41,8 +37,11 @@ def load_symbols(args) -> List[str]:
     
     return list(dict.fromkeys(symbols))
 
-def save_signals_to_csv(all_signals: List[Dict], drive_storage: GoogleDriveStorage, scope: str = "all"):
+def save_signals_to_csv(all_signals: List[Dict], drive_storage, scope: str = "all"):
     """Exports collected signals to a CSV file and uploads to Drive."""
+    # ⚡️ 延迟导入 Pandas，因为它启动很慢
+    import pandas as pd
+
     rows = []
     for entry in all_signals:
         for signal in entry["signals"]:
@@ -60,15 +59,17 @@ def save_signals_to_csv(all_signals: List[Dict], drive_storage: GoogleDriveStora
         return
 
     df = pd.DataFrame(rows)
-    # Update filename to include scope
-    filename = f"trade_signals_{scope}_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
+    filename = f"results/trade_signals_{scope}_{datetime.now().strftime('%Y%m%d%H%M')}.csv"
+    
+    # Ensure directory exists
+    os.makedirs("results", exist_ok=True)
+    
     df.to_csv(filename, index=False, encoding='utf-8-sig')
     logger.info(f"📄 Signals CSV created: {filename}")
 
-    # 使用新的存储类上传
     drive_storage.upload_file(filename)
 
-async def send_discord_summary(discord_notifier: DiscordNotifier, all_signals: List[Dict]):
+async def send_discord_summary(discord_notifier, all_signals: List[Dict]):
     """Formats and sends a summary to Discord."""
     today_str = datetime.today().strftime("%Y-%m-%d")
     message_lines = [f"** 💸 Daily [{today_str}] Trade Signals Summary: **"]
@@ -76,7 +77,7 @@ async def send_discord_summary(discord_notifier: DiscordNotifier, all_signals: L
     has_signals = False
     for entry in all_signals:
         for s in entry["signals"]:
-            if s.signal in ("buy", "sell"):
+            if s.signal in ("buy", "sell", "rebalance"):
                 has_signals = True
                 line = (f"* **{entry['symbol']}**: {s.signal.upper()} | "
                         f"Strat: {s.strategy} | Conf: {s.confidence:.2f} | "
@@ -84,7 +85,7 @@ async def send_discord_summary(discord_notifier: DiscordNotifier, all_signals: L
                 message_lines.append(line)
 
     if not has_signals:
-        message_lines.append("No actionable BUY/SELL signals generated.")
+        message_lines.append("No actionable BUY/SELL/REBALANCE signals generated.")
 
     full_message = "\n".join(message_lines)
     logger.info(f"🔔 Sending Discord Notification:\n{full_message}")
@@ -97,16 +98,16 @@ async def send_discord_summary(discord_notifier: DiscordNotifier, all_signals: L
 # --- Core Logic ---
 
 async def run_trading_session(symbols: List[str], 
-                              executor: TradeExecutor, 
-                              discord_notifier: DiscordNotifier, 
-                              drive_storage: GoogleDriveStorage,
+                              executor, 
+                              discord_notifier, 
+                              drive_storage, 
                               max_concurrency: int = 5, 
                               stagger_sec: int = 2, 
                               scope: str = "all"):
-    """
-    Orchestrates the entire trading session.
-    :param scope: "all", "single", or "portfolio"
-    """
+    
+    # ⚡️ 在这里导入 TraderBot，因为它会引发巨型依赖链 (Strategies -> Numpy/OpenBB)
+    from tradercat.bot import TraderBot
+
     start_time = datetime.now()
     bot = TraderBot(executor=executor)
     all_results = []
@@ -120,6 +121,8 @@ async def run_trading_session(symbols: List[str],
                 all_results.append({"symbol": "PORTFOLIO", "signals": portfolio_signals})
         except Exception as e:
             logger.error(f"Error in portfolio strategies: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
     else:
         logger.info("Skipping Portfolio Strategies per scope.")
 
@@ -129,7 +132,6 @@ async def run_trading_session(symbols: List[str],
 
         async def worker(symbol):
             async with semaphore:
-                # Stagger start to be nice to APIs
                 await asyncio.sleep(stagger_sec * (symbols.index(symbol) % max_concurrency)) 
                 try:
                     signals = await bot.process_symbol(symbol)
@@ -143,7 +145,6 @@ async def run_trading_session(symbols: List[str],
             tasks = [worker(sym) for sym in symbols]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Filter out failures and empty results
             for res in results:
                 if isinstance(res, dict):
                     all_results.append(res)
@@ -152,7 +153,7 @@ async def run_trading_session(symbols: List[str],
 
     # 3. Reporting
     if all_results:
-        save_signals_to_csv(all_results, drive_storage)
+        save_signals_to_csv(all_results, drive_storage, scope)
         await send_discord_summary(discord_notifier, all_results)
     else:
         logger.info("No signals generated this session.")
@@ -163,36 +164,58 @@ async def run_trading_session(symbols: List[str],
 # --- Entry Point ---
 
 def main():
-    parser = argparse.ArgumentParser(description="TraderCat Bot Runner")
-    # Removed "schedule" mode as it is better handled by system Cron/Systemd
-    parser.add_argument("-s", "--symbols", type=str, help="Comma separated symbols")
-    parser.add_argument("-f", "--symbols-file", type=str, help="Path to symbols file")
-    parser.add_argument("-c", "--concurrency", type=int, default=5, help="Max concurrent bots")
-    parser.add_argument("-S", "--stagger", type=int, default=2, help="Stagger seconds")
-    
-    # 替换 skip-portfolio 为 scope
-    parser.add_argument("--scope", choices=["all", "single", "portfolio"], default="all", 
+    parser = argparse.ArgumentParser(description="TraderCat Bot CLI")
+    subparsers = parser.add_subparsers(dest="command", title="Available Commands")
+
+    # --- Command: run ---
+    run_parser = subparsers.add_parser("run", help="Start the trading session")
+    run_parser.add_argument("-s", "--symbols", type=str, help="Comma separated symbols")
+    run_parser.add_argument("-f", "--symbols-file", type=str, help="Path to symbols file")
+    run_parser.add_argument("-c", "--concurrency", type=int, default=5, help="Max concurrent bots")
+    run_parser.add_argument("-S", "--stagger", type=int, default=2, help="Stagger seconds")
+    run_parser.add_argument("--scope", choices=["all", "single", "portfolio"], default="all", 
                         help="Execution scope: 'all' (default), 'single' (assets), or 'portfolio' strategies.")
+
+    # --- Command: help ---
+    subparsers.add_parser("help", help="Show this help message")
 
     args = parser.parse_args()
     
-    symbols = load_symbols(args)
-    if not symbols:
-        logger.error("No symbols found. Exiting.")
-        return
+    if args.command == "run":
+        # ⚡️ 只有在用户确定要 run 时，才导入这些重型模块
+        logger.info("🚀 Initializing Trading Engine...")
+        from tradercat.notification.discord import DiscordNotifier
+        from tradercat.execution.trade_execution import TradeExecutor
+        from tradercat.storage.google_drive import GoogleDriveStorage
 
-    logger.info(f"Loaded {len(symbols)} unique symbols.")
+        symbols = []
+        if args.scope != "portfolio":
+            symbols = load_symbols(args)
+            logger.info(f"Loaded {len(symbols)} unique symbols from scope '{args.scope}'.")
+            if not symbols:
+                logger.error("No symbols found. Exiting.")
+                return
+        
+        executor = TradeExecutor()
+        notifier = DiscordNotifier()
+        drive_storage = GoogleDriveStorage()
+
+        try:
+            asyncio.run(run_trading_session(symbols, executor, notifier, drive_storage, 
+                                            args.concurrency, args.stagger, args.scope))
+        except KeyboardInterrupt:
+            logger.info("🛑 Bot stopped by user.")
+
+    elif args.command == "help":
+        parser.print_help()
+        print("\n" + "-"*60)
+        print("🚀 COMMAND: 'run' OPTIONS (Main Trading Engine)")
+        print("-" * 60)
+        run_parser.print_help()
     
-    # 初始化主要组件
-    executor = TradeExecutor()
-    notifier = DiscordNotifier()
-    # 实例化 Google Drive Storage
-    drive_storage = GoogleDriveStorage()
-
-    # Always run once. Scheduling is handled externally (Cron/Systemd).
-    asyncio.run(run_trading_session(symbols, executor, notifier, drive_storage, 
-                                    args.concurrency, args.stagger, args.scope))
-
+    else:
+        parser.print_help()
+        print("\n💡 Tip: Type 'tradercat help' to see detailed options.")
 
 if __name__ == "__main__":
     main()

@@ -33,7 +33,7 @@ def _is_same_file_handler(handler, path):
 
 def get_logger(name: str,
                 level=logging.INFO,
-                log_file: str = "trade_bot.log",
+                log_file: str = "logs/trade_bot.log",
                 max_bytes: int = 10 * 1024 * 1024,
                 backup_count: int = 5,
                 timed: bool = False,
