@@ -2,7 +2,7 @@ from typing import List, Optional
 from tradercat.data.openbb_provider import OpenBBProvider
 from tradercat.logger.logger import get_logger
 from tradercat.strategy.signal_model import SignalModel
-from tradercat.strategy.strategy_presets import StrategyPreset, SectorRotationPreset
+from tradercat.strategy.strategy_presets import StrategyPreset
 
 # Import Strategies and Presets
 from tradercat.strategy.bbands_breakout_strategy import (
@@ -52,7 +52,7 @@ class StrategyFactory:
         ]
 
     @staticmethod
-    def get_portfolio_strategies(data_provider: OpenBBProvider, preset: SectorRotationPreset = "swing") -> List:
+    def get_portfolio_strategies(data_provider: OpenBBProvider, preset: StrategyPreset = "swing") -> List:
         # Note: make_sector_rotation_presets() now accepts preset_name directly
         return [
             SectorRotationStrategy(data_provider=data_provider, **make_sector_rotation_presets()[preset]),

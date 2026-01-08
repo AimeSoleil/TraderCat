@@ -15,9 +15,8 @@ class BBandsReversalStrategy(TradingStrategy):
     基于布林带的反转策略
     核心思想：
         - 当价格接近上/下轨并出现拒绝性蜡烛（长影线、吞没、反转实体）时，作为反转候选
-        - 用 ATR 过滤低波动、用 ADX 避免强趋势中做逆向交易，用成交量 z-score 与动量作为确认
-        - [优化] 动态接触阈值 (ATR-based)
-        - [优化] 中轨作为第一止盈位
+        - 用 ATR 过滤低波动、用 ADX 避免强趋势中做逆向交易
+        - [优化] 动态权重配置
     """
 
     def __init__(
@@ -33,13 +32,14 @@ class BBandsReversalStrategy(TradingStrategy):
         max_time_bars: int = 3,
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 1.0,
-        macd_params: Optional[Dict[str, int]] = {"fast": 12, "slow": 26, "signal": 9},
+        macd_params: Optional[Dict[str, int]] = None,
         score_threshold: float = 0.6,
+        # [NEW] Dynamic Weights
+        weights: Optional[Dict[str, float]] = None,
         data_provider=None,
     ):
         self.bb_period = bb_period
         self.bb_std = bb_std
-        # [Optimization] Store ATR multiplier
         self.touch_atr_multiplier = float(touch_atr_multiplier)
         self.rsi_period = rsi_period
         self.atr_period = atr_period
@@ -50,6 +50,17 @@ class BBandsReversalStrategy(TradingStrategy):
         self.vol_zscore_threshold = float(vol_zscore_threshold)
         self.macd_params = macd_params or {"fast": 12, "slow": 26, "signal": 9}
         self.score_threshold = float(score_threshold)
+        
+        # [NEW] Dynamic Weights configuration
+        default_weights = {
+            "candle": 0.35,     # Pattern is the primary trigger
+            "trend": 0.25,      # ADX filter is crucial for mean reversion
+            "volume": 0.20,     # Volume confirms rejection
+            "momentum": 0.10,   # RSI/MACD hook
+            "bonus": 0.10       # Mid-line cross etc
+        }
+        self.weights = {**default_weights, **(weights or {})}
+        
         self.provider = data_provider
 
         # 字段名（兼容 provider 产出）
@@ -90,15 +101,15 @@ class BBandsReversalStrategy(TradingStrategy):
         ]
 
     # --- Helper Methods ---
+
     def _resolve_bias(
         self,
-        rejection_res_bias: Literal["long", "short", "neutral"] | None,
+        rejection_res_bias: str | None,
         candidate_buy: bool,
         candidate_sell: bool,
         near_lower: bool,
         near_upper: bool,
-        middle_line_reversal: bool
-    ) -> Literal["long", "short", "neutral"]:
+    ) -> str:
         # Primary: pattern bias agrees with candidate side
         if rejection_res_bias == "long" and candidate_buy:
             return "long"
@@ -107,15 +118,8 @@ class BBandsReversalStrategy(TradingStrategy):
 
         # Secondary: neutral or mismatched bias — tilt by proximity and mid-line cross
         if near_lower and candidate_buy:
-            # If we also have a middle-line reversal in the bullish sense, reinforce bull
-            return "long" if middle_line_reversal or (rejection_res_bias in (None, "neutral")) else "long"
-        if near_upper and candidate_sell:
-            return "short" if middle_line_reversal or (rejection_res_bias in (None, "neutral")) else "short"
-
-        # Fallback: use band proximity if no candidate agreement
-        if near_lower:
             return "long"
-        if near_upper:
+        if near_upper and candidate_sell:
             return "short"
 
         # No clear signal
@@ -123,17 +127,9 @@ class BBandsReversalStrategy(TradingStrategy):
 
     # ---------- 主逻辑 ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
-        logger.info(f"🔍 Generating Bollinger Reversal signal for {symbol} at {candles[-1].date if candles else 'N/A'}...")
-        
+        # Check basic data sufficiency (using base class helper logic usually, but manual check here)
         if not candles or len(candles) < self.get_lookback_window():
-            return SignalModel(
-                symbol=symbol,
-                strategy=self.get_name(),
-                signal="hold",
-                date=candles[-1].date if candles else None,
-                reason="数据不足",
-                confidence=0.0,
-            )
+            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=None, reason="Low Data", confidence=0.0)
 
         # 获取指标
         bb_series = self.provider.get_indicator("bbands", candles, {"length": self.bb_period, "std": self.bb_std})
@@ -165,36 +161,37 @@ class BBandsReversalStrategy(TradingStrategy):
         # 读取当前带位
         try:
             bb_last = bb_series[-1]
-            u_curr = getattr(bb_last, self.bb_up_field, None)
-            l_curr = getattr(bb_last, self.bb_low_field, None)
-            m_curr = getattr(bb_last, self.bb_mid_field, None)
+            u_curr = float(getattr(bb_last, self.bb_up_field, 0))
+            l_curr = float(getattr(bb_last, self.bb_low_field, 0))
+            m_curr = float(getattr(bb_last, self.bb_mid_field, 0))
         except Exception:
-            u_curr = l_curr = m_curr = None
+            # Fatal error for this strat
+            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=dates[-1], reason="Indicator Error", confidence=0.0)
 
-        # 判断趋势强度和市场波动
-        trend_strength = self._check_trend_and_volatility(
+        # 判断趋势强度和市场波动 (Reversal Mode: We prefer Low Trend Strength aka Chop/Range)
+        # Use 'reversal' mode so low ADX is scored positively
+        trend_config = self._check_trend_and_volatility(
             atr_val_history=atr_val_history,
             adx_val_history=adx_val_history,
             price_history=closes,
             window=100,
-            mode='reversal',
+            mode='reversal', 
             trend_quantiles=[0.6, 0.4]
         )
 
-        # 成交量 z-score 确认（vol_ok
+        # 成交量 z-score 确认
         recent_window = max(1, min(self.vol_zscore_window, len(vols)))
         vol_ok, volume_z = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
 
-        # --- [Optimization 1] Adaptive Bandwidth (波动率自适应带宽) ---
-        # 使用 ATR 计算动态接触阈值，而不是固定的百分比
+        # --- Adaptive Bandwidth ---
         touch_threshold = current_atr_val * self.touch_atr_multiplier
 
-        near_upper = (u_curr is not None) and (close >= u_curr - touch_threshold)
-        near_lower = (l_curr is not None) and (close <= l_curr + touch_threshold)
-        near_mid = (m_curr is not None) and (abs(close - m_curr) <= touch_threshold)
-        # -----------------------------------------------------------
+        near_upper = (close >= u_curr - touch_threshold)
+        near_lower = (close <= l_curr + touch_threshold)
+        # Mid proximity logic can be tricky, simplified here:
+        near_mid = (abs(close - m_curr) <= touch_threshold) 
 
-        # 检测拒绝蜡烛（以最近 self.max_time_bars 根内的任意一根作为确认）
+        # 检测拒绝蜡烛
         orchestrator = PatternDetectorsOrchestrator()
         rejection_found: bool = False
         reject_idx: int | None = None
@@ -203,20 +200,15 @@ class BBandsReversalStrategy(TradingStrategy):
         
         if near_lower or near_upper:
             for i in range(start, idx + 1):
-                atr_i = atr_val_history[i] if atr_val_history is not None else None
+                # Ensure we have data for this index
+                if i >= len(atr_val_history): continue
+                
+                atr_i = atr_val_history[i]
 
                 if near_lower:
-                    # Bullish reversal candidates (e.g., Tweezer Bottom, Morning Star, etc.)
-                    res = orchestrator.detect_bullish(
-                        opens, highs, lows, closes, i,
-                        atr=atr_i,
-                    )
+                    res = orchestrator.detect_bullish(opens, highs, lows, closes, i, atr=atr_i)
                 else:
-                    # Bearish reversal candidates (e.g., Tweezer Top, Evening Star, etc.)
-                    res = orchestrator.detect_bearish(
-                        opens, highs, lows, closes, i,
-                        atr=atr_i,
-                    )
+                    res = orchestrator.detect_bearish(opens, highs, lows, closes, i, atr=atr_i)
 
                 if res.is_pattern:
                     rejection_found = True
@@ -224,18 +216,16 @@ class BBandsReversalStrategy(TradingStrategy):
                     reject_idx = i
                     break
 
-        # 只有在带位接近并出现拒绝蜡烛的情况下考虑反转
+        # Candidates triggers
         candidate_buy = (near_lower or near_mid) and rejection_found
         candidate_sell = (near_upper or near_mid) and rejection_found
         
-        # 修正：中轨穿越反转逻辑
-        # 看涨反转：之前在下，现在在上 (上穿)
-        # 看跌反转：之前在上，现在在下 (下穿)
+        # 中轨穿越反转逻辑
         middle_line_reversal = False
-        if m_curr is not None:
-            if candidate_buy:
+        if m_curr:
+            if candidate_buy: # Crossed UP over mid line?
                 middle_line_reversal = (prev_close < m_curr and close > m_curr)
-            elif candidate_sell:
+            elif candidate_sell:# Crossed DOWN under mid line?
                 middle_line_reversal = (prev_close > m_curr and close < m_curr)
 
         # Side resolution
@@ -244,11 +234,10 @@ class BBandsReversalStrategy(TradingStrategy):
             candidate_buy=candidate_buy,
             candidate_sell=candidate_sell,
             near_lower=near_lower,
-            near_upper=near_upper,
-            middle_line_reversal=middle_line_reversal
+            near_upper=near_upper
         )
 
-        # 动量确认
+        # 动量确认 (Using Base Class Helper logic)
         momentum_ok: bool = self._momentum_confirm(
             rsi_val_history=rsi_val_history,
             macd_hist_val_history=macd_hist_val_history,
@@ -259,42 +248,60 @@ class BBandsReversalStrategy(TradingStrategy):
             "close": close,
             "upper": u_curr,
             "lower": l_curr,
-            "mid": m_curr,
             "atr": round(current_atr_val, 6),
             "adx": round(current_adx_val, 3),
-            "rejection_date": dates[reject_idx] if reject_idx is not None else None,
             "rejection_pattern": rejection_res.name,
-            "rejection_pattern_bias": rejection_res.bias,
-            "reject_pattern_metrics": rejection_res.metrics,   # full metrics for downstream analysis
-            "vol_zscore": round(volume_z, 3) if volume_z is not None else None,
-            "trend_volatility_ok": trend_strength.signal,
-            "trend_info": trend_strength.trend,
-            "volatility_info": trend_strength.volatility,
-            "near_upper": near_upper,
-            "near_lower": near_lower,
+            "vol_zscore": round(volume_z, 3) if volume_z is not None else 0,
+            "trend_ok": trend_config.signal, # Should refer to signal
             "momentum_ok": momentum_ok,
-            "resolved_side": side_bias,                     # final direction used for trading decision
         }
 
-        # 评分 & 生成 signal
-        result: ScoringResult = None
+        # --- SCORING ENGINE ---
         factors = [
-            Factor(FactorName.BB_REVERSAL_CANDLE, f"检测到布林带拒绝蜡烛({rejection_res.name})", 0.35, candidate_buy or candidate_sell),
-            Factor(FactorName.TREND_STRENGTH, "趋势强度和波动率确认", 0.25, trend_strength.signal),
-            Factor(FactorName.VOLUME_CONFIRM, "成交量放大确认", 0.2, vol_ok),
-            Factor(FactorName.MOMENTUM_CONFIRM, "动量确认方向确认", 0.1, momentum_ok),
-            Factor(FactorName.CONFLUENCE_BONUS, "中轨穿越反转", 0.1, middle_line_reversal)
+            # Factor 1: The Candle Pattern (Must exist)
+            Factor(
+                FactorName.BB_REVERSAL_CANDLE, 
+                f"Rejection: {rejection_res.name}", 
+                self.weights["candle"], 
+                candidate_buy or candidate_sell
+            ),
+            # Factor 2: Market State (Low ADX / Range)
+            Factor(
+                FactorName.TREND_STRENGTH, 
+                "Ranging Market (Low ADX)", 
+                self.weights["trend"], 
+                trend_config.signal
+            ),
+            # Factor 3: Volume
+            Factor(
+                FactorName.VOLUME_CONFIRM, 
+                "Volume Rejection", 
+                self.weights["volume"], 
+                vol_ok
+            ),
+            # Factor 4: Momentum
+            Factor(
+                FactorName.MOMENTUM_CONFIRM, 
+                "Momentum Hook (RSI)", 
+                self.weights["momentum"], 
+                momentum_ok
+            ),
+            # Factor 5: Confluence
+            Factor(
+                FactorName.CONFLUENCE_BONUS, 
+                "Mid-Line Cross / Confluence", 
+                self.weights["bonus"], 
+                middle_line_reversal
+            )
         ]
 
-        # Compute score using ScoringEngine
         engine = ScoringEngine(
             base_threshold=self.score_threshold, 
-            required_factors=self.support_scoring_factors(),
-            determined_factors=[
-                FactorName.BB_REVERSAL_CANDLE
-            ],
-            is_volatility_ok=trend_strength.volatility['signal']
+            # We enforce that a pattern MUST exist for a reversal trade
+            determined_factors=[FactorName.BB_REVERSAL_CANDLE],
+            is_volatility_ok=True # We used trend_config.signal via Factor 2 already
         )
+        
         result = engine.compute_score(factors, side=side_bias)
 
         # 计算入场止损与 trailing stop
@@ -307,101 +314,73 @@ class BBandsReversalStrategy(TradingStrategy):
             )
             plan = planner.make_exit_plan(trading_signal=result.signal)
             
-            # --- [Optimization 2] Mean Reversion Target (中轨止盈) ---
-            # 布林带反转的第一目标位通常是中轨
+            # [Optimization] Mean Reversion Target (Mid Band)
             if m_curr:
                 plan['take_profit_ref'] = m_curr
                 plan['take_profit_type'] = 'mean_reversion_mid'
-            # -------------------------------------------------------
             
-            details.update({"plan": plan})
+            details["plan"] = plan
 
         return SignalModel(
             symbol=symbol,
             strategy=self.get_name(),
             signal=result.signal,
             date=dates[-1],
-            confidence=round(result.score, 3),
+            # Cap confidence at 1.0
+            confidence=round(min(1.0, result.score), 3),
             reason=" | ".join(result.reasons),
             details=details,
         )
 
 def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
-    """
-    Returns a dictionary of all available presets for Bollinger Band Reversal Strategy.
-    Key: Preset Name (e.g., 'swing')
-    Value: Dictionary of constructor arguments.
-    """
     return {
         "swing": {
             # ---------------- SWING TRADING (Optimized) ----------------
-            # --- BB Reversal Strategy Best Practices ---
-            # Catching reversion-to-mean moves while avoiding fading strong trends (ADX filter).
-            
-            # --- Core BB Settings ---
-            "bb_period": 20,            # Standard BB period
-            "bb_std": 2.0,              # 2 std deviations (95% coverage)
-
-            # --- Proximity Logic ---
-            # [Optimization] 0.5 ATR. 
-            # Price doesn't need to touch the band perfectly. 
-            # Within 0.5 ATR is considered "Testing the Band".
+            "bb_period": 20,
+            "bb_std": 2.0,
             "touch_atr_multiplier": 0.5,    
-
-            # --- Trend Filter (Crucial) ---
-            # [Optimization] ADX < 30. 
-            # ONLY trade reversals when trend is weak or maturing.
-            # If ADX > 30, it is a strong trend -> DO NOT FADE.
             "adx_period": 14,
             "adx_threshold": 30.0,      
-
-            # --- Pattern Recognition ---
-            # Look for rejection candles (Hammer, etc.) in the last 3 days.
             "max_time_bars": 3,
-
-            # --- Volume Confirmation ---
-            # Reversals need conviction (1.5 std devs above mean volume).
             "vol_zscore_window": 20,
             "vol_zscore_threshold": 1.5,
-
-            # --- Momentum Indicators ---
             "rsi_period": 14,
             "atr_period": 14,
             "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-
-            # --- Scoring ---
-            "score_threshold": 0.60
+            "score_threshold": 0.60,
+            
+            # [NEW] Tuned Weights
+            "weights": {
+                "candle": 0.35,    # Pattern is king for reversal
+                "trend": 0.25,     # Must be ranging
+                "volume": 0.20,
+                "momentum": 0.10,
+                "bonus": 0.10
+            }
         },
 
         "position": {
-            # ---------------- POSITION TRADING (Mean Reversion in Range) ----------------
+            # ---------------- POSITION TRADING (Strong Levels) ----------------
             "bb_period": 50,
-            "bb_std": 2.5,              # 2.5 std devs = rare extremes
-            "touch_atr_multiplier": 1.0,
+            "bb_std": 2.5,
+            "touch_atr_multiplier": 1.0, # looser touch tolerance on weekly charts
             "adx_period": 14,
-            "adx_threshold": 25.0,      # Strict range requirement
+            "adx_threshold": 25.0,
             "max_time_bars": 5,
             "vol_zscore_window": 50,
             "vol_zscore_threshold": 1.5,
             "rsi_period": 14,
             "atr_period": 14,
             "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-            "score_threshold": 0.70
-        },
-
-        "scalp": {
-            # ---------------- SCALPING (Fading Extremes) ----------------
-            "bb_period": 20,
-            "bb_std": 2.2,              # Slightly wider than standard to reduce fakeouts in noise
-            "touch_atr_multiplier": 0.2, # Must be very close or touching
-            "adx_period": 14,
-            "adx_threshold": 20.0,      # Pure chop markets only
-            "max_time_bars": 2,         # Immediate reaction expected
-            "vol_zscore_window": 10,
-            "vol_zscore_threshold": 2.0,
-            "rsi_period": 7,            # Fast RSI
-            "atr_period": 10,
-            "macd_params": {"fast": 6, "slow": 13, "signal": 4}, # Fast MACD
-            "score_threshold": 0.55     # Speed over perfection
+            "score_threshold": 0.70,
+            
+            # [NEW] Tuned Weights
+            "weights": {
+                "candle": 0.30,
+                "trend": 0.30,     # Market structure matters more
+                "volume": 0.15,
+                "momentum": 0.15,
+                "bonus": 0.10
+            }
         }
     }

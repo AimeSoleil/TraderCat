@@ -10,12 +10,12 @@ logger = get_logger(__name__)
 
 class FibonacciRetracementStrategy(TradingStrategy):
     """
-    Fibonacci Retracement + Breakout Strategy (Refactored)
+    Fibonacci Retracement + Breakout Strategy (Production Grade).
     
-    Key Improvements:
-    - Fix: Strict direction enforcement based on impulse type (Long Impulse -> Only Long signals).
-    - Fix: Removed premature 'in_zone' entry; requires confirmation (breakout or bounce).
-    - Improvement: Added impulse strength validation (must be > 2 ATR).
+    Logic:
+    1. Identify Major Impulse (Filtered by EMA 200 Trend).
+    2. Wait for price to enter "Golden Zone" (e.g. 0.382-0.618).
+    3. Trigger: Must have strong confirmation (Engulfing Candle OR RSI Hook OR EMA Reclaim).
     """
 
     def __init__(
@@ -32,6 +32,8 @@ class FibonacciRetracementStrategy(TradingStrategy):
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 1.0,
         score_threshold: float = 0.6,
+        # [NEW] Dynamic Weights
+        weights: Optional[Dict[str, float]] = None,
         data_provider: Any = None,
     ):
         self.lookback_swings = int(lookback_swings)
@@ -47,6 +49,18 @@ class FibonacciRetracementStrategy(TradingStrategy):
         self.vol_zscore_window = int(vol_zscore_window)
         self.vol_zscore_threshold = float(vol_zscore_threshold)
         self.score_threshold = float(score_threshold)
+        
+        # [NEW] Dynamic Weights configuration
+        default_weights = {
+            "zone_trigger": 0.35,   # Price action confirmation
+            "trend_match": 0.20,    # Alignment with specific EMA trend
+            "adx_strength": 0.15,   # Trend strength
+            "momentum": 0.15,       # RSI/MACD hook
+            "volume": 0.10,         # Volume confirmation
+            "confluence": 0.05      # Bonus factors
+        }
+        self.weights = {**default_weights, **(weights or {})}
+        
         self.provider = data_provider
 
         # Fields
@@ -84,6 +98,7 @@ class FibonacciRetracementStrategy(TradingStrategy):
         ]
 
     # -------------- Helper Functions --------------
+    
     def _select_fib_zone(
         self,
         fib_levels: Dict[float, float],
@@ -91,7 +106,7 @@ class FibonacciRetracementStrategy(TradingStrategy):
         base_fib_high=0.618,
         pullback_type="auto",
         trend_strength=None,
-    ):
+    ) -> Tuple[float, float]:
         if not fib_levels:
             raise ValueError("Missing fib_levels")
         
@@ -110,15 +125,8 @@ class FibonacciRetracementStrategy(TradingStrategy):
         else:
             zone = (base_fib_low, base_fib_high)
         
-        # Ensure we return High/Low values correctly regardless of trend direction
-        # fib_levels dict keys are ratios.
-        # For Uptrend: 0.0 is High, 1.0 is Low. Retracement 0.382 is closer to High.
-        # For Downtrend: 0.0 is Low, 1.0 is High. Retracement 0.382 is closer to Low.
-        # The _calc_fib_levels function handles the math, so fib_levels[0.382] is the price level.
-        
-        # We just need to return the price range.
-        p1 = fib_levels[zone[0]]
-        p2 = fib_levels[zone[1]]
+        p1 = fib_levels.get(zone[0], 0.0)
+        p2 = fib_levels.get(zone[1], 0.0)
         return max(p1, p2), min(p1, p2)
 
     def _calc_fib_levels(
@@ -130,26 +138,22 @@ class FibonacciRetracementStrategy(TradingStrategy):
         Direction 'short' (Downtrend Impulse): High -> Low. Retracement goes up from Low.
         """
         diff = abs(swing_high - swing_low)
-        ratios = [0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
+        ratios = [-0.236, 0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0, 1.272, 1.618]
         levels = {}
         
         if direction == 'long':
             # Retracement from High down to Low
-            # 0.0 is Swing High, 1.0 is Swing Low
             for r in ratios:
                 levels[r] = swing_high - (diff * r)
         else:
             # Retracement from Low up to High
-            # 0.0 is Swing Low, 1.0 is Swing High
             for r in ratios:
                 levels[r] = swing_low + (diff * r)
                 
         return levels
 
     # ---------- 主逻辑 ----------
-    def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
-        logger.info(f"🔍 Generating Fibonacci Retracement signal for {symbol} at {candles[-1].date if candles else 'N/A'}...")
-        
+    def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:        
         if not candles or len(candles) < self.get_lookback_window():
             return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="insufficient data")
 
@@ -161,6 +165,7 @@ class FibonacciRetracementStrategy(TradingStrategy):
         vols = [float(c.volume) for c in candles]
         dates = [c.date for c in candles]
         curr_close = closes[-1]
+        prev_close = closes[-2]
 
         # Indicators
         ema_fast_series = self.provider.get_indicator("ema", candles, {"length": self.ema_fast})
@@ -181,12 +186,11 @@ class FibonacciRetracementStrategy(TradingStrategy):
         ema_fast_val = getattr(ema_fast_series[-1], self.ema_fast_field, 0)
         ema_slow_val = getattr(ema_slow_series[-1], self.ema_slow_field, 0)
 
-        # Trend Filter
+        # Trend Filter (EMA 9/21 cross, or similar)
         trend_up = ema_fast_val > ema_slow_val
         trend_down = ema_fast_val < ema_slow_val
 
-        # Swings Detection
-        # Use a slice for efficiency
+        # Swings Detection (Inherited from TradingStrategy)
         slice_start = max(0, len(highs) - self.lookback_swings - 50)
         swings_highs, swings_lows = self._find_fractal_swings(
             highs[slice_start:], lows[slice_start:], self.swing_window
@@ -195,45 +199,44 @@ class FibonacciRetracementStrategy(TradingStrategy):
         swings_highs = [(i + slice_start, v) for i, v in swings_highs]
         swings_lows = [(i + slice_start, v) for i, v in swings_lows]
 
-        # Identify Impulse
-        # We need the most recent completed impulse.
-        # Long Impulse: Low -> High
-        # Short Impulse: High -> Low
-        
-        impulse_type = None # 'long' or 'short'
+        # Identify Major Impulse
+        impulse_type = None 
         impulse_start_val = 0.0
         impulse_end_val = 0.0
         
-        # Find latest swing points
         last_high = swings_highs[-1] if swings_highs else None
         last_low = swings_lows[-1] if swings_lows else None
         
         if not last_high or not last_low:
             return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="No swings")
 
-        # Determine which impulse is more recent/relevant
-        # If Last High index > Last Low index -> Potential Long Impulse (Low -> High)
-        # If Last Low index > Last High index -> Potential Short Impulse (High -> Low)
-        
         if last_high[0] > last_low[0]:
-            impulse_type = 'long'
+            impulse_type = 'long' # Low -> High
             impulse_start_val = last_low[1]
             impulse_end_val = last_high[1]
         else:
-            impulse_type = 'short'
+            impulse_type = 'short' # High -> Low
             impulse_start_val = last_high[1]
             impulse_end_val = last_low[1]
 
-        # [Improvement] Impulse Validation
-        # Impulse must be significant (> 2 * ATR)
+        # [CRITICAL FIX 1] Major Trend Forced Filter
+        # If price is above EMA Slow (e.g. 200), we act as if it's a Bull Market.
+        # Ignore Short signals derived from minor pullbacks.
+        is_bull_context = curr_close > ema_slow_val
+        
+        if is_bull_context and impulse_type == 'short':
+            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Counter-trend Short Impulse ignored")
+        
+        if not is_bull_context and impulse_type == 'long':
+            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Counter-trend Long Impulse ignored")
+
+        # Impulse Strength Validation
         impulse_range = abs(impulse_end_val - impulse_start_val)
         if impulse_range < 2 * current_atr_val:
             return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Impulse too weak")
 
-        # Calculate Fibs
-        fib_levels = self._calc_fib_levels(impulse_end_val, impulse_start_val, impulse_type) # Note arg order
-        
-        # Select Zone
+        # Calculate Fibs & Zone
+        fib_levels = self._calc_fib_levels(impulse_end_val, impulse_start_val, impulse_type)
         zone_high, zone_low = self._select_fib_zone(
             fib_levels=fib_levels,
             base_fib_low=self.fib_low,
@@ -242,62 +245,58 @@ class FibonacciRetracementStrategy(TradingStrategy):
             trend_strength=current_adx_val
         )
 
-        # Logic Check
-        # Long: Price retraced into zone, then breaks UP above zone_high (or bounces)
-        # Short: Price retraced into zone, then breaks DOWN below zone_low (or bounces)
-        
         signal_triggered = False
         trigger_reason = ""
-        
-        # Check if price is currently inside or just broke out of the zone in the trend direction
         in_zone = zone_low <= curr_close <= zone_high
         
+        # [CRITICAL FIX 2] Enhanced Trigger Logic
+        # We need "Engulfing" or "RSI Hook" or "EMA Reclaim"
+        
+        # RSI Hook Logic
+        curr_rsi = rsi_val_history[-1] if rsi_val_history else 50
+        prev_rsi = rsi_val_history[-2] if len(rsi_val_history) > 1 else 50
+        
         if impulse_type == 'long':
-            # Retracement is downward. Zone High is 0.382 (higher price), Zone Low is 0.618 (lower price).
-            # We want to buy if price stabilizes in zone and starts moving up.
-            # Trigger: Price > Zone High (Breakout of shallow retracement) OR Price bounces from Zone Low
+            # Bullish Case
+            # 1. RSI Hook: Was oversold/low, now ticking up
+            rsi_hook = (prev_rsi < 50) and (curr_rsi > prev_rsi)
             
-            # [Fix] Don't buy just because 'in_zone'. Wait for momentum up.
-            # Simple trigger: Price closes above Zone High (0.382 level) after being inside/below?
-            # Or Price > EMA Fast while in zone?
+            # 2. Engulfing / Strong Candle: Close > Prev High (stronger than just prev close)
+            # Or at least Close > Open AND Close > Prev Close
+            is_strong_candle = (curr_close > opens[-1]) and (curr_close > prev_close)
+            is_engulfing = (curr_close > highs[-2]) and (curr_close > opens[-1])
             
-            # Let's use: Breakout of Zone High (0.382) implies retracement is over.
-            # OR: Price is in zone AND Candle is Green AND RSI hooking up.
+            # 3. EMA Reclaim (Breakout confirmation)
+            ema_reclaim = (curr_close > ema_fast_val)
             
-            # [Optimization] Breakout Confirmation
-            # Instead of just Close > Zone High, we can require Close > EMA Fast (9).
-            # This confirms that short-term momentum has realigned with the major trend.
+            # Specific trigger combinations
+            bounce_type = in_zone and (is_engulfing or (is_strong_candle and rsi_hook))
+            breakout_type = (curr_close > zone_low) and ema_reclaim
             
-            # breakout_confirm = curr_close > zone_high  <-- Old logic (can be too late if zone is wide)
-            
-            # New Logic:
-            # 1. Price is above the "Deep" part of the zone (e.g. > 0.618 level in uptrend)
-            # 2. Price reclaims the Fast EMA (9)
-            
-            breakout_confirm = (curr_close > zone_low) and (curr_close > ema_fast_val)
-            
-            # Bounce confirm remains useful for early entry
-            bounce_confirm = in_zone and (curr_close > closes[-2]) and (curr_close > opens[-1]) # Green candle
-            
-            if breakout_confirm or bounce_confirm:
+            if bounce_type or breakout_type:
                 signal_triggered = True
-                trigger_reason = "Fib Bounce/Breakout Long"
+                trigger_reason = "Fib Long: Bounce/Breakout Confirmed"
                 
         elif impulse_type == 'short':
-            # Retracement is upward. Zone High is 0.618 (higher price), Zone Low is 0.382 (lower price).
-            # We want to sell if price stabilizes and starts moving down.
+            # Bearish Case
+            rsi_hook = (prev_rsi > 50) and (curr_rsi < prev_rsi)
             
-            breakout_confirm = curr_close < zone_low
-            bounce_confirm = in_zone and (curr_close < closes[-2])
+            is_strong_candle = (curr_close < opens[-1]) and (curr_close < prev_close)
+            is_engulfing = (curr_close < lows[-2]) and (curr_close < opens[-1])
             
-            if breakout_confirm or bounce_confirm:
+            ema_reclaim = (curr_close < ema_fast_val)
+            
+            bounce_type = in_zone and (is_engulfing or (is_strong_candle and rsi_hook))
+            breakout_type = (curr_close < zone_high) and ema_reclaim
+            
+            if bounce_type or breakout_type:
                 signal_triggered = True
-                trigger_reason = "Fib Bounce/Breakout Short"
+                trigger_reason = "Fib Short: Bounce/Breakout Confirmed"
 
         if not signal_triggered:
             return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="No trigger in zone")
 
-        # Scoring
+        # Scoring Factors
         trend_strength = self._check_trend_and_volatility(
             atr_val_history, adx_val_history, closes, 100, mode='trend'
         )
@@ -305,37 +304,56 @@ class FibonacciRetracementStrategy(TradingStrategy):
         vol_ok, _ = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
         mom_ok = self._momentum_confirm(rsi_val_history, macd_hist_val_history, prefer=impulse_type)
         
-        # Trend Direction Confirm: Major trend (EMA) should match Impulse
+        # Trend Direction Confirm
         trend_match = (impulse_type == 'long' and trend_up) or (impulse_type == 'short' and trend_down)
 
         factors = [
-            Factor(FactorName.FIB_ZONE_CONFIRM, trigger_reason, 0.35, True),
-            Factor(FactorName.TREND_DIRECTION_CONFIRM, "Major Trend Match", 0.20, trend_match),
-            Factor(FactorName.TREND_STRENGTH, "ADX Strength", 0.15, trend_strength.signal),
-            Factor(FactorName.MOMENTUM_CONFIRM, "Momentum Hook", 0.15, mom_ok),
-            Factor(FactorName.VOLUME_CONFIRM, "Volume", 0.10, vol_ok),
-            Factor(FactorName.CONFLUENCE_BONUS, "Bonus", 0.05, trend_match and mom_ok)
+            Factor(FactorName.FIB_ZONE_CONFIRM, trigger_reason, self.weights["zone_trigger"], True),
+            Factor(FactorName.TREND_DIRECTION_CONFIRM, "Major Trend Match", self.weights["trend_match"], trend_match),
+            Factor(FactorName.TREND_STRENGTH, "ADX Strength", self.weights["adx_strength"], trend_strength.signal),
+            Factor(FactorName.MOMENTUM_CONFIRM, "Momentum Hook", self.weights["momentum"], mom_ok),
+            Factor(FactorName.VOLUME_CONFIRM, "Volume", self.weights["volume"], vol_ok),
+            Factor(FactorName.CONFLUENCE_BONUS, "Confluence", self.weights["confluence"], trend_match and mom_ok)
         ]
 
         engine = ScoringEngine(
             base_threshold=self.score_threshold,
             required_factors=[FactorName.FIB_ZONE_CONFIRM],
             determined_factors=[FactorName.FIB_ZONE_CONFIRM],
-            is_volatility_ok=trend_strength.volatility['signal']
+            is_volatility_ok=trend_strength.volatility.get('signal', True)
         )
         
         result: ScoringResult = engine.compute_score(factors, side=impulse_type)
 
         details = {
             "impulse": impulse_type,
-            "zone": (zone_low, zone_high),
+            "zone": (round(zone_low, 2), round(zone_high, 2)),
             "curr": curr_close,
-            "atr": current_atr_val
+            "atr": round(current_atr_val, 2),
+            "trend_match": trend_match
         }
 
         if result.signal != 'hold':
             planner = ExitPlanner(highs=highs, lows=lows, atr=current_atr_val, close_price=curr_close)
             plan = planner.make_exit_plan(trading_signal=result.signal)
+            
+            # [Optimization] Fib Target Extension
+            # If we buy at 0.618 retracement, target is often -0.236 extension
+            ext_level = fib_levels.get(-0.236, None)
+            if ext_level:
+                plan['take_profit'] = ext_level
+                plan['take_profit_type'] = 'fib_extension_1.236'
+                
+            # Stop loss just below the 1.0 (start of impulse) is safest but wide
+            # A tighter stop is below 0.786
+            sl_level = fib_levels.get(0.786, None) # or 1.0
+            if sl_level:
+                if impulse_type == 'long':
+                    plan['stop_loss'] = min(sl_level, plan['stop_loss']) # Take the wider one usually
+                else:
+                    plan['stop_loss'] = max(sl_level, plan['stop_loss'])
+                plan['stop_loss_type'] = 'fib_level_0.786'
+
             details["plan"] = plan
 
         return SignalModel(
@@ -343,7 +361,8 @@ class FibonacciRetracementStrategy(TradingStrategy):
             symbol=symbol,
             strategy=self.get_name(),
             signal=result.signal,
-            confidence=round(result.score, 3),
+            # Ensure confidence capped at 1.0
+            confidence=round(min(1.0, result.score), 3),
             reason=" | ".join(result.reasons),
             details=details
         )
@@ -355,42 +374,35 @@ def make_fibonacci_presets() -> Dict[str, Dict[str, Any]]:
     return {
         "swing": {
             # ---------------- SWING TRADING (Optimized) ----------------
-            # --- Swing Detection ---
-            # 5 bars (1 week) is standard for identifying significant swing points.
-            "lookback_swings": 40,               # Look back ~2 months to find the major impulse.
+            "lookback_swings": 40,               
             "swing_window": 5,                   
-
-            # --- Fib Zone ---
-            # The "Golden Pocket" is between 0.5 and 0.618. 
-            # But for strong trends, 0.382 is common. We keep the wide zone.
             "fib_zone": (0.382, 0.618),          
-
-            # --- Trend Filter ---
-            # Use 9/21 EMA. Price should be respecting the 21 EMA in a healthy swing trend.
             "ema_fast": 9,                       
-            "ema_slow": 21,                      
-
-            # --- Indicators ---
+            "ema_slow": 34, # Slightly slower to catch medium trends                      
             "atr_period": 14,                    
             "rsi_period": 14,                    
             "macd_params": {"fast": 12, "slow": 26, "signal": 9}, 
             "adx_period": 14,                    
-
-            # --- Volume Confirmation ---
-            # The bounce from the Fib level needs volume validation.
             "vol_zscore_window": 20,             
             "vol_zscore_threshold": 1.5,         
+            "score_threshold": 0.65,
 
-            # --- Scoring ---
-            # Set to 0.65. We need Trend + Fib Level + Bounce Confirmation.
-            "score_threshold": 0.65               
+            # [NEW] Tuned Weights
+            "weights": {
+                "zone_trigger": 0.35,
+                "trend_match": 0.20,
+                "adx_strength": 0.15,
+                "momentum": 0.15,
+                "volume": 0.10,
+                "confluence": 0.05
+            }
         },
     
         "position": {
-            # ---------------- POSITION TRADING (Buy The Deep Dip) ----------------
-            "lookback_swings": 252,              # 1 Year High/Low logic
+            # ---------------- POSITION TRADING (Deep Value) ----------------
+            "lookback_swings": 252,              
             "swing_window": 20,
-            "fib_zone": (0.5, 0.786),            # Deep value area
+            "fib_zone": (0.5, 0.786),            
             "ema_fast": 50,
             "ema_slow": 200,
             "atr_period": 14,
@@ -399,22 +411,16 @@ def make_fibonacci_presets() -> Dict[str, Dict[str, Any]]:
             "adx_period": 14,
             "vol_zscore_window": 50,
             "vol_zscore_threshold": 1.5,
-            "score_threshold": 0.75
-        },
-        
-        "scalp": {
-            # ---------------- SCALPING (Micro Pullbacks) ----------------
-            "lookback_swings": 20,
-            "swing_window": 3,
-            "fib_zone": (0.382, 0.5),            # Shallow retracements in strong trend
-            "ema_fast": 5,
-            "ema_slow": 13,
-            "atr_period": 5,
-            "rsi_period": 7,
-            "macd_params": {"fast": 6, "slow": 13, "signal": 4},
-            "adx_period": 7,
-            "vol_zscore_window": 10,
-            "vol_zscore_threshold": 1.2,
-            "score_threshold": 0.55
+            "score_threshold": 0.75,
+            
+            # [NEW] Tuned Weights
+            "weights": {
+                "zone_trigger": 0.30,
+                "trend_match": 0.30,   # Macro trend alignment is key
+                "adx_strength": 0.10,
+                "momentum": 0.15,
+                "volume": 0.10,
+                "confluence": 0.05
+            }
         }
     }

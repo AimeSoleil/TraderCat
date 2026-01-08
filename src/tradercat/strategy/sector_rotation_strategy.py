@@ -8,7 +8,7 @@ from tradercat.data.market_data_provider import MarketDataProvider
 from tradercat.strategy.trading_strategy import TradingStrategy
 from tradercat.strategy.signal_model import SignalModel
 from tradercat.logger.logger import get_logger
-from tradercat.strategy.strategy_presets import SectorRotationPreset
+from tradercat.strategy.strategy_presets import StrategyPreset
 
 logger = get_logger(__name__)
 
@@ -200,15 +200,33 @@ class SectorRotationStrategy(TradingStrategy):
             valid_sectors.append(etf)
 
         if not valid_sectors:
-            return SignalModel(symbol="CASH", strategy=self.get_name(), signal="hold", reason="No valid sector data")
+            return SignalModel(symbol="CASH", strategy=self.get_name(), signal="hold", reason="No valid sector data", confidence=0.0)
 
         # 3. Compute Scores
         df = pd.DataFrame({etf: ind.model_dump() for etf, ind in etf_indicators.items()}).T
-        df = df.fillna(df.mean())
         
-        z_mom = zscore(df['momentum'])
-        z_rsi = zscore(df['rsi'])
-        z_vol = zscore(df['volume_trend'])
+        # [IMPROVEMENT] Robust Data Handling
+        # Drop columns that are entirely NaN
+        df = df.dropna(axis=1, how='all')
+        if df.empty:
+            return SignalModel(symbol="CASH", strategy=self.get_name(), signal="hold", reason="All sector data invalid")
+
+        # Fill remaining NaNs with column median (safer than mean for outliers) or 0
+        for col in df.columns:
+            if df[col].isna().all():
+                df[col] = 0.0
+            else:
+                df[col] = df[col].fillna(df[col].median())
+
+        # Safety checking for Z-Score (requires std > 0)
+        # If std is 0 (all values same), zscore returns NaN. logic: treat as 0 score.
+        def safe_zscore(series):
+            if series.std() == 0: return pd.Series(0, index=series.index)
+            return zscore(series)
+
+        z_mom = safe_zscore(df['momentum'])
+        z_rsi = safe_zscore(df['rsi'])
+        z_vol = safe_zscore(df['volume_trend'])
         
         df['composite_score'] = (
             (z_mom * self.weights['momentum']) +

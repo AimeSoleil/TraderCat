@@ -28,6 +28,8 @@ class CandlestickReversalStrategy(TradingStrategy):
         vol_zscore_window: int = 20,
         vol_zscore_threshold: float = 2.0,
         score_threshold: float = 0.6,
+        # [NEW] Dynamic Weights
+        weights: Optional[Dict[str, float]] = None,
         data_provider: Any = None
     ):
         self.ema_fast = int(ema_fast)
@@ -39,6 +41,18 @@ class CandlestickReversalStrategy(TradingStrategy):
         self.vol_zscore_window = int(vol_zscore_window)
         self.vol_zscore_threshold = float(vol_zscore_threshold)
         self.score_threshold = float(score_threshold)
+        
+        # [NEW] Dynamic Weights configuration
+        default_weights = {
+            "candle": 0.35,     # The Pattern itself
+            "volume": 0.20,     # Volume Confirmation
+            "trend_strength": 0.10, # ADX
+            "trend_dir": 0.15,  # EMA Alignment (Trend Following)
+            "momentum": 0.10,   # RSI/MACD Hook
+            "confirm": 0.10     # Price Action Confirmation
+        }
+        self.weights = {**default_weights, **(weights or {})}
+        
         self.provider = data_provider
 
         # 指标字段名约定
@@ -70,28 +84,44 @@ class CandlestickReversalStrategy(TradingStrategy):
             FactorName.MOMENTUM_CONFIRM,
             FactorName.CONFLUENCE_BONUS
         ]
+        
+    # --- Helper Implementation ---
 
-    # [New] Helper for Confirmation Candle
-    def _check_reversal_confirmation(
-        self, 
-        closes: List[float], 
-        effective_bias: str,
-    ) -> bool:
-        """确认反转有效性：价格是否朝着预期方向移动"""
-        if len(closes) < 3:
+    def _check_reversal_confirmation(self, highs: List[float], lows: List[float], closes: List[float], effective_bias: str) -> bool:
+        """
+        Strong Price Action Confirmation.
+        Instead of just checking Close > Prev Close (which is redundant for patterns like Engulfing),
+        we check if the candle closed strongly (in the top/bottom third of its range).
+        """
+        if len(closes) < 2:
             return False
+            
+        h, l, c = highs[-1], lows[-1], closes[-1]
+        rng = h - l
         
-        # 简单的确认：最新收盘价优于前一根
+        # Avoid division by zero
+        if rng <= 0: 
+            return False
+            
         if effective_bias == "long":
-            return closes[-1] > closes[-2]
+            # 1. Close higher than previous close (Basic momentum)
+            # 2. Close in top 35% of the range (Strong bull finish, no long upper wick)
+            is_strong_close = (c - l) / rng >= 0.65
+            is_green = c > closes[-2]
+            return is_strong_close and is_green
+            
         elif effective_bias == "short":
-            return closes[-1] < closes[-2]
-        
+            # 1. Close lower than previous close
+            # 2. Close in bottom 35% of the range (Strong bear finish, no long lower wick)
+            is_strong_close = (h - c) / rng >= 0.65
+            is_red = c < closes[-2]
+            return is_strong_close and is_red
+            
         return False
 
     # ---------- 主决策逻辑 ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
-        logger.info(f"🔍 Generating Candlestick Reversal signal for {symbol} at {candles[-1].date if candles else 'N/A'}...")
+        # logger.info(f"🔍 Generating Reversal signal for {symbol}...") # Reduced log noise
         
         if not candles or len(candles) < max(self.ema_slow, self.atr_period, 3):
             return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold",
@@ -134,35 +164,33 @@ class CandlestickReversalStrategy(TradingStrategy):
         idx = len(candles) - 1
         orchestrator = PatternDetectorsOrchestrator()
 
-        # 策略：在上升趋势中寻找看涨反转（回调买入），在下降趋势中寻找看跌反转（反弹做空）
-        # 注意：这里 trend_ok 传入的是主趋势方向，用于过滤逆势信号
+        # 顺势交易：只在上升趋势找看涨反转（Ex: Hammer），下降趋势找看跌反转（Ex: Shooting Star）
         res_bull = orchestrator.detect_bullish(opens, highs, lows, closes, idx, atr=current_atr_val, trend_ok=trend_long)
         res_bear = orchestrator.detect_bearish(opens, highs, lows, closes, idx, atr=current_atr_val, trend_ok=trend_short)
 
         found_bull = bool(res_bull and res_bull.is_pattern)
         found_bear = bool(res_bear and res_bear.is_pattern)
 
-        # 冲突解决：优先选择顺应主趋势的信号
+        # 冲突解决
         chosen_res = None
-        if found_bull and found_bear:
-            if trend_long: chosen_res = res_bull # Uptrend -> Buy Dip
-            elif trend_short: chosen_res = res_bear # Downtrend -> Sell Rally
-            else: 
-                # 无明确趋势时，保持中立
-                chosen_res = None 
-        elif found_bull:
+        if found_bull and trend_long:
             chosen_res = res_bull
-        elif found_bear:
+        elif found_bear and trend_short:
+            chosen_res = res_bear
+        elif found_bull and not found_bear: # Fallback if no trend constraint enforced strictly
+            chosen_res = res_bull
+        elif found_bear and not found_bull:
             chosen_res = res_bear
 
         pattern = chosen_res.name if chosen_res else None
         raw_bias = chosen_res.bias if chosen_res else None
 
-        # 确定有效方向 (long/short)
+        # 确定有效方向
         effective_bias = raw_bias
-        if raw_bias in (None, "neutral"):
-            if found_bull: effective_bias = "long"
-            elif found_bear: effective_bias = "short"
+        if effective_bias in (None, "neutral"):
+            # Try to infer if bias is missing from pattern result
+            if chosen_res == res_bull: effective_bias = "long"
+            elif chosen_res == res_bear: effective_bias = "short"
 
         # ---------- 辅助确认 ----------
         trend_strength = self._check_trend_and_volatility(
@@ -170,15 +198,14 @@ class CandlestickReversalStrategy(TradingStrategy):
             adx_val_history=adx_val_history,
             price_history=closes,
             window=100,
-            mode='reversal',
+            mode='trend', # We want TRENDING markets to buy dips in
             trend_quantiles=[0.6, 0.4]
         )
 
-        # 根据 preset 动态调整：swing 用 10-15 根，position 用 30-50 根
         recent_window = max(1, min(self.vol_zscore_window, len(vols)))
         vol_ok, volume_z = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
 
-        # [Optimization] Use parent class momentum check
+        # 动量确认
         mom_ok = False
         if chosen_res and chosen_res.is_pattern and effective_bias:
             mom_ok = self._momentum_confirm(
@@ -187,7 +214,7 @@ class CandlestickReversalStrategy(TradingStrategy):
                 prefer=effective_bias
             )
 
-        # [Optimization] Reversal Confirmation (Price Action)
+        # 价格行为确认 (Strong Close?)
         reversal_confirmed = False
         if effective_bias:
             reversal_confirmed = self._check_reversal_confirmation(
@@ -203,25 +230,58 @@ class CandlestickReversalStrategy(TradingStrategy):
         )
 
         factors = [
-            Factor(FactorName.REVERSAL_CANDLE, f"检测到烛形({pattern})", 0.35, found_any),
-            Factor(FactorName.VOLUME_CONFIRM, "成交量放大", 0.20, vol_ok),
-            Factor(FactorName.TREND_STRENGTH, "趋势强度(ADX)", 0.10, bool(trend_strength.signal)),
-            Factor(FactorName.TREND_DIRECTION_CONFIRM, "顺大势(EMA)", 0.15, trend_direction_ok),
-            Factor(FactorName.MOMENTUM_CONFIRM, "动量确认(RSI/MACD)", 0.10, mom_ok),
-            Factor(FactorName.CONFLUENCE_BONUS, "反转确认(Price Action)", 0.10, reversal_confirmed)
+            # 1. The Pattern
+            Factor(
+                FactorName.REVERSAL_CANDLE, 
+                f"Pattern: {pattern}", 
+                self.weights["candle"], 
+                found_any
+            ),
+            # 2. Volume
+            Factor(
+                FactorName.VOLUME_CONFIRM, 
+                "Volume Surge", 
+                self.weights["volume"], 
+                vol_ok
+            ),
+            # 3. Market State (ADX)
+            Factor(
+                FactorName.TREND_STRENGTH, 
+                "Healthy Trend (ADX)", 
+                self.weights["trend_strength"], 
+                bool(trend_strength.signal)
+            ),
+            # 4. Alignment
+            Factor(
+                FactorName.TREND_DIRECTION_CONFIRM, 
+                "With Major Trend (EMA)", 
+                self.weights["trend_dir"], 
+                trend_direction_ok
+            ),
+            # 5. Momentum Hook
+            Factor(
+                FactorName.MOMENTUM_CONFIRM, 
+                "Momentum Hook", 
+                self.weights["momentum"], 
+                mom_ok
+            ),
+            # 6. Price Confirmation
+            Factor(
+                FactorName.CONFLUENCE_BONUS, 
+                "Price Confirmation", 
+                self.weights["confirm"], 
+                reversal_confirmed
+            )
         ]
 
         engine = ScoringEngine(
             base_threshold=self.score_threshold,
-            required_factors=self.support_scoring_factors(),
+            # Strict: Must have a pattern
             determined_factors=[FactorName.REVERSAL_CANDLE],
             is_volatility_ok=bool(trend_strength.volatility.get('signal', True))
         )
 
-        side_action = "neutral"
-        if found_any:
-            side_action = effective_bias # "long" or "short"
-
+        side_action = effective_bias if found_any else "neutral"
         result: ScoringResult = engine.compute_score(factors, side=side_action)
 
         details = {
@@ -243,8 +303,10 @@ class CandlestickReversalStrategy(TradingStrategy):
             # [Optimization] Dynamic Stop Loss for Reversals
             plan = planner.make_exit_plan(trading_signal=result.signal)
             
-            # Adjust stop loss based on ADX (Weaker trend = tighter stop)
-            sl_mult = 1.0 if current_adx_val < 20 else 1.5
+            # Adjust stop loss based on ADX (Weaker trend = tight stop; Strong trend = looser stop)
+            # If ADX is low, trend is weak -> Tight Stop
+            sl_mult = 1.0 if current_adx_val < 25 else 1.5
+            
             if result.signal == 'long':
                 plan['stop_loss'] = close - (sl_mult * current_atr_val)
             elif result.signal == 'short':
@@ -257,7 +319,7 @@ class CandlestickReversalStrategy(TradingStrategy):
             strategy=self.get_name(),
             signal=result.signal,
             date=dates[-1],
-            confidence=round(result.score, 3),
+            confidence=round(min(1.0, result.score), 3),
             reason=" | ".join(result.reasons),
             details=details
         )
@@ -271,35 +333,29 @@ def make_candlestick_reversal_presets() -> Dict[str, Dict[str, Any]]:
             # ---------------- SWING TRADING (Optimized) ----------------
             # Strategy: "Buy the Dip" in an Uptrend / "Sell the Rally" in a Downtrend.
             
-            # --- Trend Filter ---
-            # Use 9/21 EMA. This is the standard "Swing Trader's Zone".
-            # We only look for Bullish patterns when EMA 9 > EMA 21.
             "ema_fast": 9,
             "ema_slow": 21,
-
-            # --- Volatility & Momentum ---
             "atr_period": 14,
-            "rsi_period": 14,       # Standard RSI. Look for oversold dips (RSI < 40) in uptrends.
-            "adx_period": 14,       # ADX helps filter out ranging markets.
-
-            # --- MACD (Momentum Confirmation) ---
+            "rsi_period": 14,       
+            "adx_period": 14,       
             "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-
-            # --- Volume Confirmation ---
-            # Reversal candles (e.g., Hammer) need volume validation.
-            # 1.5 std devs above mean ensures institutions are stepping in.
             "vol_zscore_window": 20,
             "vol_zscore_threshold": 1.5,
-
-            # --- Scoring ---
-            # Set to 0.65 to filter out weak patterns.
-            # We want Confluence: Trend + Pattern + Volume + Momentum.
             "score_threshold": 0.65,
+            
+            # [NEW] Tuned Weights
+            "weights": {
+                "candle": 0.35,
+                "trend_dir": 0.20,     # Must follow trend
+                "volume": 0.15,
+                "momentum": 0.15,
+                "trend_strength": 0.10,
+                "confirm": 0.05
+            }
         },
 
         "position": {
             # ---------------- POSITION TRADING ----------------
-            # Weekly/Monthly reversals
             "ema_fast": 50,
             "ema_slow": 200,
             "atr_period": 14,
@@ -307,21 +363,17 @@ def make_candlestick_reversal_presets() -> Dict[str, Dict[str, Any]]:
             "adx_period": 14,
             "macd_params": {"fast": 12, "slow": 26, "signal": 9},
             "vol_zscore_window": 50,
-            "vol_zscore_threshold": 2.0, # High conviction accumulation
-            "score_threshold": 0.75
-        },
-
-        "scalp": {
-            # ---------------- SCALPING ----------------
-            # 1m/5m timeframe reversals
-            "ema_fast": 5,
-            "ema_slow": 13,
-            "atr_period": 10,
-            "rsi_period": 7,
-            "adx_period": 7,
-            "macd_params": {"fast": 6, "slow": 13, "signal": 4},
-            "vol_zscore_window": 10,
-            "vol_zscore_threshold": 2.5, # Volume spike essential for scalp reversals
-            "score_threshold": 0.60
+            "vol_zscore_threshold": 2.0, 
+            "score_threshold": 0.75,
+            
+            # [NEW] Tuned Weights for Position
+            "weights": {
+                "candle": 0.30,
+                "trend_dir": 0.30,     # Trend is everything in position trading
+                "volume": 0.10,
+                "momentum": 0.10,
+                "trend_strength": 0.15,
+                "confirm": 0.05
+            }
         }
     }
