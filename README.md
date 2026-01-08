@@ -76,21 +76,28 @@ You can provide symbols via:
 
 After installation, the `tradercat` command is available in your terminal.
 
+### Commands
+
+*   `tradercat run`: Start the trading bot session.
+*   `tradercat help`: Show help information.
+
 ### Run Once (Immediate Execution)
-Run the bot immediately for a specific set of symbols.
 
 ```bash
+# Display Help
+tradercat help
+
 # Run for specific symbols
-tradercat -s "AAPL,MSFT,GOOG"
+tradercat run -s "AAPL,MSFT,GOOG"
 
 # Run using a symbols file
-tradercat -f symbols.yml
+tradercat run -f symbols.yml
 
 # Run only Single Asset strategies
-tradercat -f symbols.yml --scope single
+tradercat run -f symbols.yml --scope single
 
-# Run only Portfolio strategies
-tradercat -f symbols.yml --scope portfolio
+# Run only Portfolio strategies (No symbols file required)
+tradercat run --scope portfolio
 ```
 
 ### Automation (Cron / Systemd)
@@ -104,15 +111,15 @@ Since the internal scheduler has been removed in favor of robust system-level to
 CRON_TZ=America/New_York
 
 # 1. Daily Swing Trading Signals (Mon-Fri at 5:00 PM)
-# Runs single asset strategies on a daily basis
-0 17 * * 1-5 cd /path/to/TraderCat && /path/to/python -m tradercat -f symbols.yml --scope single >> daily_swing.log 2>&1
+# Logs are saved with date suffix (NOTE: % must be escaped with \ in crontab)
+0 17 * * 1-5 cd /path/to/TraderCat && /path/to/python -m tradercat run -f symbols.yml --scope single >> logs/daily_swing_$(date +\%Y-\%m-\%d).log 2>&1
 
 # 2. Weekly Portfolio Rebalancing (Fridays at 5:00 PM)
-# Runs sector rotation / portfolio strategies once a week
-0 17 * * 5 cd /path/to/TraderCat && /path/to/python -m tradercat --scope portfolio >> weekly_portfolio.log 2>&1
+# Runs sector rotation strategies (No symbols file needed)
+0 17 * * 5 cd /path/to/TraderCat && /path/to/python -m tradercat run --scope portfolio >> logs/weekly_portfolio_$(date +\%Y-\%m-\%d).log 2>&1
 ```
 
-### CLI Options
+### CLI Options (for `run` command)
 
 | Option | Long Option | Description | Default |
 | :--- | :--- | :--- | :--- |
