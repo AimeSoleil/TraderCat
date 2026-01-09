@@ -1,220 +1,179 @@
-# Combined list of stock symbols (sorted by market cap and popularity):
-# * Dow Jones Industrial Average (DJIA)
-# * S&P 500
-# * NASDAQ-100
-# * Top 100 in Russell 2000 by market cap
-# * Additional tech and growth stocks by editor choice
+# TraderCat Strategy Universe (2026 Professional Edition)
+# Optimized for: Momentum, Sector Rotation & High-Beta Volatility
 symbols: [
-  "QQQ",    # Invesco QQQ Trust
-  "SPY",    # SPDR S&P 500 ETF Trust
-  "DIA",    # SPDR Dow Jones Industrial Average ETF Trust
-  "IWM",    # iShares Russell 2000 ETF
-  "VTI",    # Vanguard Total Stock Market ETF
-  "ARKK",   # ARK Innovation ETF
-  "TSM",    # Taiwan Semiconductor Manufacturing Co. Ltd.
-  "AMAT",   # Applied Materials Inc.
-  "ASML",   # ASML Holding NV
-  "ADSK",   # Autodesk Inc.
-  "NVDA",   # NVIDIA Corporation
-  "CRWV",   # Core Weave Inc.
-  "NBIS",   # Nebius Group Inc.
-  "APLD",   # Applied Digital Corp.
-  "MSFT",   # Microsoft Corporation
-  "AAPL",   # Apple Inc.
-  "GOOG",   # Alphabet Inc. (Class C)
-  "AMZN",   # Amazon.com Inc.
-  "META",   # Meta Platforms Inc.
-  "AVGO",   # Broadcom Inc.
-  "TSLA",   # Tesla Inc.
-  "BRK-B",  # Berkshire Hathaway Inc.
-  "JPM",    # JPMorgan Chase & Co.
-  "ORCL",   # Oracle Corporation
-  "WMT",    # Walmart Inc.
-  "LLY",    # Eli Lilly and Company
-  "V",      # Visa Inc.
-  "MA",     # Mastercard Inc.
-  "NFLX",   # Netflix Inc.
-  "XOM",    # Exxon Mobil Corporation
-  "JNJ",    # Johnson & Johnson
-  "ABBV",   # AbbVie Inc.
-  "PLTR",   # Palantir Technologies Inc.
-  "COST",   # Costco Wholesale Corporation
-  "HD",     # Home Depot Inc.
-  "BAC",    # Bank of America Corporation
-  "PG",     # Procter & Gamble Co.
-  "UNH",    # UnitedHealth Group Inc.
-  "GE",     # General Electric Co.
-  "CVX",    # Chevron Corporation
-  "KO",     # Coca-Cola Co.
-  "IBM",    # International Business Machines Corp.
-  "CSCO",   # Cisco Systems Inc.
-  "AMD",    # Advanced Micro Devices Inc.
-  "TMUS",   # T-Mobile US Inc.
-  "WFC",    # Wells Fargo & Co.
-  "MS",     # Morgan Stanley
-  "GS",     # Goldman Sachs Group Inc.
-  "PM",     # Philip Morris International Inc.
-  "ABT",    # Abbott Laboratories
-  "CAT",    # Caterpillar Inc.
-  "APP",    # Applovin Corp.
-  "AXP",    # American Express Co.
-  "CRM",    # Salesforce Inc.
-  "RTX",    # RTX Corp.
-  "LMT",    # Lockheed Martin Corp.
-  "MRK",    # Merck & Co. Inc.
-  "LIN",    # Linde plc
-  "MCD",    # McDonald's Corp.
-  "MU",     # Micron Technology Inc.
-  "BX",     # Blackstone Inc.
-  "TMO",    # Thermo Fisher Scientific Inc.
-  "DIS",    # Walt Disney Co.
-  "INTU",   # Intuit Inc.
-  "ADBE",   # Adobe Inc.
-  "TXN",    # Texas Instruments Inc.
-  "QCOM",   # Qualcomm Inc.
-  "ISRG",   # Intuitive Surgical Inc.
-  "PEP",    # PepsiCo Inc.
-  "BKNG",   # Booking Holdings Inc.
-  "PDD",    # PDD Holdings Inc.
-  "GILD",   # Gilead Sciences Inc.
-  "VRTX",   # Vertex Pharmaceuticals Inc.
-  "MDLZ",   # Mondelez International Inc.
-  "ADI",    # Analog Devices Inc.
-  "REGN",   # Regeneron Pharmaceuticals Inc.
-  "LRCX",   # Lam Research Corp.
-  "MNST",   # Monster Beverage Corp.
-  "CDNS",   # Cadence Design Systems Inc.
-  "PANW",   # Palo Alto Networks Inc.
-  "FTNT",   # Fortinet Inc.
-  "MAR",    # Marriott International Inc.
-  "KHC",    # Kraft Heinz Co.
-  "EXC",    # Exelon Corp.
-  "DLTR",   # Dollar Tree Inc.
-  "ROST",   # Ross Stores Inc.
-  "WBD",    # Warner Bros. Discovery Inc.
-  "PAYX",   # Paychex Inc.
-  "ODFL",   # Old Dominion Freight Line Inc.
-  "PCAR",   # PACCAR Inc.
-  "EBAY",   # eBay Inc.
-  "FAST",   # Fastenal Co.
-  "CTAS",   # Cintas Corp.
-  "CHTR",   # Charter Communications Inc.
-  "VRSK",   # Verisk Analytics Inc.
-  "BIIB",   # Biogen Inc.
-  "SIRI",   # Sirius XM Holdings Inc.
-  "TEAM",   # Atlassian Corp.
-  "LCID",   # Lucid Group Inc.
-  "ZS",     # Zscaler Inc.
-  "MRVL",   # Marvell Technology Inc.
-  "DXCM",   # Dexcom Inc.
-  "XEL",    # Xcel Energy Inc.
-  "IDXX",   # IDEXX Laboratories Inc.
-  "ALGN",   # Align Technology Inc.
-  "ANSS",   # Ansys Inc.
-  "CEG",    # Constellation Energy Corp.
-  "VRSN",   # Verisign Inc.
-  "SPLK",   # Splunk Inc.
-  "GEN",    # Gen Digital Inc.
-  "TTD",    # Trade Desk Inc.
-  "CRWD",   # CrowdStrike Holdings Inc.
-  "MTCH",   # Match Group Inc.
-  "DDOG",   # Datadog Inc.
-  "SGEN",   # Seagen Inc.
-  "ILMN",   # Illumina Inc.
-  "FANG",   # Diamondback Energy Inc.
-  "BKR",    # Baker Hughes Co.
-  "ON",     # ON Semiconductor Corp.
-  "KLAC",   # KLA Corp.
-  "NXPI",   # NXP Semiconductors NV
-  "OKTA",   # Okta Inc.
-  "TTWO",   # Take-Two Interactive Software Inc.
-  "ENPH",   # Enphase Energy Inc.
-  "SWKS",   # Skyworks Solutions Inc.
-  "DLR",    # Digital Realty Trust Inc.
-  "TT",     # Trane Technologies plc
-  "EXPE",   # Expedia Group Inc.
-  "SBAC",   # SBA Communications Corp.
-  "CDW",    # CDW Corp.
-  "CPRT",   # Copart Inc.
-  "GFS",    # GlobalFoundries Inc.
-  "RIVN",   # Rivian Automotive Inc.
-  "CHKP",   # Check Point Software Technologies Ltd.
-  "VTRS",   # Viatris Inc.
-  "TECH",   # Bio-Techne Corp.
-  "INCY",   # Incyte Corp.
-  "NTES",   # NetEase Inc.
-  "JD",     # JD.com Inc.
-  "BIDU",   # Baidu Inc.
-  "BABA",   # Alibaba Group Holding Ltd.
-  "PINS",   # Pinterest Inc.
-  "UBER",   # Uber Technologies Inc.
-  "ZM",     # Zoom Video Communications Inc.
-  "MSTR",   # MicroStrategy Inc.
-  "CVNA",   # Carvana Co.
-  "B",      # Barrick Mining Inc.
-  "SMCI",   # Super Micro Computer Inc.
-  "FIX",    # Comfort Systems USA Inc.
-  "INSM",   # Insmed Inc.
-  "SMMT",   # Summit Therapeutics Inc.
-  "SFM",    # Sprouts Farmers Market Inc.
-  "ASTS",   # AST SpaceMobile Inc.
-  "APG",    # APi Group Corp.
-  "CRS",    # Carpenter Technology Corp.
-  "ITCI",   # Intra-Cellular Therapies Inc.
-  "ATI",    # Allegheny Technologies Inc.
-  "FTAI",   # FTAI Aviation Ltd.
-  "AVAV",   # AeroVironment Inc.
-  "HIMS",   # Hims & Hers Health Inc.
-  "FN",     # Fabrinet
-  "MTSI",   # MACOM Technology Solutions Holdings Inc.
-  "COKE",   # Coca-Cola Consolidated Inc.
-  "SSB",    # SouthState Corp.
-  "COOP",   # Mr. Cooper Group Inc.
-  "ALTR",   # Altair Engineering Inc.
-  "AIT",    # Applied Industrial Technologies Inc.
-  "MLI",    # Mueller Industries Inc.
-  "FLNG",   # FLEX LNG Ltd.
-  "DUOL",   # Duolingo Inc.
-  "BE",     # Bloom Energy Corp.
-  "JOBY",   # Joby Aviation Inc.
-  "KTOS",   # Kratos Defense & Security Solutions Inc.
-  "SATS",   # EchoStar Corp.
-  "IONQ",   # IonQ Inc.
-  "SMR",    # NuScale Power Corp.
-  "DRS",    # Leonardo DRS Inc.
-  "BBIO",   # BridgeBio Pharma Inc.
-  "PR",     # Permian Resources Corp.
-  "CRDO",   # Credo Technology Group Holding Ltd.
-  "RKLB",   # Rocket Lab USA Inc.
-  "FLEX",   # Flex Ltd.
-  "DOW",    # Dow Inc.
-  "HON",    # Honeywell International Inc.
-  "INTC",   # Intel Corp.
-  "NKE",    # Nike Inc.
-  "MMM",    # 3M Company
-  "TRV",    # Travelers Companies Inc.
-  "VZ",     # Verizon Communications Inc.
-  "AZN",    # AstraZeneca plc
-  "VERI",   # Veritone Inc.
-  # "..." (additional symbols can be added here)
-  "FFAI",   # Faradyne Future AI Limited
-  "KULR",   # KULR Technology Group Inc.
-  "DJT",    # Donald J Trump Inc.
-  "FIG",    # Figma Inc.
-  "S",      # SentinelOne Inc.
-  "SNAP",   # Snap Inc.
-  "BMNR",   # Bitminer Industries Inc. (ETC Mining)
-  "SLMT",   # Brera Holdings Inc. (Solana Mining)
-  "LUMN",   # Lumen Technologies Inc.
-  "PFE",   # Pfizer Inc.
-  "OSCR",   # Oscar Health Inc.
-  "MODN",   # Moderna Inc.
-  # Quantum Computing
-  "IBMQ",   # IBM Quantum Computing Division
-  "QUBT",   # Qubitekk Inc.
-  "QCDA",   # Quantum Computing Inc. 
-  "RGTI",   # Rigetti Computing Inc.
-  "LAES",   # LAES Quantum Computers Inc.
-  # other emerging tech
-  "LULU"
+  # ==============================================================================
+  # 1. INDICES & ETFS (Benchmark & Broad Exposure)
+  # ==============================================================================
+  "QQQ",    # Nasdaq 100 [Base Liquidity]
+  "SPY",    # S&P 500 [Base Liquidity]
+  "IWM",    # Russell 2000 [Small Cap Volatility/Beta Proxy]
+  "DIA",    # Dow Jones Industrial [Defensive/Rotation]
+  "SMH",    # VanEck Semi ETF [Trend Indicator for Tech]
+  "ARKK",   # ARK Innovation [High Beta/Speculative Sentiment Proxy]
+  "VTI",    # Total Market
+  "XBI",    # Biotech ETF [Sector Rotation Signal]
+
+  # ==============================================================================
+  # 2. TECHNOLOGY: AI, HARDWARE & SEMICONDUCTORS
+  # Reason: The core engine of growth. Trading the "Picks and Shovels".
+  # ==============================================================================
+  # --- The "Mag 7", Cloud Titans & New AI Infra ---
+  "NVDA",   # NVIDIA [AI King - Trend Leader]
+  "CRWV",   # CoreWeave [Added: The GPU Compute Utility - Maximum Beta]
+  "MSFT",   # Microsoft [AI Software/Cloud Leader]
+  "AAPL",   # Apple [Consumer AI Advantage]
+  "GOOG",   # Alphabet [AI Search/Gemini]
+  "AMZN",   # Amazon [AWS Cloud Infrastructure]
+  "META",   # Meta Platforms [Open Source AI Leader]
+  "TSLA",   # Tesla [FSD/Robotaxi Volatility]
+  "AVGO",   # Broadcom [AI Networking & Custom Silicon]
+  "ORCL",   # Oracle [Fastest growing AI Cloud]
+
+  # --- Fab, Equipment & Packaging (Process Control Added) ---
+  "TSM",    # Taiwan Semi [Foundry Monopoly]
+  "ASML",   # ASML [EUV Monopoly]
+  "AMAT",   # Applied Materials [Wafer Fab Equip]
+  "LRCX",   # Lam Research [Memory Fab Equip]
+  "KLA",    # KLA Corp [Metrology]
+  "ONTO",   # Onto Innovation [Advanced Packaging Inspection Alpha]
+  "ACLS",   # Axcelis [Ion Implantation Alpha]
+  "CAMT",   # Camtek [Small Cap Inspection]
+
+  # --- Chips, Connectivity & Servers (High Beta) ---
+  "AMD",    # AMD [The "Other" GPU Play]
+  "ARM",    # Arm Holdings [Chip Architecture IP]
+  "ALAB",   # Astera Labs [AI Connectivity Leader]
+  "MU",     # Micron [HBM Memory Cycle]
+  "SMCI",   # Super Micro [Server Volatility - High Risk]
+  "DELL",   # Dell Technologies [Enterprise AI Servers]
+  "MRVL",   # Marvell [Optical/ASIC]
+  "ANET",   # Arista Networks [AI Networking]
+  "CRDO",   # Credo Technology [Connectivity Micro]
+  "INTC",   # Intel [Turnaround Play]
+
+  # --- Physical AI & Robotics ---
+  "SYM",    # Symbotic [Warehouse Automation/Robotics]
+  "PATH",   # UiPath [AI Agents/Automation]
+
+  # ==============================================================================
+  # 3. SOFTWARE, SECURITY & DATA
+  # ==============================================================================
+  "FIG",    # Figma [Added: The Design OS - Massive IPO Momentum]
+  "PLTR",   # Palantir [AI OS for Gov/Enterprise]
+  "CRWD",   # CrowdStrike [Endpoint Security]
+  "PANW",   # Palo Alto Networks [Platform Security]
+  "FTNT",   # Fortinet [Network Security]
+  "ZS",     # Zscaler [Zero Trust]
+  "S",      # SentinelOne [High Growth Security]
+  "NET",    # Cloudflare [Edge AI]
+  "DDOG",   # Datadog [Observability]
+  "SNOW",   # Snowflake [Data Cloud]
+  "MDB",    # MongoDB [NoSQL]
+  "ADBE",   # Adobe [Creative AI - Figma Rival]
+  "CRM",    # Salesforce [SaaS Anchor]
+  "NOW",    # ServiceNow [Workflow AI]
+  "APP",    # AppLovin [AdTech Algorithm Alpha]
+  "INTU",   # Intuit [FinTech AI]
+  "CDNS",   # Cadence [Chip Design Software]
+
+  # ==============================================================================
+  # 4. ENERGY, NUCLEAR & GRID (AI Power Source)
+  # ==============================================================================
+  "VRT",    # Vertiv [Liquid Cooling King]
+  "MOD",    # Modine Mfg [Thermal Mgmt High Beta]
+  "FIX",    # Comfort Systems [Electrical/HVAC Infra]
+  "ETN",    # Eaton [Grid Power]
+  "PWR",    # Quanta Services [Grid Buildout]
+  "CEG",    # Constellation Energy [Nuclear Utility]
+  "VST",    # Vistra Corp [Power Gen Aggregator]
+  "CCJ",    # Cameco [Uranium]
+  "OKLO",   # Oklo [Speculative Nuclear]
+  "SMR",    # NuScale Power [SMR]
+  "GE",     # GE Aerospace [Industrial Giant]
+  "CAT",    # Caterpillar [Global Infra]
+  "HON",    # Honeywell [Automation]
+
+  # ==============================================================================
+  # 5. BIOTECH & HEALTHCARE (Growth)
+  # ==============================================================================
+  "LLY",    # Eli Lilly [Obesity Leader]
+  "NVO",    # Novo Nordisk [Obesity Leader]
+  "VKTX",   # Viking Therapeutics [Obesity High Beta]
+  "HIMS",   # Hims & Hers [Personalized Health/Compounding Growth]
+  "VRTX",   # Vertex [Cystic Fibrosis]
+  "REGN",   # Regeneron [Immunology]
+  "ISRG",   # Intuitive Surgical [Robotics]
+  "TMDX",   # TransMedics [Organ Transplant Tech]
+  "DXCM",   # Dexcom [Diabetes]
+  "UNH",    # UnitedHealth [Value/Defensive]
+  "JNJ",    # Johnson & Johnson [Composite]
+  "ABBV",   # AbbVie [Yield]
+  "MRK",    # Merck [Oncology]
+  "MODN",   # Moderna [mRNA Volatility]
+  "SMMT",   # Summit Therapeutics [Cancer Drug Binary]
+
+  # ==============================================================================
+  # 6. FINANCE & CRYPTO (Risk-On Proxies)
+  # ==============================================================================
+  "MSTR",   # MicroStrategy [Bitcoin Leveraged Proxy]
+  "COIN",   # Coinbase [Crypto Exchange]
+  "HOOD",   # Robinhood [Retail Flow]
+  "CLSK",   # CleanSpark [Miner]
+  "MARA",   # Marathon Digital [Miner]
+  "JPM",    # JPMorgan [Bank Leader]
+  "GS",     # Goldman Sachs [Trading Volatility]
+  "AXP",    # American Express [Spend Data]
+  "V",      # Visa
+  "MA",     # Mastercard
+  "BX",     # Blackstone [Private Equity]
+  "BRK-B",  # Berkshire Hathaway [Safety]
+
+  # ==============================================================================
+  # 7. CONSUMER & NEW RETAIL (Trend updated)
+  # ==============================================================================
+  "AMZN",   # Amazon [E-com]
+  "COST",   # Costco [Defensive Growth]
+  "WMT",    # Walmart [Staple]
+  "NFLX",   # Netflix [Streaming]
+  "DIS",    # Disney [Media]
+  "UBER",   # Uber [Mobility]
+  "ABNB",   # Airbnb [Travel]
+  "BKNG",   # Booking [Travel]
+  "MELI",   # MercadoLibre [LatAm Growth]
+  "NU",     # Nu Holdings [Fintech Growth]
+  "PDD",    # PDD Holdings [China E-com]
+  "BABA",   # Alibaba [China Value]
+  "DECK",   # Deckers (Hoka/Ugg) [Strong Trend Consumer]
+  "ONON",   # On Holding [High growth footwear]
+  "CELH",   # Celsius [Beverage Volatility]
+  "ELF",    # e.l.f. Beauty [Cosmetics Growth]
+  "CAVA",   # CAVA Group [Fast Casual Leader]
+  "CMG",    # Chipotle [Restaurant]
+  "LULU",   # Lululemon [Kept for mean-reversion]
+  "MCD",    # McDonald's [Defensive]
+  "KO",     # Coca-Cola
+  "PEP",    # PepsiCo
+
+  # ==============================================================================
+  # 8. FRONTIER: SPACE & QUANTUM
+  # ==============================================================================
+  "RKLB",   # Rocket Lab [Space Systems]
+  "ASTS",   # AST SpaceMobile [Sat-to-Phone]
+  "LUNR",   # Intuitive Machines [Lunar]
+  "IONQ",   # IonQ [Quantum]
+  "RGTI",   # Rigetti [Quantum]
+  "QBTS",   # D-Wave Quantum
+  "QUBT",   # Quantum Computing Inc
+  "KTOS",   # Kratos [Defense Drones]
+  "AVAV",   # AeroVironment [Kamikaze Drones]
+  "JOBY",   # Joby Aviation [eVTOL]
+
+  # ==============================================================================
+  # 9. SPECIAL SITUATIONS: Micro / Meme / Sentiment (don’t miss opportunities bucket)
+  # ==============================================================================
+  "GOLD",   # Barrick Gold [Macro Hedge]
+  "LIN",    # Linde [Industrial Gas]
+  "DJT",    # Trump Media [Event Driven]
+  "RDDT",   # Reddit [Data Licensing]
+  "BA",     # Boeing [Turnaround]
 ]
