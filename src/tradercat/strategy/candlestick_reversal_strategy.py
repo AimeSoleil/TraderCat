@@ -218,7 +218,7 @@ class CandlestickReversalStrategy(TradingStrategy):
         reversal_confirmed = False
         if effective_bias:
             reversal_confirmed = self._check_reversal_confirmation(
-                closes, effective_bias
+                highs, lows, closes, effective_bias
             )
 
         # ---------- 评分系统 ----------
