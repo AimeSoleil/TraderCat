@@ -86,7 +86,6 @@ class BollingerBreakoutStrategy(TradingStrategy):
         )
     
     def support_scoring_factors(self) -> List[FactorName]:
-        # Removed unused CONFLUENCE_BONUS
         return  [
             FactorName.BREAKOUT_TRIGGER,
             FactorName.SQUEEZE_CONFIRM,
@@ -290,7 +289,7 @@ class BollingerBreakoutStrategy(TradingStrategy):
 
         engine = ScoringEngine(
             base_threshold=self.score_threshold, 
-            required_factors=[], 
+            required_factors=self.support_scoring_factors(), 
             determined_factors=[FactorName.BREAKOUT_TRIGGER], # Strict requirement: Must have valid candle
             is_volatility_ok=True 
         )

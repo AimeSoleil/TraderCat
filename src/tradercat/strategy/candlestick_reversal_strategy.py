@@ -276,6 +276,7 @@ class CandlestickReversalStrategy(TradingStrategy):
 
         engine = ScoringEngine(
             base_threshold=self.score_threshold,
+            required_factors=self.support_scoring_factors(),
             # Strict: Must have a pattern
             determined_factors=[FactorName.REVERSAL_CANDLE],
             is_volatility_ok=bool(trend_strength.volatility.get('signal', True))

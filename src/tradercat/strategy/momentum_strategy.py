@@ -300,7 +300,7 @@ class MomentumTrendStrategy(TradingStrategy):
 
         engine = ScoringEngine(
             base_threshold=self.score_threshold, 
-            required_factors=[FactorName.MOMENTUM_CONFIRM],
+            required_factors=self.support_scoring_factors(),
             determined_factors=[FactorName.MOMENTUM_CONFIRM],
             is_volatility_ok=trend_config.volatility.get('signal', True)
         )

@@ -318,7 +318,7 @@ class FibonacciRetracementStrategy(TradingStrategy):
 
         engine = ScoringEngine(
             base_threshold=self.score_threshold,
-            required_factors=[FactorName.FIB_ZONE_CONFIRM],
+            required_factors=self.support_scoring_factors(),
             determined_factors=[FactorName.FIB_ZONE_CONFIRM],
             is_volatility_ok=trend_strength.volatility.get('signal', True)
         )
@@ -349,9 +349,9 @@ class FibonacciRetracementStrategy(TradingStrategy):
             sl_level = fib_levels.get(0.786, None) # or 1.0
             if sl_level:
                 if impulse_type == 'long':
-                    plan['stop_loss'] = min(sl_level, plan['stop_loss']) # Take the wider one usually
+                    plan['stop_loss'] = min(sl_level, plan['fib_stop_loss_at']) # Take the wider one usually
                 else:
-                    plan['stop_loss'] = max(sl_level, plan['stop_loss'])
+                    plan['stop_loss'] = max(sl_level, plan['fib_stop_loss_at'])
                 plan['stop_loss_type'] = 'fib_level_0.786'
 
             details["plan"] = plan

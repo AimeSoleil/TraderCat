@@ -266,16 +266,16 @@ class DivergenceStrategy(TradingStrategy):
                 
                 # Save first valid result, prioritize Regular
                 if not best_result or ('regular' in name and 'regular' not in best_result[1]):
-                     best_result = (res, name)
-                     best_div_details = {
+                    best_result = (res, name)
+                    best_div_details = {
                         "type": name,
                         "swing_indices": (idx1, idx2),
                         "indicator_vals": (v1, v2),
                         "atr": curr_atr,
                         "vol_z": vol_z,
                         "rsi": rsi_val
-                     }
-                     if 'regular' in name: break # Found strongest signal
+                    }
+                    if 'regular' in name: break # Found strongest signal
 
         # 5. Final Output
         if not best_result or best_result[0].signal == 'hold':

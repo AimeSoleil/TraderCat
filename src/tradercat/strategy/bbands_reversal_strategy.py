@@ -297,6 +297,7 @@ class BBandsReversalStrategy(TradingStrategy):
 
         engine = ScoringEngine(
             base_threshold=self.score_threshold, 
+            required_factors=self.support_scoring_factors(),
             # We enforce that a pattern MUST exist for a reversal trade
             determined_factors=[FactorName.BB_REVERSAL_CANDLE],
             is_volatility_ok=True # We used trend_config.signal via Factor 2 already
