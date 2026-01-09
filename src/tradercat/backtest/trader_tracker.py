@@ -48,7 +48,7 @@ class TradeTracker:
                 else:
                     self._log_trade(date_str, "buy", price, 0, index, note="Insufficient Cash")
             else:
-                 self._log_trade(date_str, "buy", price, 0, index, note="Low Cash")
+                self._log_trade(date_str, "buy", price, 0, index, note="Low Cash")
 
         # --- SELL LOGIC ---
         elif action == "sell":
@@ -103,20 +103,3 @@ class TradeTracker:
         market_value = self.position * price
         total_equity = self.cash + market_value
         self.portfolio_values.append(total_equity)
-
-    def get_trade_table(self):
-        table = []
-        for trade in self.trades:
-            # Only show executed trades in the summary table
-            if trade['shares'] > 0:
-                row = {
-                    "Date": trade.get("date"),
-                    "Type": trade.get("type").upper(),
-                    "Price": f"${trade.get('price', 0):.2f}",
-                    "Shares": trade.get("shares"),
-                    "Profit": f"${trade.get('profit', 0):.2f}" if trade['type'] == 'sell' else "-",
-                    "Comm": f"${trade.get('commission', 0):.2f}",
-                    "Cash": f"${trade.get('cash_after', 0):.0f}"
-                }
-                table.append(row)
-        return table

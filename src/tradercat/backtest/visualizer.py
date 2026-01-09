@@ -25,8 +25,8 @@ class BacktestVisualizer:
                 f"{report['return_pct']:.2f}%",  # [NEW] Added Return
                 report["num_trades"],
                 f"{report['win_rate']:.2f}%",    # Added % unit
-                f"${report['avg_win']:.2f}",
-                f"${report['avg_loss']:.2f}",
+                f"${report['avg_win']:,.2f}",
+                f"${report['avg_loss']:,.2f}",
                 f"{report['max_drawdown']:.2f}%" # Added % unit
             ])
 
@@ -50,10 +50,10 @@ class BacktestVisualizer:
                 trade.get("date", "N/A"),
                 trade.get("symbol", "N/A"),
                 trade.get("type").upper(),
-                f"${trade.get('price', 0):.2f}",
-                f"{trade.get('shares', 0):.4f}",
-                f"${trade.get('profit', 0):.2f}" if "profit" in trade else "-", # Added $
-                f"${trade.get('cash_after', 0):.2f}", # Added $
+                f"${trade.get('price', 0):,.2f}",
+                f"{trade.get('shares', 0):,.4f}",
+                f"${trade.get('profit', 0):,.2f}" if "profit" in trade else "-", # Added $
+                f"${trade.get('cash_after', 0):,.2f}", # Added $
             ]
             table.append(row)
         

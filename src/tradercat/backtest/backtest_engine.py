@@ -41,7 +41,7 @@ class SingleSymbolEngine:
                 self.tracker.execute(signal_model, price, i)
                 self.tracker.record_portfolio(price)
 
-        self.tracker.get_trade_table()
+        # self.tracker.get_trade_table()
         return PerformanceReport(self.tracker).generate()
 
     def _normalize_date(self, date_val) -> datetime:
