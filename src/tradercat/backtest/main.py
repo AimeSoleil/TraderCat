@@ -49,8 +49,8 @@ class BacktestConfig:
     # Format: { "StrategyName": ["preset1", "preset2"] }
     active_strategies: Dict[str, List[str]] = field(default_factory=lambda: {
         # --- Single Asset Strategies ---
-        "BBBreakout": ["swing"],
-        # "BBReversal": ["swing"],
+        # "BBBreakout": ["swing"],
+        "BBReversal": ["swing"],
         # "Divergence": ["swing"],
         # "ReversalCandle": ["swing"],
         # "Fibonacci": ["swing"],

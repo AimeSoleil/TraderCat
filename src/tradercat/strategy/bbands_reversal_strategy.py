@@ -88,7 +88,7 @@ class BBandsReversalStrategy(TradingStrategy):
                 self.max_time_bars,
                 (self.macd_params["slow"] or 0),
             )
-            + 5
+            + 10
         )
     
     def support_scoring_factors(self) -> List[FactorName]:

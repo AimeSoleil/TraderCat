@@ -157,7 +157,7 @@ class MomentumTrendStrategy(TradingStrategy):
         We don't need High/Low/Vol for EMA calculation.
         """
         if len(candles) < days:
-             return []
+            return []
         
         # Efficient slicing: take every Nth element starting from end is tricky
         # Simple loop is fine for O(N)
@@ -171,8 +171,8 @@ class MomentumTrendStrategy(TradingStrategy):
         # Strategy: Just iterate normally. 
         # The 'last' bar of every 5-bar chunk is the close.
         for i in range(days-1, total, days):
-             agg_closes.append(float(getattr(candles[i], "close", 0.0)))
-             
+            agg_closes.append(float(getattr(candles[i], "close", 0.0)))
+        
         # Handling the "latest incomplete week" is complex in backtesting.
         # We stick to completed 5-day blocks or just standard sampling.
         # Alternative: Standard sampling (Index 4, 9, 14...)

@@ -73,7 +73,7 @@ class CandlestickReversalStrategy(TradingStrategy):
                         int(self.macd_params.get("slow", 0) or 0),
                         int(self.macd_params.get("signal", 0) or 0))
         base = max(self.ema_slow, self.atr_period, self.rsi_period, macd_max, 3)
-        return int(base + 5)
+        return int(base + 10)
 
     def support_scoring_factors(self) -> List[FactorName]:
         return  [
