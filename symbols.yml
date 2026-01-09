@@ -34,7 +34,7 @@ symbols: [
   "ASML",   # ASML [EUV Monopoly]
   "AMAT",   # Applied Materials [Wafer Fab Equip]
   "LRCX",   # Lam Research [Memory Fab Equip]
-  "KLA",    # KLA Corp [Metrology]
+  "KLAC",    # KLA Corp [Metrology]
   "ONTO",   # Onto Innovation [Advanced Packaging Inspection Alpha]
   "ACLS",   # Axcelis [Ion Implantation Alpha]
   "CAMT",   # Camtek [Small Cap Inspection]
@@ -109,7 +109,7 @@ symbols: [
   "JNJ",    # Johnson & Johnson [Composite]
   "ABBV",   # AbbVie [Yield]
   "MRK",    # Merck [Oncology]
-  "MODN",   # Moderna [mRNA Volatility]
+  "MRNA",   # Moderna [mRNA Volatility]
   "SMMT",   # Summit Therapeutics [Cancer Drug Binary]
 
   # ==============================================================================
