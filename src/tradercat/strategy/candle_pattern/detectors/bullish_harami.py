@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Dict, Any
 from tradercat.strategy.candle_pattern.pattern_detector import DoubleCandlePatternDetector, PatternResult
 
 class BullishHaramiDetector(DoubleCandlePatternDetector):
@@ -7,7 +7,7 @@ class BullishHaramiDetector(DoubleCandlePatternDetector):
         - Candle 1: Large Bearish (Trend continuation).
         - Candle 2: Small Bullish or Doji (Indecision), contained within Candle 1's body.
         - Logic: Momentum stall. Bears couldn't push lower, price consolidated inside previous range.
-        - Note: Often an "Inside Bar" setup.
+        - Note: Often an "Inside Bar" setup indicating a pause or potential reversal.
     """
     def __init__(
         self,
@@ -16,7 +16,7 @@ class BullishHaramiDetector(DoubleCandlePatternDetector):
         require_first_bearish: bool = True,
         
         # [Optimization] False. 
-        # We allow Dojis (Harami Cross) or very small red candles if they are strictly inside.
+        # We allow Dojis (Harami Cross) or very small green candles if they are strictly inside.
         # The "Inside" nature is more important than the color of the baby candle.
         require_second_bullish: bool = False,
 
@@ -74,34 +74,33 @@ class BullishHaramiDetector(DoubleCandlePatternDetector):
         self,
         o1: float, c1: float,
         o2: float, c2: float,
+        h1: float, l1: float,  # Mandatory
+        h2: float, l2: float,  # Mandatory
+        v1: Optional[float] = None, 
+        v2: Optional[float] = None,
         *,
-        h1: Optional[float] = None, l1: Optional[float] = None,
-        h2: Optional[float] = None, l2: Optional[float] = None,
-        v1: Optional[float] = None, v2: Optional[float] = None,
         atr: Optional[float] = None,
         **overrides
     ) -> PatternResult:
-        p = {**self.defaults, **overrides}
+        p: Dict[str, Any] = {**self.defaults, **overrides}
         
-        # Hygiene
-        if any(x is None for x in (o1, c1, o2, c2)):
-            return PatternResult(is_pattern=False)
-
         # 1. Directions
-        first_bearish = c1 < o1
-        second_bullish = c2 > o2
+        first_bearish = not self.is_bullish(o1, c1)
+        second_bullish = self.is_bullish(o2, c2)
         
         if p["require_first_bearish"] and not first_bearish:
             return PatternResult(is_pattern=False)
         
         if p["require_second_bullish"]:
-            # If strict bullish required, allow Green or Doji (c2 >= o2)
+            # If strict bullish required, allow Green (c2 > o2) or Doji (c2 == o2).
+            # "Is Bullish" logic is typically Close > Open. Check logic if you want >=
             if not (c2 >= o2): 
                 return PatternResult(is_pattern=False)
 
-        # 2. Bodies
-        body1 = abs(c1 - o1)
-        body2 = abs(c2 - o2)
+        # 2. Bodies & Ranges
+        body1 = self.get_body(o1, c1)
+        body2 = self.get_body(o2, c2)
+        range1 = self.get_range(h1, l1)
         
         # Mother candle must exist
         if body1 <= p["min_range"]:
@@ -126,65 +125,42 @@ class BullishHaramiDetector(DoubleCandlePatternDetector):
         # 4. Inside Wick Check
         wick_inside_ok = True
         if p["strict_wick_inside"]:
-            if all(x is not None for x in (h1, l1, h2, l2)):
-                wick_inside_ok = (h2 <= h1) and (l2 >= l1)
-            else:
-                wick_inside_ok = False
+            # Highs/Lows are now mandatory
+            wick_inside_ok = (h2 <= h1 * (1 + p["float_tolerance"])) and \
+                             (l2 >= l1 * (1 - p["float_tolerance"]))
+        
         if not wick_inside_ok:
             return PatternResult(is_pattern=False)
 
         # 5. Relative Size
-        strength_ok = True
         if p["require_small_body2"]:
-            strength_ok = body2 <= (body1 * p["max_body2_ratio_vs_body1"] * (1 + p["float_tolerance"]))
+            if body2 > (body1 * p["max_body2_ratio_vs_body1"] * (1 + p["float_tolerance"])):
+                return PatternResult(is_pattern=False)
 
         # 6. Volume Contraction
-        vol_ok = True
         if p["require_volume_contraction"]:
-            if v1 is not None and v2 is not None:
-                vol_ok = v2 < v1
-            else:
-                vol_ok = False
+            # Strict verification
+            if v1 is None or v2 is None:
+                return PatternResult(is_pattern=False)
+            if not (v2 < v1):
+                return PatternResult(is_pattern=False)
 
-        # 7. Range & Ratio Checks
-        def valid_range(h, l): return (h is not None) and (l is not None) and (h >= l)
-        price_range1 = (h1 - l1) if valid_range(h1, l1) else None
-        
-        # Only check range1 for min_body_ratio1
-        if p["min_body_ratio1"] is not None and price_range1 is None:
-             return PatternResult(is_pattern=False)
-
-        body_ratio1_ok = True
-        if p["min_body_ratio1"] is not None and price_range1:
-            body_ratio1_ok = (body1 / price_range1) >= (p["min_body_ratio1"] * (1 - p["float_tolerance"]))
+        # 7. Range & Ratio Checks (Mother Candle Strength)
+        if p["min_body_ratio1"] is not None:
+             eff_range1 = range1 if range1 > p["min_range"] else p["min_range"]
+             if (body1 / eff_range1) < (p["min_body_ratio1"] * (1 - p["float_tolerance"])):
+                 return PatternResult(is_pattern=False)
 
         # 8. ATR Checks
-        atr_body1_ok = True
-        atr_body2_ok = True
         if atr is not None and atr > 0.0:
-            if p["min_body1_vs_atr"]:
-                atr_body1_ok = body1 >= (p["min_body1_vs_atr"] * atr) * (1 - p["float_tolerance"])
-            if p["max_body2_vs_atr"]:
-                atr_body2_ok = body2 <= (p["max_body2_vs_atr"] * atr) * (1 + p["float_tolerance"])
-
-        # Final Decision
-        conditions = [
-            inside_ok,
-            strength_ok,
-            body_ratio1_ok,
-            atr_body1_ok,
-            atr_body2_ok,
-            wick_inside_ok,
-            vol_ok,
-        ]
-
-        if not all(conditions):
-            return PatternResult(is_pattern=False)
+            if p["min_body1_vs_atr"] and body1 < (p["min_body1_vs_atr"] * atr * (1 - p["float_tolerance"])):
+                return PatternResult(is_pattern=False)
+            if p["max_body2_vs_atr"] and body2 > (p["max_body2_vs_atr"] * atr * (1 + p["float_tolerance"])):
+                            return PatternResult(is_pattern=False)
 
         metrics = {
             "body1": body1, "body2": body2,
             "inside_ok": inside_ok,
-            "strength_ok": strength_ok,
             "vol_contraction": (v2 / v1) if (v1 and v2 and v1 > 0) else None,
             "params": {**self.defaults, "atr": atr, **overrides},
         }

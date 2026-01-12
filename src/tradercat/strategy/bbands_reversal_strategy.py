@@ -206,9 +206,9 @@ class BBandsReversalStrategy(TradingStrategy):
                 atr_i = atr_val_history[i]
 
                 if near_lower:
-                    res = orchestrator.detect_bullish(opens, highs, lows, closes, i, atr=atr_i)
+                    res = orchestrator.detect_bullish(opens, highs, lows, closes, vols, i, atr=atr_i)
                 else:
-                    res = orchestrator.detect_bearish(opens, highs, lows, closes, i, atr=atr_i)
+                    res = orchestrator.detect_bearish(opens, highs, lows, closes, vols, i, atr=atr_i)
 
                 if res.is_pattern:
                     rejection_found = True

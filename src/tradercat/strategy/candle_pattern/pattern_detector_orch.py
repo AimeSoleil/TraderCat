@@ -61,13 +61,13 @@ class PatternDetectorsOrchestrator:
         # ==========================================
         
         self.bullish_triple: List[TripleCandlePatternDetector] = [
-            MorningStarDetector(),
-            ThreeWhiteSoldiersDetector(),
+            MorningStarDetector(require_volume_increase_c3=True),
+            ThreeWhiteSoldiersDetector(require_volume_increase=True),
         ]
 
         self.bearish_triple: List[TripleCandlePatternDetector] = [
-            EveningStarDetector(),
-            ThreeBlackCrowsDetector(),
+            EveningStarDetector(require_volume_increase_c3=True),
+            ThreeBlackCrowsDetector(require_volume_increase=True),
         ]
 
         # ==========================================
@@ -75,17 +75,17 @@ class PatternDetectorsOrchestrator:
         # ==========================================
 
         self.bullish_double: List[DoubleCandlePatternDetector] = [
-            BullishEngulfingDetector(),
-            PiercingPatternDetector(),
-            TweezerBottomDetector(),
-            BullishHaramiDetector(),
+            BullishEngulfingDetector(require_volume_increase=True),
+            PiercingPatternDetector(require_volume_increase=True),
+            TweezerBottomDetector(require_volume_increase=True),
+            BullishHaramiDetector(require_volume_contraction=True),
         ]
 
         self.bearish_double: List[DoubleCandlePatternDetector] = [
-            BearishEngulfingDetector(),
-            DarkCloudCoverDetector(),
-            TweezerTopDetector(),
-            BearishHaramiDetector(),
+            BearishEngulfingDetector(require_volume_increase=True),
+            DarkCloudCoverDetector(require_volume_increase=True),
+            TweezerTopDetector(require_volume_increase=True),
+            BearishHaramiDetector(require_volume_contraction=True),
         ]
 
         # ==========================================
@@ -93,15 +93,15 @@ class PatternDetectorsOrchestrator:
         # ==========================================
         
         self.bullish_single: List[SingleCandlePatternDetector] = [
-            HammerDetector(),
-            DragonflyDojiDetector(),
+            HammerDetector(require_volume_increase=True),
+            DragonflyDojiDetector(require_high_volume=True),
             StandardDojiDetector(),
             SpinningTopDetector(),
         ]
 
         self.bearish_single: List[SingleCandlePatternDetector] = [
-            ShootingStarDetector(),
-            GravestoneDojiDetector(),
+            ShootingStarDetector(require_high_volume=True),
+            GravestoneDojiDetector(require_high_volume=True),
             StandardDojiDetector(),
             SpinningTopDetector(),
         ]
@@ -115,6 +115,7 @@ class PatternDetectorsOrchestrator:
         highs: List[float],
         lows: List[float],
         closes: List[float],
+        volumes: List[float],  # <--- [FIX 1] 添加 volumes 参数
         idx: int,
         *,
         atr: Optional[float] = None,
@@ -133,6 +134,18 @@ class PatternDetectorsOrchestrator:
 
         results: List[PatternResult] = []
 
+        # [FIX 2] 准备上下文数据 (Context Data Preparation)
+        # 安全地获取前值，防止索引越界
+        def get_val(arr, i): return arr[i] if i >= 0 else None
+        
+        v3 = get_val(volumes, idx)
+        v2 = get_val(volumes, idx - 1)
+        v1 = get_val(volumes, idx - 2)
+        
+        prev_close = get_val(closes, idx - 1)
+        prev_high = get_val(highs, idx - 1)
+        prev_low = get_val(lows, idx - 1)
+
         # 1. Triple-candle (Strongest)
         if idx >= 2:
             for det in self.bullish_triple:
@@ -143,6 +156,8 @@ class PatternDetectorsOrchestrator:
                     h1=highs[idx - 2], l1=lows[idx - 2],
                     h2=highs[idx - 1], l2=lows[idx - 1],
                     h3=highs[idx],     l3=lows[idx],
+                    # [FIX 3] 传递成交量
+                    v1=v1, v2=v2, v3=v3,
                     **overrides
                 )
                 if r.is_pattern:
@@ -157,6 +172,8 @@ class PatternDetectorsOrchestrator:
                     opens[idx], closes[idx],
                     h1=highs[idx - 1], l1=lows[idx - 1],
                     h2=highs[idx],     l2=lows[idx],
+                    # [FIX 4] 传递成交量 (注意 double patterns通常期望 v1, v2)
+                    v1=v2, v2=v3,
                     **overrides
                 )
                 if r.is_pattern:
@@ -168,6 +185,12 @@ class PatternDetectorsOrchestrator:
             for det in self.bullish_single:
                 r = det.detect(
                     opens[idx], highs[idx], lows[idx], closes[idx],
+                    # [FIX 5] 传递单根蜡烛所需的完整上下文
+                    vol=v3,
+                    prev_vol=v2,
+                    prev_close=prev_close,
+                    prev_high=prev_high,
+                    prev_low=prev_low,
                     **overrides
                 )
                 if r.is_pattern:
@@ -182,6 +205,7 @@ class PatternDetectorsOrchestrator:
         highs: List[float],
         lows: List[float],
         closes: List[float],
+        volumes: List[float], # <--- [FIX 1] 添加 volumes 参数
         idx: int,
         *,
         atr: Optional[float] = None,
@@ -197,8 +221,19 @@ class PatternDetectorsOrchestrator:
             overrides["trend_ok"] = trend_ok
         if extra_overrides:
             overrides.update(extra_overrides)
-
+            
         results: List[PatternResult] = []
+
+        # [FIX 2] 准备上下文数据
+        def get_val(arr, i): return arr[i] if i >= 0 else None
+        
+        v3 = get_val(volumes, idx)
+        v2 = get_val(volumes, idx - 1)
+        v1 = get_val(volumes, idx - 2)
+        
+        prev_close = get_val(closes, idx - 1)
+        prev_high = get_val(highs, idx - 1)
+        prev_low = get_val(lows, idx - 1)
 
         # 1. Triple-candle
         if idx >= 2:
@@ -210,6 +245,8 @@ class PatternDetectorsOrchestrator:
                     h1=highs[idx - 2], l1=lows[idx - 2],
                     h2=highs[idx - 1], l2=lows[idx - 1],
                     h3=highs[idx],     l3=lows[idx],
+                    # [FIX 3]
+                    v1=v1, v2=v2, v3=v3,
                     **overrides
                 )
                 if r.is_pattern:
@@ -224,6 +261,8 @@ class PatternDetectorsOrchestrator:
                     opens[idx],     closes[idx],
                     h1=highs[idx - 1], l1=lows[idx - 1],
                     h2=highs[idx],     l2=lows[idx],
+                    # [FIX 4]
+                    v1=v2, v2=v3,
                     **overrides
                 )
                 if r.is_pattern:
@@ -235,6 +274,12 @@ class PatternDetectorsOrchestrator:
             for det in self.bearish_single:
                 r = det.detect(
                     opens[idx], highs[idx], lows[idx], closes[idx],
+                    # [FIX 5]
+                    vol=v3,
+                    prev_vol=v2,
+                    prev_close=prev_close,
+                    prev_high=prev_high,
+                    prev_low=prev_low,
                     **overrides
                 )
                 if r.is_pattern:

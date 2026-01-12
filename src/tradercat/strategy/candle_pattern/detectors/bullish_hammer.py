@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 from tradercat.strategy.candle_pattern.pattern_detector import PatternResult, SingleCandlePatternDetector
 
 class HammerDetector(SingleCandlePatternDetector):
@@ -85,104 +85,93 @@ class HammerDetector(SingleCandlePatternDetector):
     def detect(
         self, 
         open_: float, high: float, low: float, close: float, 
+        volume: Optional[float] = None,      
+        prev_close: Optional[float] = None, 
+        prev_high: Optional[float] = None, 
+        prev_vol: Optional[float] = None, 
         *, 
         atr: Optional[float] = None,
-        vol: Optional[float] = None, 
-        prev_vol: Optional[float] = None, 
-        prev_close: Optional[float] = None, 
         **overrides
     ) -> PatternResult:
-        p = {**self.defaults, **overrides}
+        p: Dict[str, Any] = {**self.defaults, **overrides}
         
         # Hygiene
-        if any(x is None for x in (open_, high, low, close)) or high < low:
-            return PatternResult(is_pattern=False)
-
-        price_range = high - low
+        price_range = self.get_range(high, low)
         if price_range <= p["min_range"]:
             return PatternResult(is_pattern=False)
 
         # Components
-        body = abs(close - open_)
-        upper_shadow = max(0.0, high - max(open_, close))
-        lower_shadow = max(0.0, min(open_, close) - low)
+        body = self.get_body(open_, close)
+        upper_shadow = self.get_upper_shadow(open_, high, close)
+        lower_shadow = self.get_lower_shadow(open_, low, close)
 
-        # Ratios
+        # 1. Color Check
+        if p["require_bullish_body"]:
+            if not self.is_bullish(open_, close):
+                return PatternResult(is_pattern=False)
+
+        # 2. Context Checks (Fail Fast)
+        if p["require_gap_down"]:
+            if prev_close is None or not (open_ < (prev_close * (1 - p["float_tolerance"]))):
+                return PatternResult(is_pattern=False)
+
+        if p["require_volume_increase"]:
+            if volume is None or prev_vol is None or volume <= prev_vol:
+                return PatternResult(is_pattern=False)
+
+        # 3. ATR Scaling for Body
         body_ratio = body / price_range
-        
-        # Handle zero body (Doji) safely for ratios
-        safe_body = body if body > p["float_tolerance"] else p["float_tolerance"]
-        upper_to_body = upper_shadow / safe_body
-        lower_to_body = lower_shadow / safe_body
-
-        # ATR Scaling for minimum body size
         effective_min_body_ratio = p["body_ratio_min"]
         body_atr_scaler = 1.0
+
         if atr and atr > 0:
             lo, hi = p["body_atr_bounds"]
             if hi < lo: lo, hi = hi, lo
             body_atr_scaler = p["body_atr_alpha"] * (atr / price_range)
+            # Limit scaling
             body_atr_scaler = max(lo, min(hi, body_atr_scaler))
-            effective_min_body_ratio = p["body_ratio_min"] / body_atr_scaler
+            effective_min_body_ratio = effective_min_body_ratio / body_atr_scaler
 
-        # 1. Body Size Check
-        body_ok = body_ratio >= (effective_min_body_ratio * (1 - p["float_tolerance"]))
-
-        # 2. Shadow Ratios Check
-        lower_shadow_ok = lower_to_body >= (p["min_lower_shadow_to_body"] * (1 - p["float_tolerance"]))
-        upper_shadow_ok = upper_to_body <= (p["max_upper_shadow_to_body"] * (1 + p["float_tolerance"]))
-
-        # 3. ATR Absolute Checks (Optional)
-        if atr and atr > 0:
-            if p["min_lower_vs_atr"]:
-                lower_shadow_ok = lower_shadow_ok and (lower_shadow >= p["min_lower_vs_atr"] * atr * (1 - p["float_tolerance"]))
-            if p["max_upper_vs_atr"]:
-                upper_shadow_ok = upper_shadow_ok and (upper_shadow <= p["max_upper_vs_atr"] * atr * (1 + p["float_tolerance"]))
-            if p["max_body_vs_atr"]:
-                body_ok = body_ok and (body <= p["max_body_vs_atr"] * atr * (1 + p["float_tolerance"]))
-
-        # 4. Shadow Presence
-        if p["require_lower_shadow"]:
-            lower_shadow_ok = lower_shadow_ok and (lower_shadow > 0.0)
-        if p["require_upper_shadow"]:
-            upper_shadow_ok = upper_shadow_ok and (upper_shadow > 0.0)
-
-        # 5. Color Filter
-        color_ok = True
-        if p["require_bullish_body"]:
-            if close <= open_:
-                color_ok = False
-
-        # 6. Close Position Filter (Must close near high)
-        close_pos_ok = True
-        if p["require_close_upper_fraction"] is not None:
-            frac = (close - low) / price_range
-            close_pos_ok = frac >= p["require_close_upper_fraction"] * (1 - p["float_tolerance"])
-
-        # 7. Volume Filter
-        volume_ok = True
-        if p["require_volume_increase"]:
-            if vol is None or prev_vol is None or vol <= prev_vol:
-                volume_ok = False
-
-        # 8. Gap Filter (Bear Trap)
-        gap_ok = True
-        if p["require_gap_down"]:
-            if prev_close is None or open_ >= prev_close:
-                gap_ok = False
-
-        is_pattern = all([
-            body_ok, 
-            lower_shadow_ok, 
-            upper_shadow_ok, 
-            color_ok, 
-            close_pos_ok, 
-            volume_ok,
-            gap_ok
-        ])
-
-        if not is_pattern:
+        # 4. Body Size Check (Adaptive)
+        if body_ratio < (effective_min_body_ratio * (1 - p["float_tolerance"])):
             return PatternResult(is_pattern=False)
+
+        # 5. Shadow Ratios (The "Hammer" Shape)
+        # Use a safe denominator (ref_size) to avoid div/0 if body is extremely thin (Doji-like)
+        ref_size = body if body > p["min_range"] else p["min_range"]
+        
+        lower_to_body = lower_shadow / ref_size
+        upper_to_body = upper_shadow / ref_size
+
+        # A. Large Lower Shadow
+        if lower_to_body < (p["min_lower_shadow_to_body"] * (1 - p["float_tolerance"])):
+            return PatternResult(is_pattern=False)
+            
+        # B. Small Upper Shadow
+        if upper_to_body > (p["max_upper_shadow_to_body"] * (1 + p["float_tolerance"])):
+            return PatternResult(is_pattern=False)
+
+        # 6. Shadow Existence (Strict Flags)
+        if p["require_lower_shadow"] and lower_shadow <= p["min_range"]:
+            return PatternResult(is_pattern=False)
+        if p["require_upper_shadow"] and upper_shadow <= p["min_range"]:
+            return PatternResult(is_pattern=False)
+
+        # 7. Close Position (Close near Highs)
+        if p["require_close_upper_fraction"] is not None:
+            # How high up in the range is the close?
+            close_pos_frac = (close - low) / price_range
+            if close_pos_frac < (p["require_close_upper_fraction"] * (1 - p["float_tolerance"])):
+                return PatternResult(is_pattern=False)
+
+        # 8. Absolute ATR Checks
+        if atr and atr > 0:
+            if p["min_lower_vs_atr"] and lower_shadow < (p["min_lower_vs_atr"] * atr):
+                return PatternResult(is_pattern=False)
+            if p["max_upper_vs_atr"] and upper_shadow > (p["max_upper_vs_atr"] * atr):
+                return PatternResult(is_pattern=False)
+            if p["max_body_vs_atr"] and body > (p["max_body_vs_atr"] * atr):
+                return PatternResult(is_pattern=False)
 
         metrics = {
             "body": body, "price_range": price_range,
@@ -192,7 +181,7 @@ class HammerDetector(SingleCandlePatternDetector):
             "effective_min_body_ratio": effective_min_body_ratio,
             "body_atr_scaler": body_atr_scaler,
             "close_upper_frac": (close - low) / price_range,
-            "volume_increase": (vol / prev_vol) if (vol and prev_vol and prev_vol > 0) else None,
+            "volume_increase": (volume / prev_vol) if (volume and prev_vol and prev_vol > 0) else None,
             "gap_down": (open_ < prev_close) if prev_close else None,
             "params": {**self.defaults, "atr": atr, **overrides},
         }

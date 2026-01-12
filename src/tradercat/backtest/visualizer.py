@@ -40,7 +40,7 @@ class BacktestVisualizer:
             return
         
         # Limit print to last 20 trades
-        display_trades = trades[-20:] 
+        display_trades = trades[-50:] 
         table = []
         
         for trade in display_trades:

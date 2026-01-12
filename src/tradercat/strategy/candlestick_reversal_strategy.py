@@ -165,8 +165,8 @@ class CandlestickReversalStrategy(TradingStrategy):
         orchestrator = PatternDetectorsOrchestrator()
 
         # 顺势交易：只在上升趋势找看涨反转（Ex: Hammer），下降趋势找看跌反转（Ex: Shooting Star）
-        res_bull = orchestrator.detect_bullish(opens, highs, lows, closes, idx, atr=current_atr_val, trend_ok=trend_long)
-        res_bear = orchestrator.detect_bearish(opens, highs, lows, closes, idx, atr=current_atr_val, trend_ok=trend_short)
+        res_bull = orchestrator.detect_bullish(opens, highs, lows, closes, vols, idx, atr=current_atr_val, trend_ok=trend_long)
+        res_bear = orchestrator.detect_bearish(opens, highs, lows, closes, vols, idx, atr=current_atr_val, trend_ok=trend_short)
 
         found_bull = bool(res_bull and res_bull.is_pattern)
         found_bear = bool(res_bear and res_bear.is_pattern)

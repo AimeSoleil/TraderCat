@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 from tradercat.strategy.candle_pattern.pattern_detector import PatternResult, SingleCandlePatternDetector
 
 class StandardDojiDetector(SingleCandlePatternDetector):
@@ -53,36 +53,40 @@ class StandardDojiDetector(SingleCandlePatternDetector):
     def detect(
         self,
         open_: float, high: float, low: float, close: float,
+        volume: Optional[float] = None,   
+        prev_close: Optional[float] = None,
+        prev_high: Optional[float] = None,
+        prev_vol: Optional[float] = None,
         *,
         atr: Optional[float] = None,
         **overrides
     ) -> PatternResult:
-        p = {**self.defaults, **overrides}
+        p: Dict[str, Any] = {**self.defaults, **overrides}
         
-        # Hygiene
-        if any(x is None for x in (open_, high, low, close)) or high < low:
-            return PatternResult(is_pattern=False)
-
-        price_range = high - low
+        # Hygiene: Range too small
+        price_range = self.get_range(high, low)
         if price_range <= p["min_range"]:
             return PatternResult(is_pattern=False)
 
-        body = abs(close - open_)
-        upper_shadow = max(0.0, high - max(open_, close))
-        lower_shadow = max(0.0, min(open_, close) - low)
+        # Components
+        body = self.get_body(open_, close)
+        upper_shadow = self.get_upper_shadow(open_, high, close)
+        lower_shadow = self.get_lower_shadow(open_, low, close)
 
         body_ratio = body / price_range
         upper_ratio = upper_shadow / price_range
         lower_ratio = lower_shadow / price_range
 
-        # ATR-adaptive threshold
+        # ATR-adaptive threshold calculation
         effective_body_ratio_max = p["body_ratio_max"]
         atr_scaler = 1.0
+        
         if atr is not None and atr > 0.0:
             lo, hi = p["atr_scale_bounds"]
             if hi < lo: lo, hi = hi, lo
-            # If volatility is high, we allow a slightly larger body for a Doji
+            # If volatility (ATR) is high, we allow a slightly larger body for a Doji (more noise)
             atr_scaler = p["atr_scale_alpha"] * (atr / price_range)
+            # Clip scaler
             atr_scaler = max(lo, min(hi, atr_scaler))
             effective_body_ratio_max = p["body_ratio_max"] * atr_scaler
 
@@ -94,17 +98,20 @@ class StandardDojiDetector(SingleCandlePatternDetector):
             body_ok = body_ok and (body <= (p["max_body_atr_ratio"] * atr) * (1 + p["float_tolerance"]))
 
         # 2. Shadow Presence Check
-        upper_exists = (upper_shadow > 0.0) if p["require_upper_shadow"] else True
-        lower_exists = (lower_shadow > 0.0) if p["require_lower_shadow"] else True
+        if p["require_upper_shadow"] and upper_shadow <= p["min_range"]:
+             return PatternResult(is_pattern=False)
+        if p["require_lower_shadow"] and lower_shadow <= p["min_range"]:
+             return PatternResult(is_pattern=False)
 
-        # 3. Shadow Length Check (Ensure "Cross" shape)
+        # 3. Shadow Length Check (The "Cross" shape logic)
         # Prevents Dragonfly/Gravestone from being detected as Standard Doji
-        shadows_length_ok = True
         if p["min_shadow_ratio"] > 0:
-            shadows_length_ok = (upper_ratio >= p["min_shadow_ratio"]) and \
-                                (lower_ratio >= p["min_shadow_ratio"])
+            if upper_ratio < p["min_shadow_ratio"]:
+                return PatternResult(is_pattern=False)
+            if lower_ratio < p["min_shadow_ratio"]:
+                return PatternResult(is_pattern=False)
 
-        is_pattern = body_ok and upper_exists and lower_exists and shadows_length_ok
+        is_pattern = body_ok
         
         if not is_pattern:
             return PatternResult(is_pattern=False)

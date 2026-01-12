@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 from tradercat.strategy.candle_pattern.pattern_detector import PatternResult, SingleCandlePatternDetector
 
 class SpinningTopDetector(SingleCandlePatternDetector):
@@ -75,80 +75,86 @@ class SpinningTopDetector(SingleCandlePatternDetector):
     def detect(
         self, 
         open_: float, high: float, low: float, close: float, 
+        volume: Optional[float] = None,
+        prev_close: Optional[float] = None, 
+        prev_high: Optional[float] = None,  
+        prev_vol: Optional[float] = None,
         *, 
         atr: Optional[float] = None, 
         **overrides
     ) -> PatternResult:
-        p = {**self.defaults, **overrides}
+        p: Dict[str, Any] = {**self.defaults, **overrides}
         
         # Hygiene
-        if any(x is None for x in (open_, high, low, close)) or high < low:
-            return PatternResult(is_pattern=False)
-
-        price_range = high - low
+        price_range = self.get_range(high, low)
         if price_range <= p["min_range"]:
             return PatternResult(is_pattern=False)
 
         # Components
-        body = abs(close - open_)
-        upper_shadow = max(0.0, high - max(open_, close))
-        lower_shadow = max(0.0, min(open_, close) - low)
-
+        body = self.get_body(open_, close)
+        upper_shadow = self.get_upper_shadow(open_, high, close)
+        lower_shadow = self.get_lower_shadow(open_, low, close)
         body_ratio = body / price_range
         
-        # Safe division
-        safe_body = body if body > p["float_tolerance"] else p["float_tolerance"]
-        upper_to_body = upper_shadow / safe_body
-        lower_to_body = lower_shadow / safe_body
-
         # ATR-adaptive body ratio bounds
-        # [Fix] Corrected key name from "max_body_ratio" to "body_ratio_max"
         effective_max_body_ratio = p["body_ratio_max"]
         effective_min_body_ratio = p["body_ratio_min"]
         
         body_atr_scaler = 1.0
-        if atr and atr > 0:
+        if atr is not None and atr > 0.0:
             lo, hi = p["body_atr_bounds"]
             if hi < lo: lo, hi = hi, lo
             body_atr_scaler = p["body_atr_alpha"] * (atr / price_range)
+            # Clip
             body_atr_scaler = max(lo, min(hi, body_atr_scaler))
+            
+            # If Volatility is high, we can accept larger bodies as being "indecisive" relative to noise
             effective_max_body_ratio = p["body_ratio_max"] * body_atr_scaler
+            
+            # If Volatility is high, we require the minimum body to be larger to avoid noise
             effective_min_body_ratio = p["body_ratio_min"] / body_atr_scaler
 
         # 1. Body Size Check
-        body_small_ok = body_ratio <= (effective_max_body_ratio * (1 + p["float_tolerance"]))
-        body_not_too_small_ok = body_ratio >= (effective_min_body_ratio * (1 - p["float_tolerance"]))
-        body_ok = body_small_ok and body_not_too_small_ok
+        # Not too big (Spinning Top) AND Not too small (Doji)
+        if body_ratio > (effective_max_body_ratio * (1 + p["float_tolerance"])):
+            return PatternResult(is_pattern=False)
+            
+        if body_ratio < (effective_min_body_ratio * (1 - p["float_tolerance"])):
+            return PatternResult(is_pattern=False) # Likely a Doji
 
-        # 2. Shadow Length Check
-        upper_shadow_ok = upper_to_body >= (p["min_upper_shadow_to_body"] * (1 - p["float_tolerance"]))
-        lower_shadow_ok = lower_to_body >= (p["min_lower_shadow_to_body"] * (1 - p["float_tolerance"]))
+        # 2. Shadow Length Check logic
+        # Use body as denom, but guard against tiny body (though min_body_ratio handles most)
+        ref_size = body if body > p["min_range"] else p["min_range"]
+        
+        upper_to_body = upper_shadow / ref_size
+        lower_to_body = lower_shadow / ref_size
+
+        if upper_to_body < (p["min_upper_shadow_to_body"] * (1 - p["float_tolerance"])):
+            return PatternResult(is_pattern=False)
+            
+        if lower_to_body < (p["min_lower_shadow_to_body"] * (1 - p["float_tolerance"])):
+            return PatternResult(is_pattern=False)
 
         # 3. Symmetry Check (Neutrality)
-        symmetry_ok = True
         if p["require_symmetry"]:
             diff = abs(upper_shadow - lower_shadow)
             # The difference in wick lengths should be small relative to the total range
-            symmetry_ok = diff <= (p["symmetry_tolerance"] * price_range * (1 + p["float_tolerance"]))
+            if diff > (p["symmetry_tolerance"] * price_range * (1 + p["float_tolerance"])):
+                return PatternResult(is_pattern=False)
 
         # 4. ATR Absolute Checks
-        if atr and atr > 0:
-            if p["max_body_vs_atr"]:
-                body_ok = body_ok and (body <= p["max_body_vs_atr"] * atr * (1 + p["float_tolerance"]))
-            if p["min_upper_vs_atr"]:
-                upper_shadow_ok = upper_shadow_ok and (upper_shadow >= p["min_upper_vs_atr"] * atr * (1 - p["float_tolerance"]))
-            if p["min_lower_vs_atr"]:
-                lower_shadow_ok = lower_shadow_ok and (lower_shadow >= p["min_lower_vs_atr"] * atr * (1 - p["float_tolerance"]))
+        if atr is not None and atr > 0.0:
+            if p["max_body_vs_atr"] and body > (p["max_body_vs_atr"] * atr):
+                return PatternResult(is_pattern=False)
+            if p["min_upper_vs_atr"] and upper_shadow < (p["min_upper_vs_atr"] * atr):
+                return PatternResult(is_pattern=False)
+            if p["min_lower_vs_atr"] and lower_shadow < (p["min_lower_vs_atr"] * atr):
+                return PatternResult(is_pattern=False)
 
-        # 5. Shadow Presence
-        if p["require_upper_shadow"]:
-            upper_shadow_ok = upper_shadow_ok and (upper_shadow > 0.0)
-        if p["require_lower_shadow"]:
-            lower_shadow_ok = lower_shadow_ok and (lower_shadow > 0.0)
-
-        is_pattern = body_ok and upper_shadow_ok and lower_shadow_ok and symmetry_ok
-        
-        if not is_pattern:
+        # 5. Shadow Presence (Strict)
+        if p["require_upper_shadow"] and upper_shadow <= p["min_range"]:
+            return PatternResult(is_pattern=False)
+        if p["require_lower_shadow"] and lower_shadow <= p["min_range"]:
             return PatternResult(is_pattern=False)
 
         metrics = {
@@ -161,4 +167,9 @@ class SpinningTopDetector(SingleCandlePatternDetector):
             "params": {**self.defaults, "atr": atr, **overrides},
         }
 
-        return PatternResult(is_pattern=True, name="Spinning Top", bias="neutral", metrics=metrics)
+        return PatternResult(
+            is_pattern=True, 
+            name="Spinning Top", 
+            bias="neutral", 
+            metrics=metrics
+        )

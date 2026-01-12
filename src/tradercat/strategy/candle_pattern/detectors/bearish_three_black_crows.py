@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 from tradercat.strategy.candle_pattern.pattern_detector import PatternResult, TripleCandlePatternDetector
 
 class ThreeBlackCrowsDetector(TripleCandlePatternDetector):
@@ -99,148 +99,126 @@ class ThreeBlackCrowsDetector(TripleCandlePatternDetector):
         o1: float, c1: float,
         o2: float, c2: float,
         o3: float, c3: float,
+        h1: float, l1: float,  # Mandatory
+        h2: float, l2: float,  # Mandatory
+        h3: float, l3: float,  # Mandatory
+        v1: Optional[float] = None, 
+        v2: Optional[float] = None, 
+        v3: Optional[float] = None,
         *,
-        h1: Optional[float] = None, l1: Optional[float] = None,
-        h2: Optional[float] = None, l2: Optional[float] = None,
-        h3: Optional[float] = None, l3: Optional[float] = None,
-        v1: Optional[float] = None, v2: Optional[float] = None, v3: Optional[float] = None,
         atr: Optional[float] = None,
         **overrides
     ) -> PatternResult:
-        p = {**self.defaults, **overrides}
+        p: Dict[str, Any] = {**self.defaults, **overrides}
 
-        # Basic data check
-        if any(x is None for x in (o1, c1, o2, c2, o3, c3)):
-            return PatternResult(is_pattern=False)
+        # 1) Direction (Bearish)
+        if p["require_consecutive_bearish"]:
+            if self.is_bullish(o1, c1) or self.is_bullish(o2, c2) or self.is_bullish(o3, c3):
+                return PatternResult(is_pattern=False)
 
-        # 1) Direction
-        bear1, bear2, bear3 = c1 < o1, c2 < o2, c3 < o3
-        if p["require_consecutive_bearish"] and not (bear1 and bear2 and bear3):
-            return PatternResult(is_pattern=False)
-
-        # 2) Bodies
-        body1, body2, body3 = abs(c1 - o1), abs(c2 - o2), abs(c3 - o3)
+        # 2) Bodies Calculations
+        body1 = self.get_body(o1, c1)
+        body2 = self.get_body(o2, c2)
+        body3 = self.get_body(o3, c3)
+        range1 = self.get_range(h1, l1)
+        range2 = self.get_range(h2, l2)
+        range3 = self.get_range(h3, l3)
+        
+        # Hygiene
         if body1 <= p["min_range"] or body2 <= p["min_range"] or body3 <= p["min_range"]:
             return PatternResult(is_pattern=False)
+            
         avg_body = (body1 + body2 + body3) / 3.0
 
-        # 3) Staircase (closes & lows)
-        lower_closes_ok = True
+        # 3) Staircase Logic
         if p["require_lower_closes"]:
-            lower_closes_ok = (c2 < c1) and (c3 < c2)
+            if not ((c2 < c1) and (c3 < c2)):
+                return PatternResult(is_pattern=False)
 
-        lower_lows_ok = True
         if p["require_lower_lows"]:
-            if all(x is not None for x in (l1, l2, l3)):
-                lower_lows_ok = (l2 < l1) and (l3 < l2)
-            else:
-                # Fallback if lows are missing
-                lower_lows_ok = (c2 < c1) and (c3 < c2)
+            if not ((l2 < l1) and (l3 < l2)):
+                return PatternResult(is_pattern=False)
 
-        # 4) Open within previous body (Legacy / Textbook check)
-        open_within_ok = True
+        # 4) Open within previous body Logic
         if p["require_open_within_prev_body"]:
-            # Strict textbook definition: Open is inside previous real body.
-            # Note: This often filters out strong momentum gap-downs.
             def is_inside(op, prev_o, prev_c):
                 top, bot = max(prev_o, prev_c), min(prev_o, prev_c)
                 return (op >= bot * (1 - p["open_within_tolerance"])) and \
                        (op <= top * (1 + p["open_within_tolerance"]))
             
-            open_within_ok = is_inside(o2, o1, c1) and is_inside(o3, o2, c2)
+            if not (is_inside(o2, o1, c1) and is_inside(o3, o2, c2)):
+                return PatternResult(is_pattern=False)
 
-        # 5) Body strength consistency
-        strong_vs_avg_ok = True
+        # 5) Body Strength consistency
         if p["require_strong_bodies"]:
             r = p["min_body_vs_avg_body_ratio"]
-            strong_vs_avg_ok = (body1 >= avg_body * r) and (body2 >= avg_body * r) and (body3 >= avg_body * r)
+            if not ((body1 >= avg_body * r) and (body2 >= avg_body * r) and (body3 >= avg_body * r)):
+                return PatternResult(is_pattern=False)
 
-        first_candle_ok = True
         if p["require_big_first_candle"]:
-            first_candle_ok = body1 >= (avg_body * 1.0) # At least average size
+            if body1 < avg_body: # Simple comparison
+                return PatternResult(is_pattern=False)
 
-        # 6) Volume progression
-        vol_ok = True
+        # 6) Volume Progression
         if p["require_volume_increase"]:
-            if all(v is not None for v in (v1, v2, v3)):
-                # Allow slight variance, but generally increasing
-                vol_ok = (v2 >= v1 * 0.9) and (v3 >= v2 * 0.9)
-            else:
-                vol_ok = False
+            # Strict mode: fail if data missing
+            if any(v is None for v in (v1, v2, v3)):
+                return PatternResult(is_pattern=False)
+            # Allow slight variance (0.9), but generally increasing
+            if not ((v2 >= v1 * 0.9) and (v3 >= v2 * 0.9)):
+                return PatternResult(is_pattern=False)
 
-        # 7) Range & shadows
-        def valid_range(h, l): return (h is not None and l is not None and h >= l)
-        ranges = [(h - l) if valid_range(h, l) else None for h, l in [(h1, l1), (h2, l2), (h3, l3)]]
-
-        shadows_ok = True
-        # Check each candle for shadow limits
+        # 7) Shadows and Ratio Checks (Iterative)
         candle_data = [
-            (o1, c1, h1, l1, body1),
-            (o2, c2, h2, l2, body2),
-            (o3, c3, h3, l3, body3)
+            (o1, c1, h1, l1, body1, range1),
+            (o2, c2, h2, l2, body2, range2),
+            (o3, c3, h3, l3, body3, range3)
         ]
-        
-        for (o, c, h, l, b) in candle_data:
-            if h is None or l is None: continue
-            if b <= p["min_range"]: 
-                shadows_ok = False; break
 
-            upper = h - max(o, c)
-            lower = min(o, c) - l
-            
-            if p["max_upper_shadow_to_body"] is not None:
-                if (upper / b) > p["max_upper_shadow_to_body"]: shadows_ok = False
-            
-            if p["max_lower_shadow_to_body"] is not None:
-                if (lower / b) > p["max_lower_shadow_to_body"]: shadows_ok = False
-
-        # 7b) Body vs Range with ATR adaptive scaler
-        body_ratios_ok = True
+        # Prepare ATR scaler for Body/Range check
         effective_min_body_ratio = p["min_body_ratio_vs_range"]
         if effective_min_body_ratio is not None and atr is not None and atr > 0:
-            valid_ranges_vals = [r for r in ranges if r is not None]
-            if valid_ranges_vals:
-                avg_range_val = sum(valid_ranges_vals) / len(valid_ranges_vals)
-                if avg_range_val > p["min_range"]:
-                    lo, hi = p["body_atr_bounds"]
-                    if hi < lo: lo, hi = hi, lo
-                    raw_scaler = p["body_atr_alpha"] * (atr / avg_range_val)
-                    scaler = max(lo, min(hi, raw_scaler))
-                    effective_min_body_ratio = effective_min_body_ratio / scaler
+            avg_range_val = (range1 + range2 + range3) / 3.0
+            if avg_range_val > p["min_range"]:
+                lo, hi = p["body_atr_bounds"]
+                if hi < lo: lo, hi = hi, lo
+                raw_scaler = p["body_atr_alpha"] * (atr / avg_range_val)
+                scaler = max(lo, min(hi, raw_scaler))
+                effective_min_body_ratio = effective_min_body_ratio / scaler
 
-        if effective_min_body_ratio is not None:
-            for b, r in zip([body1, body2, body3], ranges):
-                if r is None:
-                    body_ratios_ok = False; break
+        # Check per crow
+        for (o, c, h, l, b, r) in candle_data:
+            # Shadow Ratios
+            upper = self.get_upper_shadow(o, h, c)
+            lower = self.get_lower_shadow(o, l, c)
+            
+            if p["max_upper_shadow_to_body"] is not None:
+                if (upper / b) > p["max_upper_shadow_to_body"]: 
+                    return PatternResult(is_pattern=False)
+            
+            if p["max_lower_shadow_to_body"] is not None:
+                if (lower / b) > p["max_lower_shadow_to_body"]: 
+                    return PatternResult(is_pattern=False)
+            
+            # Body vs Range (using adaptive ratio)
+            if effective_min_body_ratio is not None:
                 if (b / r) < (effective_min_body_ratio * (1 - p["float_tolerance"])):
-                    body_ratios_ok = False; break
+                    return PatternResult(is_pattern=False)
 
-        # 8) ATR absolute check
-        atr_bodies_ok = True
+        # 8) ATR Absolute Check
         if atr and p["min_body_vs_atr"]:
             threshold = p["min_body_vs_atr"] * atr
-            atr_bodies_ok = (body1 >= threshold) and (body2 >= threshold) and (body3 >= threshold)
-
-        # Final decision
-        conditions = [
-            lower_closes_ok, lower_lows_ok, open_within_ok,
-            strong_vs_avg_ok, first_candle_ok, vol_ok,
-            shadows_ok, atr_bodies_ok, body_ratios_ok
-        ]
-        if not all(conditions):
-            return PatternResult(is_pattern=False)
+            if not ((body1 >= threshold) and (body2 >= threshold) and (body3 >= threshold)):
+                return PatternResult(is_pattern=False)
 
         metrics = {
             "avg_body": avg_body,
-            "lower_lows": lower_lows_ok,
+            "lower_lows": True,
             "vol_trend": "increasing" if (v1 and v3 and v3 > v1) else "mixed",
             "effective_min_body_ratio": effective_min_body_ratio,
             "params": {**self.defaults, "atr": atr, **overrides},
         }
 
         return PatternResult(
-            is_pattern=True,
-            name="Three Black Crows",
-            bias="short",  # unified terminology
-            metrics=metrics
+            is_pattern=True, name="Three Black Crows", bias="short", metrics=metrics
         )

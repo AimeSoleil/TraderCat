@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 from tradercat.strategy.candle_pattern.pattern_detector import PatternResult, SingleCandlePatternDetector
 
 class DragonflyDojiDetector(SingleCandlePatternDetector):
@@ -73,35 +73,32 @@ class DragonflyDojiDetector(SingleCandlePatternDetector):
     def detect(
         self, 
         open_: float, high: float, low: float, close: float, 
-        *, 
-        atr: Optional[float] = None, 
+        volume: Optional[float] = None,      
         prev_close: Optional[float] = None, 
         prev_low: Optional[float] = None,   
-        vol: Optional[float] = None,        
         prev_vol: Optional[float] = None,   
+        *, 
+        atr: Optional[float] = None, 
         **overrides
     ) -> PatternResult:
-        p = {**self.defaults, **overrides}
+        p: Dict[str, Any] = {**self.defaults, **overrides}
         
-        # Basic Data Validation
-        if any(x is None for x in (open_, high, low, close)) or high < low:
-            return PatternResult(is_pattern=False)
-
-        price_range = high - low
+        # Hygiene
+        price_range = self.get_range(high, low)
         if price_range <= p["min_range"]:
             return PatternResult(is_pattern=False)
 
-        # Calculate Components
-        body = abs(close - open_)
-        upper_shadow = max(0.0, high - max(open_, close))
-        lower_shadow = max(0.0, min(open_, close) - low)
+        # Calculate Components using Base Class Helpers
+        body = self.get_body(open_, close)
+        upper_shadow = self.get_upper_shadow(open_, high, close)
+        lower_shadow = self.get_lower_shadow(open_, low, close)
 
         body_ratio = body / price_range
         upper_ratio = upper_shadow / price_range
         lower_ratio = lower_shadow / price_range
 
         # ATR Scaling (Adaptive Strictness)
-        # If volatility (ATR) is high, we allow slightly larger bodies.
+        # If volatility (ATR) is high, we allow slightly larger bodies (noise tolerance).
         effective_body_ratio_max = p["body_ratio_max"]
         atr_scaler = None
         if atr and atr > 0:
@@ -120,32 +117,44 @@ class DragonflyDojiDetector(SingleCandlePatternDetector):
         lower_ok = lower_ratio >= (p["lower_shadow_min_ratio"] * (1 - p["float_tolerance"]))
         if atr and p["min_lower_vs_atr_ratio"]:
             lower_ok = lower_ok and (lower_shadow >= (p["min_lower_vs_atr_ratio"] * atr) * (1 - p["float_tolerance"]))
+        
         if p["require_lower_shadow"]:
-            lower_ok = lower_ok and (lower_shadow > 0.0)
+            # Sanity check if ratio is met but shadow is zero (impossible mathematically if range > 0, but safe)
+            lower_ok = lower_ok and (lower_shadow > p["min_range"])
 
         # 3. Upper Shadow Check (Must be tiny - Close near High)
         upper_ok = upper_ratio <= (p["upper_shadow_max_ratio"] * (1 + p["float_tolerance"]))
         if atr and p["max_upper_vs_atr_ratio"]:
             upper_ok = upper_ok and (upper_shadow <= (p["max_upper_vs_atr_ratio"] * atr) * (1 + p["float_tolerance"]))
+        
         if p["require_upper_shadow"]:
-            upper_ok = upper_ok and (upper_shadow > 0.0)
+            if upper_shadow <= p["min_range"]:
+                upper_ok = False
 
         # 4. Gap Check (Bear Trap)
         gap_ok = True
         if p["require_gap_down"]:
-            if prev_close is None or open_ >= (prev_close * (1 - p["float_tolerance"])):
+            # Strict mode: fail if data missing
+            if prev_close is None:
+                gap_ok = False
+            elif not (open_ < (prev_close * (1 - p["float_tolerance"]))):
                 gap_ok = False
 
         # 5. Volume Check (Capitulation)
         vol_ok = True
         if p["require_high_volume"]:
-            if vol is None or prev_vol is None or vol <= prev_vol:
+            # Strict mode: fail if data missing
+            if volume is None or prev_vol is None:
+                vol_ok = False
+            elif volume <= prev_vol:
                 vol_ok = False
 
         # 6. New Low Check (Bottom Picking)
         new_low_ok = True
         if p["require_new_low"]:
-            if prev_low is None or low >= prev_low:
+            if prev_low is None:
+                new_low_ok = False
+            elif not (low < prev_low):
                 new_low_ok = False
 
         is_pattern = body_ok and lower_ok and upper_ok and gap_ok and vol_ok and new_low_ok
@@ -160,7 +169,7 @@ class DragonflyDojiDetector(SingleCandlePatternDetector):
             "effective_body_ratio_max": effective_body_ratio_max,
             "atr_scaler": atr_scaler,
             "gap_down": (open_ < prev_close) if prev_close else None,
-            "vol_increase": (vol > prev_vol) if (vol and prev_vol) else None,
+            "vol_increase": (volume > prev_vol) if (volume and prev_vol) else None,
             "new_low": (low < prev_low) if prev_low else None,
             "params": {**self.defaults, "atr": atr, **overrides},
         }

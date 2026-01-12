@@ -82,51 +82,52 @@ class TweezerTopDetector(DoubleCandlePatternDetector):
         self,
         o1: float, c1: float,
         o2: float, c2: float,
+        h1: float, l1: float,  # Mandatory
+        h2: float, l2: float,  # Mandatory
+        v1: Optional[float] = None, 
+        v2: Optional[float] = None,
         *,
-        h1: float, l1: float, h2: float, l2: float,     
-        v1: Optional[float] = None, v2: Optional[float] = None,
         atr: Optional[float] = None,
         **overrides
     ) -> PatternResult:
-        p = {**self.defaults, **overrides}
+        p: Dict[str, Any] = {**self.defaults, **overrides}
 
-        # Hygiene checks
-        if any(x is None for x in (o1, h1, l1, c1, o2, h2, l2, c2)):
-            return PatternResult(is_pattern=False)
-        if h1 < l1 or h2 < l2:
-            return PatternResult(is_pattern=False)
-
-        # Candle ranges and bodies
-        range1 = h1 - l1
-        range2 = h2 - l2
+        # 1. Hygiene & Ranges
+        range1 = self.get_range(h1, l1)
+        range2 = self.get_range(h2, l2)
         if range1 <= p["min_range"] or range2 <= p["min_range"]:
             return PatternResult(is_pattern=False)
 
-        body1 = abs(c1 - o1)
-        body2 = abs(c2 - o2)
+        # 2. Logic Check: Roles
+        if p["require_bullish_first"]:
+            if not self.is_bullish(o1, c1):
+                return PatternResult(is_pattern=False)
+        
+        if p["require_bearish_second"]:
+            if self.is_bullish(o2, c2):
+                return PatternResult(is_pattern=False)
 
-        upper_shadow1 = max(0.0, h1 - max(o1, c1))
-        upper_shadow2 = max(0.0, h2 - max(o2, c2))
+        # 3. Body Filters
+        body1 = self.get_body(o1, c1)
+        body2 = self.get_body(o2, c2)
+        
+        if (body1 / range1) < (p["min_body_ratio_first"] * (1 - p["float_tolerance"])):
+            return PatternResult(is_pattern=False)
+            
+        if (body2 / range2) < (p["min_body_ratio_second"] * (1 - p["float_tolerance"])):
+            return PatternResult(is_pattern=False)
 
-        body_ratio1 = body1 / range1
-        body_ratio2 = body2 / range2
+        # 4. Upper shadows (Optional)
+        if p["require_upper_shadow_first"]:
+            if self.get_upper_shadow(o1, h1, c1) <= p["min_range"]:
+                return PatternResult(is_pattern=False)
+                
+        if p["require_upper_shadow_second"]:
+            if self.get_upper_shadow(o2, h2, c2) <= p["min_range"]:
+                return PatternResult(is_pattern=False)
 
-        # 1. Role requirements
-        bullish_first_ok = (c1 > o1) if p["require_bullish_first"] else True
-        bearish_second_ok = (c2 < o2) if p["require_bearish_second"] else True
-
-        # 2. Body filters
-        body_first_ok = (body_ratio1 >= p["min_body_ratio_first"] * (1 - p["float_tolerance"]))
-        body_second_ok = (body_ratio2 >= p["min_body_ratio_second"] * (1 - p["float_tolerance"]))
-
-        # 3. Upper shadows presence (Optional)
-        upper_shadow_first_ok = (upper_shadow1 > 0.0) if p["require_upper_shadow_first"] else True
-        upper_shadow_second_ok = (upper_shadow2 > 0.0) if p["require_upper_shadow_second"] else True
-
-        # 4. Similar Highs (The Core Logic)
+        # 5. Similar Highs (The Core Logic)
         high_diff = abs(h1 - h2)
-
-        # Scale tolerance based on the AVERAGE RANGE of the two candles.
         avg_range = (range1 + range2) / 2.0
         
         # Base tolerance calculation
@@ -137,36 +138,24 @@ class TweezerTopDetector(DoubleCandlePatternDetector):
         if atr is not None and atr > 0.0:
             lo, hi = p["tolerance_scale_bounds"]
             if hi < lo: lo, hi = hi, lo
-            # If ATR is high relative to current range, allow slightly more tolerance
             atr_scaler = p["tolerance_scale_alpha"] * (atr / avg_range)
             atr_scaler = max(lo, min(hi, atr_scaler))
             tol *= atr_scaler
 
-        # Optional hard cap using ATR (Safety net)
-        atr_cap_ok = True
+        # Check: Within Tolerance
+        if high_diff > (tol * (1 + p["float_tolerance"])):
+            return PatternResult(is_pattern=False)
+
+        # Check: ATR Hard Cap (Safety)
         if atr is not None and atr > 0.0 and p["max_high_diff_atr_ratio"]:
-            atr_cap_ok = (high_diff <= (p["max_high_diff_atr_ratio"] * atr) * (1 + p["float_tolerance"]))
+            if high_diff > (p["max_high_diff_atr_ratio"] * atr * (1 + p["float_tolerance"])):
+                return PatternResult(is_pattern=False)
 
-        highs_similar_ok = (high_diff <= tol * (1 + p["float_tolerance"])) and atr_cap_ok
-
-        # 5. Volume Confirmation
-        vol_ok = True
+        # 6. Volume Confirmation
         if p["require_volume_increase"]:
             if v1 is not None and v2 is not None:
-                vol_ok = v2 > v1
-            else:
-                vol_ok = False
-
-        # Final Decision
-        conditions = [
-            bullish_first_ok, bearish_second_ok,
-            body_first_ok, body_second_ok,
-            upper_shadow_first_ok, upper_shadow_second_ok,
-            highs_similar_ok, vol_ok
-        ]
-
-        if not all(conditions):
-            return PatternResult(is_pattern=False)
+                if v2 <= v1:
+                    return PatternResult(is_pattern=False)
 
         metrics: Dict[str, Any] = {
             "high_diff": high_diff,
