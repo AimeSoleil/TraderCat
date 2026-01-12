@@ -54,6 +54,11 @@ symbols: [
   # --- Physical AI & Robotics ---
   "SYM",    # Symbotic [Warehouse Automation/Robotics]
   "PATH",   # UiPath [AI Agents/Automation]
+  "TER",    # Teradyne [Universal Robots/Cobots Market Leader]
+  "SERV",   # Serve Robotics [Last Mile Delivery / NVDA Backed / High Beta]
+  "AUR",    # Aurora Innovation [Autonomous Trucking AI]
+  "ZBRA",   # Zebra Tech [Machine Vision & Autonomous Warehouse Units]
+  "ROK",    # Rockwell Automation [Industrial IoT & Smart Manufacturing]
 
   # ==============================================================================
   # 3. SOFTWARE, SECURITY & DATA
@@ -123,7 +128,7 @@ symbols: [
   "JPM",    # JPMorgan [Bank Leader]
   "GS",     # Goldman Sachs [Trading Volatility]
   "AXP",    # American Express [Spend Data]
-  "V",      # Visa
+  "V"      # Visa
   "MA",     # Mastercard
   "BX",     # Blackstone [Private Equity]
   "BRK-B",  # Berkshire Hathaway [Safety]
@@ -175,5 +180,5 @@ symbols: [
   "LIN",    # Linde [Industrial Gas]
   "DJT",    # Trump Media [Event Driven]
   "RDDT",   # Reddit [Data Licensing]
-  "BA",     # Boeing [Turnaround]
+  "BA"     # Boeing [Turnaround]
 ]
