@@ -181,7 +181,7 @@ class MomentumTrendStrategy(TradingStrategy):
     # ---------- Main Logic ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
         if not candles or len(candles) < self.get_lookback_window():
-            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Data insufficient")
+            return SignalModel(date=None, symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Data insufficient")
 
         closes = [float(getattr(c, "close")) for c in candles]
         highs = [float(getattr(c, "high")) for c in candles]

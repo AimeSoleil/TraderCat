@@ -155,7 +155,7 @@ class FibonacciRetracementStrategy(TradingStrategy):
     # ---------- 主逻辑 ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:        
         if not candles or len(candles) < self.get_lookback_window():
-            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="insufficient data")
+            return SignalModel(date=None, symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="insufficient data")
 
         # Data Extraction
         highs = [float(c.high) for c in candles]
