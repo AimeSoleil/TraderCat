@@ -128,7 +128,7 @@ symbols: [
   "JPM",    # JPMorgan [Bank Leader]
   "GS",     # Goldman Sachs [Trading Volatility]
   "AXP",    # American Express [Spend Data]
-  "V"      # Visa
+  "V",      # Visa
   "MA",     # Mastercard
   "BX",     # Blackstone [Private Equity]
   "BRK-B",  # Berkshire Hathaway [Safety]
