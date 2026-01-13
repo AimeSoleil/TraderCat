@@ -1,10 +1,17 @@
 # TraderCat 🐱📈
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/AimeSoleil/TraderCat/graphs/commit-activity)
+
 **TraderCat** is a robust, asynchronous quantitative trading bot and backtesting framework designed for multi-symbol and multi-strategy execution. It leverages the power of **OpenBB** for market data and provides a flexible architecture for implementing custom trading strategies.
 
 ## 🚀 Features
 
-*   **Multi-Strategy Support**: Run multiple strategies simultaneously (e.g., Bollinger Bands, Candlestick Patterns, Momentum, Sector Rotation).
+*   **Multi-Strategy Support**: Run multiple strategies simultaneously (e.g., Bollinger Breakout, Chart Patterns, Momentum).
+*   **Signal Scoring Engine**: Integrated weighted scoring system to evaluate signal quality based on customizable factors (Volume, Trend Alignment, Volatility Health).
+*   **Advanced Chart Patterns**: Detection of macro price structures (Head & Shoulders, Triangles, Flags) using Pivot Point logic.
 *   **AsyncIO Architecture**: Efficiently process hundreds of symbols concurrently using Python's `asyncio`.
 *   **Modular Design**: Clean separation of concerns between Data, Strategy, Execution, and Notification layers.
 *   **Backtesting Engine**: Built-in framework to test strategies against historical data.
@@ -25,7 +32,9 @@ TraderCat/
 │       ├── execution/       # Trade Execution Logic
 │       ├── logger/          # Logging Configuration
 │       ├── notification/    # Notification Services (Discord)
-│       ├── strategy/        # Trading Strategies & Signal Generators
+│       ├── strategy/        # Trading Strategies
+│       │   ├── chart_pattern/  # OOP Detectors for geometric patterns
+│       │   └── ...
 │       └── utils/           # Helper Utilities
 ├── tests/                   # Unit Tests
 ├── pyproject.toml           # Project Configuration & Dependencies
