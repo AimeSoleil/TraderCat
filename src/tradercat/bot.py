@@ -1,3 +1,4 @@
+import traceback
 from typing import List, Optional
 from tradercat.data.openbb_provider import OpenBBProvider
 from tradercat.logger.logger import get_logger
@@ -103,7 +104,7 @@ class TraderBot:
                 logger.info(f"Strategy {strategy.__class__.__name__} generated signal: {signal.signal} for {symbol}")
                 signals.append(signal)
             except Exception as e:
-                logger.error(f"Error running {strategy.__class__.__name__} on {symbol}: {e}")
+                logger.error(f"Error running {strategy.__class__.__name__} on {symbol}: {traceback.format_exc()}")
 
         # 4. Aggregate & Execute
         final_signals = self._aggregate_signals(signals)
@@ -126,7 +127,7 @@ class TraderBot:
                 signal = strategy.generate_signal()
                 signals.append(signal)
             except Exception as e:
-                logger.error(f"Error running {strategy.__class__.__name__}: {e}")
+                logger.error(f"Error running {strategy.__class__.__name__}: {traceback.format_exc()}")
 
         final_signals = self._aggregate_signals(signals)
         
