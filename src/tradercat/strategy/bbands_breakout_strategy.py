@@ -223,7 +223,7 @@ class BollingerBreakoutStrategy(TradingStrategy):
 
         trend_strength = self._check_trend_and_volatility(
             atr_val_history=atr_history,
-            adx_val_history=None, # Passed None if not explicitly needing separate ADX check logic inside helper
+            adx_val_history=adx_history,
             price_history=closes,
             window=100,
             mode='trend',
@@ -299,7 +299,12 @@ class BollingerBreakoutStrategy(TradingStrategy):
 
         # --- Exit Planning ---
         if result and result.signal != "hold":
-            planner = ExitPlanner(highs, lows, current_atr, close)
+            planner = ExitPlanner(
+                highs=highs,
+                lows=lows,
+                atr=current_atr,
+                close_price=close
+            )
             plan = planner.make_exit_plan(result.signal)
             
             # Dynamic Stop Loss based on Band

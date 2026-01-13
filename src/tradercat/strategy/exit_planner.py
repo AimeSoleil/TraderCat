@@ -44,7 +44,7 @@ class ExitPlanner:
             return plan
 
         # Slice highs and lows based on lookback
-        lookback = self.atr_period
+        lookback = self.atr_period if self.atr_period is not None else 14
         highs_slice = self.highs[-lookback:] if len(self.highs) >= lookback else self.highs
         lows_slice = self.lows[-lookback:] if len(self.lows) >= lookback else self.lows
 

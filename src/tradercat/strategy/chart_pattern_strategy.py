@@ -239,7 +239,13 @@ class ChartPatternStrategy(TradingStrategy):
         
         # Only generating exit plan if signal is valid
         if score_res.signal != "hold":
-            plan = ExitPlanner(highs, lows, curr_atr, close).make_exit_plan(best_p.bias)
+            plan = ExitPlanner(
+                highs=highs,
+                lows=lows,
+                atr=curr_atr,
+                close_price=close
+            ).make_exit_plan(best_p.bias)
+
             plan["stop_loss"] = best_p.stop
             plan["take_profit"] = best_p.target
             details["plan"] = plan
