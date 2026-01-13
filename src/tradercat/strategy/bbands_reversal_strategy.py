@@ -300,7 +300,7 @@ class BBandsReversalStrategy(TradingStrategy):
             required_factors=self.support_scoring_factors(),
             # We enforce that a pattern MUST exist for a reversal trade
             determined_factors=[FactorName.BB_REVERSAL_CANDLE],
-            is_volatility_ok=True # We used trend_config.signal via Factor 2 already
+            is_volatility_ok=bool(trend_config.volatility.get('signal', True))
         )
         
         result = engine.compute_score(factors, side=side_bias)

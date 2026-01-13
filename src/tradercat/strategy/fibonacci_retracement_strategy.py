@@ -320,7 +320,7 @@ class FibonacciRetracementStrategy(TradingStrategy):
             base_threshold=self.score_threshold,
             required_factors=self.support_scoring_factors(),
             determined_factors=[FactorName.FIB_ZONE_CONFIRM],
-            is_volatility_ok=trend_strength.volatility.get('signal', True)
+            is_volatility_ok=bool(trend_strength.volatility.get('signal', True))
         )
         
         result: ScoringResult = engine.compute_score(factors, side=impulse_type)

@@ -259,7 +259,7 @@ class DivergenceStrategy(TradingStrategy):
                     base_threshold=self.score_threshold,
                     required_factors=[FactorName.DIVERGENCE],
                     determined_factors=[FactorName.DIVERGENCE],
-                    is_volatility_ok=trend_strength.volatility.get('signal', True)
+                    is_volatility_ok=bool(trend_strength.volatility.get('signal', True))
                 )
                 
                 res: ScoringResult = engine.compute_score(factors, side=side)

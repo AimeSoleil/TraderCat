@@ -1,6 +1,5 @@
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any
 import statistics
-import math
 
 from tradercat.strategy.exit_planner import ExitPlanner
 from tradercat.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
@@ -302,11 +301,11 @@ class MomentumTrendStrategy(TradingStrategy):
             base_threshold=self.score_threshold, 
             required_factors=self.support_scoring_factors(),
             determined_factors=[FactorName.MOMENTUM_CONFIRM],
-            is_volatility_ok=trend_config.volatility.get('signal', True)
+            is_volatility_ok=bool(trend_config.volatility.get('signal', True))
         )
         
         side = "long" if long_cond else "short" if short_cond else "neutral"
-        result: ScoringResult = engine.compute_score(factors, side=side)
+        result: ScoringResult = engine.compute_score(factors=factors, side=side)
 
         if result and result.signal != 'hold':
             planner = ExitPlanner(highs=highs, lows=lows, atr=current_atr_val, close_price=curr_close)

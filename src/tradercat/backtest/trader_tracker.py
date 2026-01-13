@@ -17,11 +17,13 @@ class TradeTracker:
 
     def execute(self, signal_model: SignalModel, price: float, index: int):
         action = signal_model.signal.lower()
-        
+
         # Handle date formatting safely
         date_str = signal_model.date
         if isinstance(date_str, (datetime, pd.Timestamp)):
             date_str = date_str.strftime("%Y-%m-%d")
+
+        logger.info(f"[{date_str}]: Get signal for {self.symbol} at price {price}: {signal_model}\n")
 
         # --- BUY LOGIC ---
         if action == "buy":

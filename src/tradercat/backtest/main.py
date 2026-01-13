@@ -8,6 +8,8 @@ from typing import List, Dict
 from datetime import datetime
 from tabulate import tabulate
 
+from tradercat.strategy.chart_pattern_strategy import ChartPatternStrategy, make_chart_pattern_presets
+
 # Add project root
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
@@ -52,8 +54,9 @@ class BacktestConfig:
         # "BBBreakout": ["swing"],
         # "BBReversal": ["swing"],
         # "Divergence": ["swing"],
-        "ReversalCandle": ["swing"],
+        # "ReversalCandle": ["swing"],
         # "Fibonacci": ["swing"],
+        "ChartPattern": ["swing"],
         # "Momentum": ["swing"],
         
         # --- Portfolio Strategies ---
@@ -92,6 +95,7 @@ def setup_registry() -> StrategyRegistry:
     registry.register("Divergence", DivergenceStrategy, make_divergence_presets, "single")
     registry.register("ReversalCandle", CandlestickReversalStrategy, make_candlestick_reversal_presets, "single")
     registry.register("Fibonacci", FibonacciRetracementStrategy, make_fibonacci_presets, "single")
+    registry.register("ChartPattern", ChartPatternStrategy, make_chart_pattern_presets, "single")
     registry.register("Momentum", MomentumTrendStrategy, make_momentum_presets, "single")
     
     # Register Portfolio Strategies

@@ -1,6 +1,7 @@
 from typing import List, Optional
 from tradercat.data.openbb_provider import OpenBBProvider
 from tradercat.logger.logger import get_logger
+from tradercat.strategy.chart_pattern_strategy import ChartPatternStrategy, make_chart_pattern_presets
 from tradercat.strategy.signal_model import SignalModel
 from tradercat.strategy.strategy_presets import StrategyPreset
 
@@ -40,7 +41,7 @@ class StrategyFactory:
     """
     @staticmethod
     def get_single_asset_strategies(data_provider: OpenBBProvider, preset: StrategyPreset = "swing") -> List:
-        # [FIX] Explicitly name 'data_provider' to avoid collision with positional args
+        # Explicitly name 'data_provider' to avoid collision with positional args
         # if the strategy class definition changed.
         return [
             BollingerBreakoutStrategy(data_provider=data_provider, **make_bbands_breakout_presets()[preset]),
@@ -48,6 +49,7 @@ class StrategyFactory:
             DivergenceStrategy(data_provider=data_provider, **make_divergence_presets()[preset]),
             CandlestickReversalStrategy(data_provider=data_provider, **make_candlestick_reversal_presets()[preset]),
             FibonacciRetracementStrategy(data_provider=data_provider, **make_fibonacci_presets()[preset]),
+            ChartPatternStrategy(data_provider=data_provider, **make_chart_pattern_presets()[preset]),
             MomentumTrendStrategy(data_provider=data_provider, **make_momentum_presets()[preset]),
         ]
 

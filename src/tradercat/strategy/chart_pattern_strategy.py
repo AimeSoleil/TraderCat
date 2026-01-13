@@ -1,0 +1,308 @@
+from typing import List, Dict, Any, Optional
+from tradercat.strategy.trading_strategy import TradingStrategy
+from tradercat.strategy.signal_model import SignalModel
+from tradercat.strategy.exit_planner import ExitPlanner
+from tradercat.strategy.signal_scorer import Factor, FactorName, ScoringEngine
+from tradercat.logger.logger import get_logger
+
+from tradercat.strategy.chart_pattern.pivot_utils import PivotFinder
+from tradercat.strategy.chart_pattern.reversal import (
+    DoubleBottomDetector,
+    DoubleTopDetector,
+    HeadAndShouldersTopDetector,
+    HeadAndShouldersBottomDetector,
+    TripleBottomDetector,
+)
+from tradercat.strategy.chart_pattern.continuation import (
+    AscendingTriangleDetector,
+    DescendingTriangleDetector,
+    BullFlagDetector,
+)
+from tradercat.strategy.chart_pattern.base_detector import ChartData, PatternResult
+
+logger = get_logger(__name__)
+
+
+class ChartPatternStrategy(TradingStrategy):
+    """
+    Chart Pattern Strategy (Macro Structure) - Refactored OOP.
+    Detects classic geometric price patterns based on Pivots.
+    Integrated with ScoringEngine for quality assessment.
+    """
+
+    def __init__(
+        self,
+        # Pivot Config
+        pivot_left_bars: int = 5,
+        pivot_right_bars: int = 5,
+        # Pattern Config
+        price_similarity_threshold: float = 0.03,
+        slope_tolerance: float = 0.1,
+        # Confirmation
+        require_volume_breakout: bool = True,
+        # Indicators
+        atr_period: int = 14,
+        adx_period: int = 14,
+        ema_trend_period: int = 200, 
+        volatility_lookback_window: int = 20, # <--- [NEW] Configurable
+        # Scoring
+        score_threshold: float = 0.6,
+        weights: Optional[Dict[str, float]] = None,
+
+        data_provider: Any = None,
+    ):
+        self.require_vol = require_volume_breakout
+        self.atr_period = int(atr_period)
+        self.adx_period = int(adx_period)
+        self.ema_trend_period = int(ema_trend_period)
+        self.vol_lookback = int(volatility_lookback_window) # <--- [NEW]
+        self.score_threshold = float(score_threshold)
+        self.provider = data_provider
+
+        self.atr_field = f"ATRr_{self.atr_period}"
+        self.adx_field = f"ADX_{self.adx_period}"
+        self.ema_trend_field = f"close_EMA_{self.ema_trend_period}"
+
+        # Default Weights (Balanced Base)
+        default_weights = {
+            "pattern_quality": 0.30, 
+            "volume_confirm": 0.25,  
+            "trend_alignment": 0.20,
+            "trend_strength": 0.15,
+            "volatility_ok": 0.10
+        }
+        self.weights = {**default_weights, **(weights or {})}
+
+        # Initialize Helper
+        self.pivot_finder = PivotFinder(pivot_left_bars, pivot_right_bars)
+
+        # Initialize Detectors
+        args = (price_similarity_threshold, slope_tolerance)
+        self.detectors = [
+            # Reversals
+            DoubleBottomDetector(*args),
+            DoubleTopDetector(*args),
+            HeadAndShouldersTopDetector(*args),
+            HeadAndShouldersBottomDetector(*args),
+            TripleBottomDetector(*args),
+            # Continuations
+            AscendingTriangleDetector(*args),
+            DescendingTriangleDetector(*args),
+            # Special
+            BullFlagDetector(*args),
+        ]
+
+    def get_name(self) -> str:
+        return "ChartPatterns"
+
+    def get_lookback_window(self) -> int:
+        return max(150, self.ema_trend_period + 20)
+
+    def support_scoring_factors(self) -> List[FactorName]:
+        return [
+            FactorName.CHART_PATTERN_DETECTED,
+            FactorName.VOLUME_CONFIRM,
+            FactorName.EMA_ALIGNMENT,
+            FactorName.TREND_STRENGTH,
+            FactorName.VOLATILITY_HEALTH
+        ]
+
+    def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
+        if not candles or len(candles) < self.get_lookback_window():
+            return SignalModel(date=None, symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Insufficient Data")
+
+        # 1. Prepare Raw Data
+        highs = [float(c.high) for c in candles]
+        lows = [float(c.low) for c in candles]
+        closes = [float(c.close) for c in candles]
+        close = closes[-1]
+        vols = [float(c.volume) for c in candles if c.volume]
+        dates = [c.date for c in candles]
+        
+        # Indicators & Helper Tools
+        try:
+            atr_series = self.provider.get_indicator("atr", candles, {"length": self.atr_period})
+            curr_atr = getattr(atr_series[-1], self.atr_field, 0.0) if atr_series else 0.0
+            
+            # Context: EMA 200
+            ema_series = self.provider.get_indicator("ema", candles, {"length": self.ema_trend_period})
+            curr_ema_trend = getattr(ema_series[-1], self.ema_trend_field, 0.0) if ema_series else 0.0
+            
+            # --- [NEW] Use Unified Trend & Volatility Check ---
+            # This handles ADX calculation and volatility health internally
+            adx_series = self.provider.get_indicator("adx", candles, {"length": self.adx_period})
+            
+            trend_strength = self._check_trend_and_volatility(
+                atr_val_history=[getattr(x, self.atr_field, 0) for x in atr_series],
+                adx_val_history=[getattr(x, self.adx_field, 0) for x in adx_series],
+                price_history=closes,
+                window=self.vol_lookback,     # <--- [UPDATED] Use configured proper window
+                mode='trend'   
+            )
+            
+            is_trend_strong = bool(trend_strength.trend.get('signal', False))   
+            is_vol_healthy = bool(trend_strength.volatility.get('signal', False))
+            
+        except Exception as e:
+            logger.error(f"Error checking trend/vol: {e}")
+            curr_atr = 0.0
+            curr_ema_trend = 0.0
+            is_trend_strong = False
+            is_vol_healthy = True # Assume innocent until proven guilty? Or cautious False.
+
+        # 2. Identify Pivots
+        p_highs, p_lows = self.pivot_finder.find_pivots(highs, lows)
+        
+        # 3. Create Context Object
+        chart_data = ChartData(
+            current_close=close,
+            pivots_high=p_highs,
+            pivots_low=p_lows,
+            highs_history=highs,
+            lows_history=lows,
+            atr=curr_atr
+        )
+        
+        patterns: List[PatternResult] = []
+        
+        # 4. Pattern Detection
+        for detector in self.detectors:
+            if result := detector.detect(chart_data):
+                patterns.append(result)
+
+        if not patterns:
+            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0)
+            
+        best_p = patterns[-1]
+        
+        # 5. Factor Calculation
+        
+        # Volume Z-Score
+        vol_breakout = self._check_volume_zscore(vols, window=20, threshold=2.0)
+        
+        # Trend Alignment (EMA 200)
+        is_aligned = (best_p.bias == "long" and close > curr_ema_trend) or \
+                    (best_p.bias == "short" and close < curr_ema_trend)
+
+        # 6. Scoring Engine
+        factors = [
+            Factor(
+                FactorName.CHART_PATTERN_DETECTED, 
+                f"{best_p.name}", 
+                self.weights["pattern_quality"], 
+                True
+            ),
+            Factor(
+                FactorName.VOLUME_CONFIRM, 
+                "Volume Surge", 
+                self.weights["volume_confirm"], 
+                vol_breakout
+            ),
+            Factor(
+                FactorName.EMA_ALIGNMENT, 
+                "Trend Aligned", 
+                self.weights["trend_alignment"], 
+                is_aligned
+            ),
+            Factor(
+                FactorName.TREND_STRENGTH, 
+                "Strong Trend (ADX)", 
+                self.weights.get("trend_strength", 0.15), 
+                is_trend_strong
+            ),
+            # [NEW] Integrated Volatility Check
+            Factor(
+                FactorName.VOLATILITY_HEALTH, 
+                "Healthy Volatility", 
+                self.weights.get("volatility_ok", 0.10), 
+                is_vol_healthy
+            )
+        ]
+        
+        engine = ScoringEngine(
+            base_threshold=self.score_threshold,
+            required_factors=self.support_scoring_factors(), 
+            determined_factors=[FactorName.CHART_PATTERN_DETECTED],
+            is_volatility_ok=is_vol_healthy # Gatekeeper usage
+        )
+        score_res = engine.compute_score(factors, side=best_p.bias)
+
+        # 7. Construct Result
+        details = {
+            "pattern": best_p.name,
+            "target_price": round(best_p.target, 2),
+            "stop_price": round(best_p.stop, 2),
+            "vol_breakout": vol_breakout,
+            "trend_aligned": is_aligned,
+            "factors": score_res.reasons
+        }
+        
+        # Only generating exit plan if signal is valid
+        if score_res.signal != "hold":
+            plan = ExitPlanner(highs, lows, curr_atr, close).make_exit_plan(best_p.bias)
+            plan["stop_loss"] = best_p.stop
+            plan["take_profit"] = best_p.target
+            details["plan"] = plan
+
+        return SignalModel(
+            symbol=symbol,
+            strategy=self.get_name(),
+            signal=score_res.signal,
+            date=dates[-1],
+            confidence=round(score_res.score, 2),
+            reason=f"{best_p.name} | {', '.join(score_res.reasons) if score_res.reasons else ''}",
+            details=details
+        )
+
+
+def make_chart_pattern_presets() -> Dict[str, Dict[str, Any]]:
+    """
+    Returns preset configurations for ChartPatternStrategy.
+    """
+    return {
+        # Swing Trading:
+        # Designed to capture medium-term moves (days to weeks).
+        # Focus: Explosiveness (Pattern + Volume)
+        "swing": {
+            "pivot_left_bars": 5,
+            "pivot_right_bars": 5,
+            "price_similarity_threshold": 0.03,
+            "slope_tolerance": 0.1,
+            "require_volume_breakout": True,
+            "score_threshold": 0.65, 
+            "ema_trend_period": 200,
+            "atr_period": 14,
+            "adx_period": 14,
+            "volatility_lookback_window": 20, # Standard monthly check
+            "weights": {
+                "pattern_quality": 0.30,  # 1. The Setup (Clear Pattern)
+                "volume_confirm": 0.30,   # 2. The Trigger (Must have energy)
+                "trend_alignment": 0.15,  # 3. Context (Nice to have, but counter-trend swings exist)
+                "trend_strength": 0.15,   # 4. Momentum (ADX)
+                "volatility_ok": 0.10     # 5. Environment (Not dead)
+            }
+        },
+        
+        # Position Trading:
+        # Designed for macro trend changes or long-term continuation.
+        # Focus: Structure & Location (Trend Alignment + Strength)
+        "position": {
+            "pivot_left_bars": 10,
+            "pivot_right_bars": 10,
+            "price_similarity_threshold": 0.05,
+            "slope_tolerance": 0.05,
+            "require_volume_breakout": True,
+            "score_threshold": 0.70, 
+            "ema_trend_period": 200,
+            "adx_period": 14,
+            "atr_period": 14,
+            "volatility_lookback_window": 50, # Longer window for macro vol
+            "weights": {
+                "pattern_quality": 0.20,  # 1. The Setup (Structure only)
+                "volume_confirm": 0.20,   # 2. Confirmation
+                "trend_alignment": 0.30,  # 3. Context IS KING (Never trade Position against EMA200)
+                "trend_strength": 0.20,   # 4. Momentum (Need strong ADX to sustain months)
+                "volatility_ok": 0.10     # 5. Environment
+            }
+        },
+    }

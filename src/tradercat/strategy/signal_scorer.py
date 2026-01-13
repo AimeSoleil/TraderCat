@@ -22,6 +22,9 @@ class FactorName(Enum):
     REVERSAL_CANDLE = "reversal_candle"
     TREND_DIRECTION_CONFIRM = "trend_direction_confirm"
 
+    # chart_pattern_strategy
+    CHART_PATTERN_DETECTED = "chart_pattern_detected"
+
     # divergence_strategy
     DIVERGENCE = "divergence"
 
@@ -34,6 +37,7 @@ class FactorName(Enum):
 
     # Common
     TREND_STRENGTH = "trend_strength"
+    VOLATILITY_HEALTH = "volatility_health"
     VOLUME_CONFIRM = "volume_confirm"
     EMA_ALIGNMENT = "ema_alignment"
     MOMENTUM_CONFIRM = "momentum_confirm"
