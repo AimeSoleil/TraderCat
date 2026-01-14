@@ -95,15 +95,15 @@ class PatternDetectorsOrchestrator:
         self.bullish_single: List[SingleCandlePatternDetector] = [
             HammerDetector(require_volume_increase=True),
             DragonflyDojiDetector(require_high_volume=True),
-            StandardDojiDetector(),
-            SpinningTopDetector(),
+            # StandardDojiDetector(),
+            # SpinningTopDetector(),
         ]
 
         self.bearish_single: List[SingleCandlePatternDetector] = [
             ShootingStarDetector(require_high_volume=True),
             GravestoneDojiDetector(require_high_volume=True),
-            StandardDojiDetector(),
-            SpinningTopDetector(),
+            # StandardDojiDetector(),
+            # SpinningTopDetector(),
         ]
 
     # -------------------------
