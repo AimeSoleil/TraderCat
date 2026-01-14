@@ -136,19 +136,23 @@ class ChartPatternStrategy(TradingStrategy):
                 atr_val_history=[getattr(x, self.atr_field, 0) for x in atr_series],
                 adx_val_history=[getattr(x, self.adx_field, 0) for x in adx_series],
                 price_history=closes,
-                window=self.vol_lookback,     # <--- [UPDATED] Use configured proper window
-                mode='trend'   
+                window=self.vol_lookback,
+                mode='trend',
+                ignore_volatility=True,       # [KEY CHANGE] Just want ADX status
+                trend_quantiles=[0.5, 0.25]
             )
             
-            is_trend_strong = bool(trend_strength.trend.get('signal', False))   
-            is_vol_healthy = bool(trend_strength.volatility.get('signal', False))
+            raw_trend_signal = trend_strength.signal   
             
+            # Use the volatility component independently for the "Environment" score
+            is_vol_healthy = trend_strength.volatility.get('signal', False)
+
         except Exception as e:
             logger.error(f"Error checking trend/vol: {e}")
             curr_atr = 0.0
             curr_ema_trend = 0.0
-            is_trend_strong = False
-            is_vol_healthy = True # Assume innocent until proven guilty? Or cautious False.
+            raw_trend_signal = False
+            is_vol_healthy = True 
 
         # 2. Identify Pivots
         p_highs, p_lows = self.pivot_finder.find_pivots(highs, lows)
@@ -175,10 +179,25 @@ class ChartPatternStrategy(TradingStrategy):
             
         best_p = patterns[-1]
         
+        # [CRITICAL LOGIC] Adapt Context based on Pattern Type
+        # Continuations (Flags, Triangles) -> Require Trend Strength
+        # Reversals (Bottoms, Tops) -> Ignore Trend Strength (or accept weak trend)
+        is_continuation = "Flag" in best_p.name or "Triangle" in best_p.name
+        
+        if is_continuation:
+            is_trend_good = raw_trend_signal # Must have trend
+        else:
+            is_trend_good = True # Reversals don't need strong trend props
+        
         # 5. Factor Calculation
         
-        # Volume Z-Score
-        vol_breakout = self._check_volume_zscore(vols, window=20, threshold=2.0)
+        # Volume Z-Score Logic: Check for a valid breakout volume
+        if self.require_vol:
+            # We check a small window around the breakout
+            _, vol_breakout_z = self._check_volume_zscore(vols, 3, 2.0)
+            vol_breakout = (vol_breakout_z is not None and vol_breakout_z > 2.0)
+        else:
+            vol_breakout = True # If configured to ignore volume
         
         # Trend Alignment (EMA 200)
         is_aligned = (best_p.bias == "long" and close > curr_ema_trend) or \
@@ -206,9 +225,9 @@ class ChartPatternStrategy(TradingStrategy):
             ),
             Factor(
                 FactorName.TREND_STRENGTH, 
-                "Strong Trend (ADX)", 
+                "Context (Trend/Struct)", 
                 self.weights.get("trend_strength", 0.15), 
-                is_trend_strong
+                is_trend_good
             ),
             # [NEW] Integrated Volatility Check
             Factor(
@@ -223,7 +242,8 @@ class ChartPatternStrategy(TradingStrategy):
             base_threshold=self.score_threshold,
             required_factors=self.support_scoring_factors(), 
             determined_factors=[FactorName.CHART_PATTERN_DETECTED],
-            is_volatility_ok=is_vol_healthy # Gatekeeper usage
+            is_volatility_ok=is_vol_healthy, # Gatekeeper usage
+            volatility_penalty=0.05
         )
         score_res = engine.compute_score(factors, side=best_p.bias)
 

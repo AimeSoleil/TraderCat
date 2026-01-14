@@ -193,13 +193,21 @@ class CandlestickReversalStrategy(TradingStrategy):
             elif chosen_res == res_bear: effective_bias = "short"
 
         # ---------- 辅助确认 ----------
+        # LOGIC CHECK:
+        # We want to buy dips in a HEALTHY trend.
+        # If trend is too weak (Choppy), patterns fail.
+        # If trend is too strong (Parabolic), dips are scary but valid.
+        # mode='trend' is CORRECT here (unlike BBands Reversal).
+        
         trend_strength = self._check_trend_and_volatility(
             atr_val_history=atr_val_history,
             adx_val_history=adx_val_history,
             price_history=closes,
             window=100,
-            mode='trend', # We want TRENDING markets to buy dips in
-            trend_quantiles=[0.6, 0.4]
+            mode='trend', 
+            # [OPTIMIZATION] Slightly relaxed quantiles to catch early trend pullbacks
+            # We rely on EMA alignment (trend_direction_ok) for the main filter.
+            trend_quantiles=[0.5, 0.25] 
         )
 
         recent_window = max(1, min(self.vol_zscore_window, len(vols)))

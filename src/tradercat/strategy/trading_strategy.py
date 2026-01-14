@@ -366,43 +366,145 @@ class TradingStrategy(ABC):
         adx_val_history: List[Optional[float]],
         price_history: List[Optional[float]],
         window: int = 100,
-        mode: Literal["trend", "reversal", "exhaustion"] = "trend",
-        # parameters for trend
+        mode: Literal["trend", "reversal", "exhaustion", "breakout"] = "trend",
+        # parameters for trend/adx
         trend_quantiles: List[float] = [0.7, 0.3],
+        # parameters for volatility
+        vol_quantile: float = 0.8, 
+        ignore_volatility: bool = False, 
         # parameters for exhaustion detection
         adx_peak_window: int = 20,
         adx_decline_window: int = 5,
         adx_min_peak_prominence: float = 2.0,
     ) -> TrendStrength:
         """
-        综合判断市场状态：'trend', 'reversal', 'exhaustion'
-        - trend: strong ADX + high volatility
-        - reversal: weak ADX + high volatility (good for mean-reversion if vol high? depends on strategy)
-        - exhaustion: ADX peaked then rolled over + volatility spike (fade the exhaustion)
-        Returns TrendStrength dataclass with detailed nested info.
+        Comprehensive market state analysis combining Trend (ADX) and Volatility (ATR).
+        
+        Args:
+            mode (str): Determines the logic flow:
+                - 'trend':      Trend Following / Momentum
+                - 'reversal':   Mean Reversion / Counter-Trend
+                - 'breakout':   Explosive Moves / Waking Up
+                - 'exhaustion': Trend Climax / Reversal setup
+            ignore_volatility (bool): If True, decouples volatility from the signal.
+                - Important for Momentum (where we like low volatility grinds).
+                - Important for Ranging (where we accept low volatility chopping).
+            vol_quantile (float): Percentile threshold to define "High Volatility".
+        
+        ---------------------------------------------------------
+        MODE LOGIC EXPLANATION:
+        ---------------------------------------------------------
+        
+        1. mode='trend' (Trend Following)
+           * Logic: Requires Strong Trend (High ADX).
+           * Volatility:
+            - Default: Requires High Volatility (Strong ADX + High Vol).
+            - With ignore_volatility=True: Accepts ANY volatility. Best for smooth momentum (The "Grind").
+           * Use Case: Momentum Strategy, Trend Following.
+
+        2. mode='reversal' (Mean Reversion)
+           * Logic: Requires Weak Trend (Low ADX).
+           * Volatility:
+            - Default: Requires High Volatility. Best for "Catching a Knife" or Climax Reversals.
+            - With ignore_volatility=True: Accepts Low Volatility. Best for "Range Trading" (Box).
+           * Use Case: Bollinger Reversal, RSI Reversion.
+
+        3. mode='breakout' (Breakout)
+           * Logic: Requires Volatility Spike AND (Strong Trend OR Rising ADX Slope).
+           * Specifics: If ADX absolute value is low (e.g., 15) but Slope is Positive, it counts as valid.
+           * Use Case: Bollinger Breakout, Channel Breakout, Squeeze Firing.
+
+        4. mode='exhaustion' (Trend End)
+           * Logic: Requires ADX Rollover (Peaked & Dropped) + High Volatility.
+           * Use Case: Exit signals for Momentum, V-Shape Tops/Bottoms.
+        ---------------------------------------------------------
         """
-        vol_info = self._check_volatility(atr_val_history, price_history, window=window)
-        trend_info = self._check_trend_strength(adx_val_history, window=window, quantiles=trend_quantiles)
+        # 1. Calculate Component Stats
+        vol_info = self._check_volatility(
+            atr_val_history, 
+            price_history, 
+            window=window, 
+            quantile=vol_quantile
+        )
+        
+        trend_info = self._check_trend_strength(
+            adx_val_history, 
+            window=window, 
+            quantiles=trend_quantiles
+        )
+        
+        adx_roll_info = None
+
+        # 2. Combine based on Mode
+        signal = False
+        reason = ""
 
         if mode == "trend":
-            signal = vol_info["signal"] and trend_info["signal"]
-            reason = "Strong trend + high volatility" if signal else "Conditions not met for trend"
+            # Momentum strategies often have LOW volatility (Grind).
+            if ignore_volatility:
+                signal = trend_info["signal"]
+                reason = "Strong trend (Volatility ignored)" if signal else "Trend not strong enough"
+            else:
+                signal = trend_info["signal"] and vol_info["signal"]
+                reason = "Strong trend + High Volatility" if signal else "Conditions not met for Strong Trend (High Vol)"
+
         elif mode == "reversal":
-            # Standard reversal: weak ADX (trend_info False because ADX < dynamic) AND volatility high
-            signal = (not trend_info["signal"]) and vol_info["signal"]
-            reason = "Weak trend + high volatility" if signal else "Conditions not met for reversal"
+            # Reversal Logic: Weak ADX + High Volatility (Panic/Climax)
+            is_weak_trend = (not trend_info["signal"]) 
+            
+            if ignore_volatility:
+                signal = is_weak_trend
+                reason = "Weak/Moderate Trend (Range)" if signal else "Trend too strong for Reversal"
+            else:
+                signal = is_weak_trend and vol_info["signal"]
+                reason = "Weak Trend + High Volatility" if signal else "Conditions not met for Reversal"
+
+        elif mode == "breakout":
+            # [NEW MODE] Breakout Logic:
+            adx_rising = trend_info.get("slope_positive", False)
+            vol_spike = vol_info["signal"]
+            
+            # Logic: Volatility needs to exist (unless ignored), 
+            # AND Momentum must be either established OR waking up (slope > 0).
+            # We strictly require ADX rising if ADX is not already strong.
+            
+            trend_condition = trend_info["signal"] or adx_rising
+
+            if ignore_volatility:
+                signal = trend_condition
+                reason = "Momentum Rising/Strong" if signal else "ADX Flat/Falling"
+            else:
+                signal = vol_spike and trend_condition
+                reason = "Vol Spike + Momentum Rising" if signal else "No Breakout (Low Vol or Flat ADX)"
+
         elif mode == "exhaustion":
             # Exhaustion means ADX peaked then rolled down (adx_roll_info) AND volatility is high
-            adx_roll_info = self._detect_adx_rollover(adx_val_history, peak_window=adx_peak_window, decline_window=adx_decline_window, min_peak_prominence=adx_min_peak_prominence)
-            signal = bool(adx_roll_info.get("signal")) and vol_info["signal"]
-            reason = "ADX rolled over after peak + high volatility (exhaustion)" if signal else "Conditions not met for exhaustion reversal"
-            return TrendStrength(signal=signal, mode=mode, reason=reason, trend=trend_info, volatility=vol_info, adx_rollover=adx_roll_info) 
+            adx_roll_info = self._detect_adx_rollover(
+                adx_val_history, 
+                peak_window=adx_peak_window, 
+                decline_window=adx_decline_window, 
+                min_peak_prominence=adx_min_peak_prominence
+            )
+            
+            if ignore_volatility:
+                signal = bool(adx_roll_info.get("signal"))
+            else:
+                signal = bool(adx_roll_info.get("signal")) and vol_info["signal"]
+                
+            reason = "ADX Rollover (Exhaustion)" if signal else "No exhaustion detected"
+
         else:
             signal = False
-            reason = "Invalid mode"
+            reason = f"Invalid mode: {mode}"
 
-        return TrendStrength(signal=signal, mode=mode, reason=reason, trend=trend_info, volatility=vol_info, adx_rollover=None) 
-
+        return TrendStrength(
+            signal=signal, 
+            mode=mode, 
+            reason=reason, 
+            trend=trend_info, 
+            volatility=vol_info, 
+            adx_rollover=adx_roll_info
+        ) 
     # --- 工具函数 ---
     def _safe_array(self, x: List[Optional[float]]) -> np.ndarray:
         """Convert list to float np.array and coerce None to np.nan."""

@@ -36,7 +36,7 @@ class BBandsReversalStrategy(TradingStrategy):
         score_threshold: float = 0.6,
         # [NEW] Dynamic Weights
         weights: Optional[Dict[str, float]] = None,
-        data_provider=None,
+        data_provider: Any = None,
     ):
         self.bb_period = bb_period
         self.bb_std = bb_std
@@ -168,16 +168,24 @@ class BBandsReversalStrategy(TradingStrategy):
             # Fatal error for this strat
             return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=dates[-1], reason="Indicator Error", confidence=0.0)
 
-        # 判断趋势强度和市场波动 (Reversal Mode: We prefer Low Trend Strength aka Chop/Range)
-        # Use 'reversal' mode so low ADX is scored positively
-        trend_config = self._check_trend_and_volatility(
+        # [MODIFIED LOGIC] Trend & Volatility for REVERSAL
+        # Standard 'reversal' mode in base class demands HIGH volatility.
+        # But BB Reversal is also valid in low-volatility RANGING markets.
+        # So we manually check: "Is Trend Weak?" (ADX not strong).
+        
+        trend_status = self._check_trend_and_volatility(
             atr_val_history=atr_val_history,
             adx_val_history=adx_val_history,
             price_history=closes,
             window=100,
-            mode='reversal', 
+            mode='reversal',            # [KEY CHANGE] Checks: NOT Strong Trend
+            ignore_volatility=True,     # [KEY CHANGE] Range can be low vol, that's fine
             trend_quantiles=[0.6, 0.4]
         )
+        
+        # We want the Trend to be False (Weak/Moderate), NOT Strong.
+        # If trend.signal is True, it means Strong Trend -> BAD for Reversal.
+        is_ranging = not trend_status.trend.get("signal", False)
 
         # 成交量 z-score 确认
         recent_window = max(1, min(self.vol_zscore_window, len(vols)))
@@ -191,13 +199,15 @@ class BBandsReversalStrategy(TradingStrategy):
         # We check Low/High instead of Close to catch "spikes" that reject quickly.
         low_touched_lower = (lows[-1] <= l_curr + touch_threshold)
         high_touched_upper = (highs[-1] >= u_curr - touch_threshold)
+
+        # [FIX] Define near_lower/upper based on touch logic to satisfy _resolve_bias signature
+        # These variables represent "price is in the reversal zone"
+        near_lower = low_touched_lower
+        near_upper = high_touched_upper
         
         # 2. Reversion Check: Did the price CLOSE inside or near the band?
         close_valid_buy = (close > l_curr - current_atr_val)
         close_valid_sell = (close < u_curr + current_atr_val)
-
-        # 3. Middle Band (Riskier, use only as bonus confluence, NOT a trigger)
-        # near_mid_check = (abs(close - m_curr) <= touch_threshold) # Removed from triggers
 
         # 检测拒绝蜡烛
         orchestrator = PatternDetectorsOrchestrator()
@@ -241,8 +251,8 @@ class BBandsReversalStrategy(TradingStrategy):
             rejection_res_bias=rejection_res.bias,
             candidate_buy=candidate_buy,
             candidate_sell=candidate_sell,
-            near_lower=low_touched_lower,
-            near_upper=high_touched_upper
+            near_lower=near_lower,
+            near_upper=near_upper
         )
 
         # 动量确认 (Using Base Class Helper logic)
@@ -260,7 +270,7 @@ class BBandsReversalStrategy(TradingStrategy):
             "adx": round(current_adx_val, 3),
             "rejection_pattern": rejection_res.name,
             "vol_zscore": round(volume_z, 3) if volume_z is not None else 0,
-            "trend_ok": trend_config.signal, # Should refer to signal
+            "is_ranging": is_ranging,
             "momentum_ok": momentum_ok,
         }
 
@@ -274,11 +284,12 @@ class BBandsReversalStrategy(TradingStrategy):
                 candidate_buy or candidate_sell
             ),
             # Factor 2: Market State (Low ADX / Range)
+            # We used our manual 'is_ranging' check instead of raw trend signal
             Factor(
                 FactorName.TREND_STRENGTH, 
                 "Ranging Market (Low ADX)", 
                 self.weights["trend"], 
-                trend_config.signal
+                is_ranging
             ),
             # Factor 3: Volume
             Factor(
@@ -308,7 +319,10 @@ class BBandsReversalStrategy(TradingStrategy):
             required_factors=self.support_scoring_factors(),
             # We enforce that a pattern MUST exist for a reversal trade
             determined_factors=[FactorName.BB_REVERSAL_CANDLE],
-            is_volatility_ok=bool(trend_config.volatility.get('signal', True))
+            # For Reversal, we are lenient on volatility. 
+            # If it's low vol, we don't mind (it's a range).
+            is_volatility_ok=True, # Always True effectively
+            volatility_penalty=0.0 # No penalty for low vol environment
         )
         
         result = engine.compute_score(factors, side=side_bias)

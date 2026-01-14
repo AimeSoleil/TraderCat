@@ -12,11 +12,8 @@ logger = get_logger(__name__)
 class MomentumTrendStrategy(TradingStrategy):
     """
     Momentum Trend Strategy (Production Grade).
-    
-    Core Logic:
-    1. Risk-Adjusted Momentum (Sharpe-like): Find smooth trends.
-    2. Simulated Weekly Trend: Ensure macro alignment.
-    3. Volatility Filter: Avoid choppy regimes.
+    It follows the trend, so it needs Health ADX (Strength), 
+    but NOT necessarily High Volatility (which reduces Sharpe).
     """
 
     def __init__(
@@ -215,14 +212,21 @@ class MomentumTrendStrategy(TradingStrategy):
         ht_slow = self._compute_ema_manual(agg_closes, self.ht_ema_slow)
         ht_ema_ok = (ht_fast is not None and ht_slow is not None)
 
-        # 4. Trend Logic
+        # 4. Trend Logic check
+        # [UPDATED] Momentum needs Strong ADX, but allows Low Volatility (Grind).
+        # We use ignore_volatility=True so we don't punish stable trends.
         trend_config = self._check_trend_and_volatility(
             atr_val_history=atr_val_history,
             adx_val_history=adx_val_history,
             price_history=closes,
             window=100,
-            mode='trend' # We want Strong Trends for Momentum
+            mode='trend',
+            ignore_volatility=True,     # [KEY CHANGE]
+            trend_quantiles=[0.5, 0.25] # Require moderate trendiness
         )
+        
+        # Now .signal contains strictly the ADX Strength check
+        is_adx_strong = trend_config.signal
 
         recent_window = max(1, min(self.vol_zscore_window, len(vols)))
         vol_ok, _ = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
@@ -265,11 +269,12 @@ class MomentumTrendStrategy(TradingStrategy):
                 self.weights["momentum"], 
                 long_cond or short_cond
             ),
+            # [FIXED REFERENCE] Use isolated ADX signal
             Factor(
                 FactorName.TREND_STRENGTH, 
-                "ADX Strength", 
+                "ADX Strength (Health)", 
                 self.weights["trend_strength"], 
-                trend_config.signal
+                is_adx_strong
             ),
             Factor(
                 FactorName.DAILY_TREND_CONFIRM, 
@@ -293,7 +298,7 @@ class MomentumTrendStrategy(TradingStrategy):
                 FactorName.CONFLUENCE_BONUS, 
                 "Full Timeframe Confluence", 
                 self.weights["confluence"], 
-                (long_cond and trend_ht_up and trend_config.signal) or (short_cond and trend_ht_down and trend_config.signal)
+                (long_cond and trend_ht_up and is_adx_strong) or (short_cond and trend_ht_down and is_adx_strong)
             )
         ]
 
@@ -301,7 +306,9 @@ class MomentumTrendStrategy(TradingStrategy):
             base_threshold=self.score_threshold, 
             required_factors=self.support_scoring_factors(),
             determined_factors=[FactorName.MOMENTUM_CONFIRM],
-            is_volatility_ok=bool(trend_config.volatility.get('signal', True))
+            # For Momentum, we are generally OK with any volatility state 
+            # as long as it's not absurdly high (which Risk-Adj Mom handles).
+            is_volatility_ok=True 
         )
         
         side = "long" if long_cond else "short" if short_cond else "neutral"

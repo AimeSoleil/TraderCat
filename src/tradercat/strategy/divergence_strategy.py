@@ -234,11 +234,26 @@ class DivergenceStrategy(TradingStrategy):
                 # === Scoring ===
                 mom_ok = self._momentum_confirm(rsi_hist, macd_hist, prefer=side)
                 
-                # Trend check: Regular div needs exhaustion (Weak Trend), Hidden needs Strong Trend
-                trend_mode = 'reversal' if 'regular' in name else 'trend'
-                trend_strength = self._check_trend_and_volatility(
-                    atr_hist, adx_hist, closes, 100, mode=trend_mode
+                # [UPDATED] Smart Trend Check via Base Class
+                raw_trend = self._check_trend_and_volatility(
+                    atr_val_history=atr_hist,
+                    adx_val_history=adx_hist, 
+                    price_history=closes, 
+                    window=100, 
+                    mode='trend',
+                    ignore_volatility=True,     # [KEY CHANGE]
+                    trend_quantiles=[0.5, 0.25]
                 )
+                
+                trend_ok_signal = raw_trend.signal
+                adx_current = raw_trend.trend.get("current_adx", 0)
+
+                if "hidden" in name:
+                    # Hidden Div (Trend Follow) -> WANTS trend
+                    is_trend_ok = trend_ok_signal
+                else:
+                    # Regular Div (Reversal) -> Accepts anything except parabolic (>50)
+                    is_trend_ok = (adx_current <= 50)
                 
                 # [MODIFIED] Volume Logic: Context Aware
                 is_hidden = 'hidden' in name
@@ -249,10 +264,6 @@ class DivergenceStrategy(TradingStrategy):
 
                 # Price Action Confirmation
                 price_confirmed = self._check_price_confirmation(candles[-1], side)
-                
-                # [FIX]: Access correct fields from Pydantic models
-                is_trend_ok = trend_strength.trend.signal
-                is_vol_healthy = trend_strength.volatility.signal
 
                 factors = [
                     Factor(FactorName.DIVERGENCE, f"{name} Triggered", self.weights["divergence"], True),

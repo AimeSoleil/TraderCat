@@ -221,14 +221,21 @@ class BollingerBreakoutStrategy(TradingStrategy):
             vols, recent_window, self.vol_zscore_threshold
         )
 
+        # [UPDATED] Trend/Vol Logic for Breakouts
+        # mode='breakout' checks for: Volatility Spike AND (Strong Trend OR Rising ADX)
+        # This handles the "Waking Up" phase automatically.
+
         trend_strength = self._check_trend_and_volatility(
             atr_val_history=atr_history,
             adx_val_history=adx_history,
             price_history=closes,
             window=100,
-            mode='trend',
-            trend_quantiles=[0.6, 0.4]
+            mode='breakout',            # [KEY CHANGE] Dedicated breakout logic
+            vol_quantile=0.85           # Require significant volatility expansion
         )
+
+        # The signal encapsulates the "Vol Spike + Momentum Context" logic
+        is_trend_context_good = trend_strength.signal
 
         # 构造详情
         details: Dict[str, Any] = {
@@ -264,12 +271,12 @@ class BollingerBreakoutStrategy(TradingStrategy):
                 self.weights["squeeze"], 
                 in_squeeze or bw_pct < 40 # Allow some expansion already if move is strong
             ),
-            # Factor 3: Momentum Context (RSI & Trend Strength)
+            # Factor 3: Momentum Context
             Factor(
                 FactorName.TREND_STRENGTH, 
-                "Momentum Context (RSI/Trend)", 
+                "Momentum Context (RSI/ADX Slope)", 
                 self.weights["trend"], 
-                rsi_ok and trend_strength.signal
+                rsi_ok and is_trend_context_good # Updated logic
             ),
             # Factor 4: Volume
             Factor(

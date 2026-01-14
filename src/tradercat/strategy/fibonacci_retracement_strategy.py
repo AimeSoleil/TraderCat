@@ -297,9 +297,23 @@ class FibonacciRetracementStrategy(TradingStrategy):
             return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="No trigger in zone")
 
         # Scoring Factors
+        # [UPDATED] Trend Strength Check
+        # Fibonacci pullbacks naturally cause ADX to dip. 
+        # We use 'trend' mode but ignore volatility (pullbacks are often quiet).
+        
         trend_strength = self._check_trend_and_volatility(
-            atr_val_history, adx_val_history, closes, 100, mode='trend'
+            atr_val_history, 
+            adx_val_history, 
+            closes, 
+            100, 
+            mode='trend',
+            ignore_volatility=True,     # [KEY CHANGE]
+            trend_quantiles=[0.4, 0.2]  # Relaxed rules
         )
+        
+        # If trend_match (EMA) is good (calculated elsewhere), we use this relaxed ADX
+        is_trend_adx_ok = trend_strength.signal
+
         recent_window = max(1, min(self.vol_zscore_window, len(vols)))
         vol_ok, _ = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
         mom_ok = self._momentum_confirm(rsi_val_history, macd_hist_val_history, prefer=impulse_type)
@@ -310,7 +324,13 @@ class FibonacciRetracementStrategy(TradingStrategy):
         factors = [
             Factor(FactorName.FIB_ZONE_CONFIRM, trigger_reason, self.weights["zone_trigger"], True),
             Factor(FactorName.TREND_DIRECTION_CONFIRM, "Major Trend Match", self.weights["trend_match"], trend_match),
-            Factor(FactorName.TREND_STRENGTH, "ADX Strength", self.weights["adx_strength"], trend_strength.trend.signal),
+            # We already have Trend Direction (EMA), so ADX is secondary
+            Factor(
+                FactorName.TREND_STRENGTH, 
+                "ADX Strength", 
+                self.weights["adx_strength"], 
+                is_trend_adx_ok
+            ),
             Factor(FactorName.MOMENTUM_CONFIRM, "Momentum Hook", self.weights["momentum"], mom_ok),
             Factor(FactorName.VOLUME_CONFIRM, "Volume", self.weights["volume"], vol_ok),
             Factor(FactorName.CONFLUENCE_BONUS, "Confluence", self.weights["confluence"], trend_match and mom_ok)
