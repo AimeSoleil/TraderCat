@@ -186,10 +186,18 @@ class BBandsReversalStrategy(TradingStrategy):
         # --- Adaptive Bandwidth ---
         touch_threshold = current_atr_val * self.touch_atr_multiplier
 
-        near_upper = (close >= u_curr - touch_threshold)
-        near_lower = (close <= l_curr + touch_threshold)
-        # Mid proximity logic can be tricky, simplified here:
-        near_mid = (abs(close - m_curr) <= touch_threshold) 
+        # [IMPROVED LOGIC]
+        # 1. Penetration Check: Did the WICK reach the danger zone?
+        # We check Low/High instead of Close to catch "spikes" that reject quickly.
+        low_touched_lower = (lows[-1] <= l_curr + touch_threshold)
+        high_touched_upper = (highs[-1] >= u_curr - touch_threshold)
+        
+        # 2. Reversion Check: Did the price CLOSE inside or near the band?
+        close_valid_buy = (close > l_curr - current_atr_val)
+        close_valid_sell = (close < u_curr + current_atr_val)
+
+        # 3. Middle Band (Riskier, use only as bonus confluence, NOT a trigger)
+        # near_mid_check = (abs(close - m_curr) <= touch_threshold) # Removed from triggers
 
         # 检测拒绝蜡烛
         orchestrator = PatternDetectorsOrchestrator()
@@ -198,14 +206,14 @@ class BBandsReversalStrategy(TradingStrategy):
         rejection_res: PatternResult = PatternResult(False, None, None, None)
         start = max(0, idx - self.max_time_bars + 1)
         
-        if near_lower or near_upper:
+        if low_touched_lower or high_touched_upper:
             for i in range(start, idx + 1):
                 # Ensure we have data for this index
                 if i >= len(atr_val_history): continue
                 
                 atr_i = atr_val_history[i]
 
-                if near_lower:
+                if low_touched_lower:
                     res = orchestrator.detect_bullish(opens, highs, lows, closes, vols, i, atr=atr_i)
                 else:
                     res = orchestrator.detect_bearish(opens, highs, lows, closes, vols, i, atr=atr_i)
@@ -217,8 +225,8 @@ class BBandsReversalStrategy(TradingStrategy):
                     break
 
         # Candidates triggers
-        candidate_buy = (near_lower or near_mid) and rejection_found
-        candidate_sell = (near_upper or near_mid) and rejection_found
+        candidate_buy = low_touched_lower and close_valid_buy and rejection_found
+        candidate_sell = high_touched_upper and close_valid_sell and rejection_found
         
         # 中轨穿越反转逻辑
         middle_line_reversal = False
@@ -233,8 +241,8 @@ class BBandsReversalStrategy(TradingStrategy):
             rejection_res_bias=rejection_res.bias,
             candidate_buy=candidate_buy,
             candidate_sell=candidate_sell,
-            near_lower=near_lower,
-            near_upper=near_upper
+            near_lower=low_touched_lower,
+            near_upper=high_touched_upper
         )
 
         # 动量确认 (Using Base Class Helper logic)
