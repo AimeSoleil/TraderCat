@@ -129,21 +129,7 @@ class ScoringEngine:
         # 1. Validation
         self._validate_factors(factors)
 
-        # 2. Veto Check (Critical Factors)
-        # We check this first because if critical factors fail, score implies 0 immediately.
-        if self.determined_factors:
-            factor_map = {f.name: f.condition for f in factors}
-            for mandatory_name in self.determined_factors:
-                # If the mandatory factor exists AND is False -> VETO
-                if mandatory_name in factor_map and not factor_map[mandatory_name]:
-                    return ScoringResult(
-                        score=0.0,
-                        threshold=self.base_threshold,
-                        signal="hold",
-                        reasons=[f"VETO: Critical factor '{mandatory_name.value}' not met."]
-                    )
-
-        # 3. Calculate Normalized Score
+        # 2. Calculate Normalized Score First (So we keep the score even if Vetoed)
         total_weight = sum(f.weight for f in factors)
         if total_weight < EPS:
             logger.warning("Total factor weight is near zero. Check configuration.")
@@ -151,8 +137,12 @@ class ScoringEngine:
 
         normalized_score = 0.0
         reasons = []
+        
+        # Keep track of factor conditions to check Veto later
+        factor_conditions = {}
 
         for factor in factors:
+            factor_conditions[factor.name] = factor.condition
             contrib = (factor.weight / total_weight)
             
             if factor.condition:
@@ -164,6 +154,19 @@ class ScoringEngine:
         # Cap score at 1.0 (float robustness)
         normalized_score = min(1.0, normalized_score)
 
+        # 3. Veto Check (Critical Factors)
+        # Logic: We calculate score first, THEN check veto. 
+        # If veto triggers, signal is forced to HOLD, but score remains visible for debugging.
+        veto_triggered = False
+        
+        if self.determined_factors:
+            for mandatory_name in self.determined_factors:
+                # If the mandatory factor exists AND is False -> VETO
+                if mandatory_name in factor_conditions and not factor_conditions[mandatory_name]:
+                    veto_triggered = True
+                    # Insert warning at the very top of reasons list
+                    reasons.insert(0, f"[!] VETO: Critical factor '{mandatory_name.value}' not met.")
+
         # 4. Determine Threshold
         threshold = self._adaptive_threshold()
         if not self.is_volatility_ok:
@@ -173,20 +176,23 @@ class ScoringEngine:
         final_signal = "hold"
         is_score_passing = normalized_score >= threshold
 
-        if is_score_passing:
+        if veto_triggered:
+            # FORCE HOLD due to Veto, regardless of how high the score is
+            final_signal = "hold"
+        elif is_score_passing:
             if side == "neutral":
-                # High Score + Neutral Side = High Quality Setup emerging, but no trigger yet.
-                # Use HOLD, but valid score indicates "Watchlist Candidate".
+                # High Score + Neutral Side = High Quality Setup emerging
                 final_signal = "hold"
                 reasons.append("High Score (Setup Quality Good), waiting for Trigger/Direction")
             else:
                 # High Score + Direction = TRADE
                 final_signal = self._trading_signal(side)
         else:
+            final_signal = "hold"
             reasons.append(f"Score ({normalized_score:.2f}) < Threshold ({threshold:.2f})")
 
         return ScoringResult(
-            score=round(normalized_score, 3),
+            score=round(normalized_score, 3), # Return the calced score even if vetoed
             threshold=round(threshold, 3),
             signal=final_signal,
             reasons=reasons
