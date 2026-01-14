@@ -82,17 +82,20 @@ class ScoringEngine:
         required_factors: Optional[List[FactorName]] = None,
         determined_factors: Optional[List[FactorName]] = None,
         is_volatility_ok: bool = True,
+        volatility_penalty: float = 0.05,  # <--- [NEW] Default reduced to 5%, configurable
     ):
         """
         :param base_threshold: logic threshold to trigger a trade (e.g. 0.7)
         :param required_factors: List of factors that MUST be present in the calculation input (for validation).
         :param determined_factors: List of factors that MUST be TRUE. If any is False, score becomes 0 (Veto).
         :param is_volatility_ok: Market regime flag. If False, threshold increases to reduce risk.
+        :param volatility_penalty: Amount to increase threshold by if is_volatility_ok is False.
         """
         self.base_threshold = base_threshold
         self.required_factors = required_factors or []
         self.determined_factors = determined_factors or []
         self.is_volatility_ok = is_volatility_ok
+        self.vol_penalty = volatility_penalty # Store it
 
     def _validate_factors(self, factors: List[Factor]) -> None:
         if not self.required_factors:
@@ -109,10 +112,10 @@ class ScoringEngine:
 
     def _adaptive_threshold(self) -> float:
         # LOGIC:
-        # If volatility is OK (Healthy), use base threshold.
-        # If volatility is NOT OK (Bad/Crash Risk/Dead), PENALIZE by raising threshold (make it harder to trade).
+        # If volatility is OK, use base threshold.
+        # If NOT OK, penalize by configurable amount.
         if not self.is_volatility_ok:
-            return min(1.0, self.base_threshold + 0.15)
+            return min(1.0, self.base_threshold + self.vol_penalty)
         return self.base_threshold
 
     def _trading_signal(self, side: Literal["long", "short", "neutral"]) -> Literal["buy", "sell", "hold"]:
