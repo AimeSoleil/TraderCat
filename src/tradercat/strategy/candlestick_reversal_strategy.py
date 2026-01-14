@@ -341,7 +341,7 @@ def make_candlestick_reversal_presets() -> Dict[str, Dict[str, Any]]:
             "adx_period": 14,       
             "macd_params": {"fast": 12, "slow": 26, "signal": 9},
             "vol_zscore_window": 20,
-            "vol_zscore_threshold": 1.5,
+            "vol_zscore_threshold": 1.0,
             "score_threshold": 0.65,
             
             # [NEW] Tuned Weights

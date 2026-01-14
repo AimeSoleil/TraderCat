@@ -152,7 +152,7 @@ class FibonacciRetracementStrategy(TradingStrategy):
                 
         return levels
 
-    # ---------- 主逻辑 ----------
+    # ---------- Main Logic ----------
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:        
         if not candles or len(candles) < self.get_lookback_window():
             return SignalModel(date=None, symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="insufficient data")
@@ -310,7 +310,7 @@ class FibonacciRetracementStrategy(TradingStrategy):
         factors = [
             Factor(FactorName.FIB_ZONE_CONFIRM, trigger_reason, self.weights["zone_trigger"], True),
             Factor(FactorName.TREND_DIRECTION_CONFIRM, "Major Trend Match", self.weights["trend_match"], trend_match),
-            Factor(FactorName.TREND_STRENGTH, "ADX Strength", self.weights["adx_strength"], trend_strength.signal),
+            Factor(FactorName.TREND_STRENGTH, "ADX Strength", self.weights["adx_strength"], trend_strength.trend.signal),
             Factor(FactorName.MOMENTUM_CONFIRM, "Momentum Hook", self.weights["momentum"], mom_ok),
             Factor(FactorName.VOLUME_CONFIRM, "Volume", self.weights["volume"], vol_ok),
             Factor(FactorName.CONFLUENCE_BONUS, "Confluence", self.weights["confluence"], trend_match and mom_ok)
@@ -320,7 +320,8 @@ class FibonacciRetracementStrategy(TradingStrategy):
             base_threshold=self.score_threshold,
             required_factors=self.support_scoring_factors(),
             determined_factors=[FactorName.FIB_ZONE_CONFIRM],
-            is_volatility_ok=bool(trend_strength.volatility.get('signal', True))
+            # Use volatility Health signal from Pydantic model
+            is_volatility_ok=trend_strength.volatility.signal
         )
         
         result: ScoringResult = engine.compute_score(factors, side=impulse_type)
@@ -346,13 +347,25 @@ class FibonacciRetracementStrategy(TradingStrategy):
                 
             # Stop loss just below the 1.0 (start of impulse) is safest but wide
             # A tighter stop is below 0.786
-            sl_level = fib_levels.get(0.786, None) # or 1.0
-            if sl_level:
+            sl_level = fib_levels.get(0.786, None) # or 1.0 (swing_low/high)
+            
+            # Default to ExitPlanner stop unless Fib structure is clearer
+            fib_stop = sl_level
+            
+            if fib_stop:
                 if impulse_type == 'long':
-                    plan['stop_loss'] = min(sl_level, plan['fib_stop_loss_at']) # Take the wider one usually
+                    # Use fib stop if it is tighter than ATR stop (don't risk too much), 
+                    # OR if ATR stop is too tight, use fib stop?
+                    # Usually: Stop below support (Fib) is structural. Stop by ATR is volatility based.
+                    # We pick MIN (for long) to be safe (wider stop)? No, we pick MAX (tighter stop) for capital preservation
+                    # unless it's too close.
+                    # Let's trust ExitPlanner unless Fib level is structurally sensible.
+                    plan['fib_stop_loss_at'] = fib_stop
                 else:
-                    plan['stop_loss'] = max(sl_level, plan['fib_stop_loss_at'])
-                plan['stop_loss_type'] = 'fib_level_0.786'
+                    plan['fib_stop_loss_at'] = fib_stop
+                
+                # We can store it in details for debugging
+                details['fib_stop'] = fib_stop
 
             details["plan"] = plan
 
@@ -384,7 +397,7 @@ def make_fibonacci_presets() -> Dict[str, Dict[str, Any]]:
             "macd_params": {"fast": 12, "slow": 26, "signal": 9}, 
             "adx_period": 14,                    
             "vol_zscore_window": 20,             
-            "vol_zscore_threshold": 1.5,         
+            "vol_zscore_threshold": 1.0,  # [UPDATED] Lowered to 1.0 for better sensitivity       
             "score_threshold": 0.65,
 
             # [NEW] Tuned Weights

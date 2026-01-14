@@ -173,8 +173,8 @@ def main():
     run_parser.add_argument("-f", "--symbols-file", type=str, help="Path to symbols file")
     run_parser.add_argument("-c", "--concurrency", type=int, default=5, help="Max concurrent bots")
     run_parser.add_argument("-S", "--stagger", type=int, default=2, help="Stagger seconds")
-    run_parser.add_argument("--scope", choices=["all", "single", "portfolio"], default="all", 
-                        help="Execution scope: 'all' (default), 'single' (assets), or 'portfolio' strategies.")
+    run_parser.add_argument("--scope", choices=["all", "single", "portfolio"], default="single", 
+                        help="Execution scope: 'single' (assets, default), 'all' (single + portfolio), or 'portfolio' strategies.")
 
     # --- Command: help ---
     subparsers.add_parser("help", help="Show this help message")

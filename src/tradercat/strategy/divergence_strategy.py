@@ -24,7 +24,6 @@ class DivergenceStrategy(TradingStrategy):
         atr_period: int = 14,
         adx_period: int = 14,
         vol_zscore_window: int = 20,
-        vol_zscore_threshold: float = 1.0,
         score_threshold: float = 0.70,
         # [NEW] Dynamic Weights
         weights: Optional[Dict[str, float]] = None,
@@ -37,7 +36,6 @@ class DivergenceStrategy(TradingStrategy):
         self.atr_period = int(atr_period)
         self.adx_period = int(adx_period)
         self.vol_zscore_window = int(vol_zscore_window)
-        self.vol_zscore_threshold = float(vol_zscore_threshold)
         self.score_threshold = float(score_threshold)
         
         # [NEW] Dynamic Weights configuration
@@ -45,7 +43,7 @@ class DivergenceStrategy(TradingStrategy):
             "divergence": 0.40,     # The core signal
             "trend_context": 0.20,  # Is the trend exhausted?
             "momentum": 0.15,       # Momentum hook confirmation
-            "volume": 0.15,         # Volume expanding on reversal
+            "volume": 0.15,         # Volume expanding on reversal (conditional)
             "confluence": 0.10      # Price action confirmation
         }
         self.weights = {**default_weights, **(weights or {})}
@@ -184,8 +182,9 @@ class DivergenceStrategy(TradingStrategy):
         
         curr_atr = atr_hist[-1] if atr_hist else 0.0
 
-        # 2. Volume Check
-        vol_ok, vol_z = self._check_volume_zscore(vols, self.vol_zscore_window, self.vol_zscore_threshold)
+        # [MODIFIED] Volume Calculation (Base)
+        # We calculate the raw Z-score here, but interpretation depends on divergence type
+        _, vol_z = self._check_volume_zscore(vols, self.vol_zscore_window, 1.0) # Threshold ignored here, used raw z
 
         # 3. Find Fractals
         # Use a slice to speed up
@@ -227,10 +226,7 @@ class DivergenceStrategy(TradingStrategy):
                 rsi_val = rsi_hist[-1] if rsi_hist else 50
                 
                 # Context Logic:
-                # Regular divergences are REVERSALS -> Require Extreme RSI
-                # Hidden divergences are CONTINUATIONS -> Require Trending RSI
-                
-                if name == "regular_bear" and rsi_val < 55: continue # Too weak
+                if name == "regular_bear" and rsi_val < 55: continue # Too weak to reverse
                 if name == "regular_bull" and rsi_val > 45: continue 
                 if name == "hidden_bull" and rsi_val < 40: continue # Bearish zone
                 if name == "hidden_bear" and rsi_val > 60: continue # Bullish zone
@@ -244,14 +240,25 @@ class DivergenceStrategy(TradingStrategy):
                     atr_hist, adx_hist, closes, 100, mode=trend_mode
                 )
                 
+                # [MODIFIED] Volume Logic: Context Aware
+                is_hidden = 'hidden' in name
+                # Hidden (Trend Follow) -> Needs strong volume to confirm resumption (Z > 1.0)
+                # Regular (Reversal) -> Needs just positive interest (Z > 0.5) to confirm bottom/top
+                target_z = 1.0 if is_hidden else 0.5
+                vol_supported = vol_z > target_z
+
                 # Price Action Confirmation
                 price_confirmed = self._check_price_confirmation(candles[-1], side)
+                
+                # [FIX]: Access correct fields from Pydantic models
+                is_trend_ok = trend_strength.trend.signal
+                is_vol_healthy = trend_strength.volatility.signal
 
                 factors = [
                     Factor(FactorName.DIVERGENCE, f"{name} Triggered", self.weights["divergence"], True),
-                    Factor(FactorName.TREND_STRENGTH, "Trend Context", self.weights["trend_context"], trend_strength.signal),
+                    Factor(FactorName.TREND_STRENGTH, "Trend Context", self.weights["trend_context"], is_trend_ok),
                     Factor(FactorName.MOMENTUM_CONFIRM, "Momentum Hook", self.weights["momentum"], mom_ok),
-                    Factor(FactorName.VOLUME_CONFIRM, "Volume OK", self.weights["volume"], vol_ok),
+                    Factor(FactorName.VOLUME_CONFIRM, f"Volume Support (Z>{target_z})", self.weights["volume"], vol_supported),
                     Factor(FactorName.CONFLUENCE_BONUS, "Price Action Confirmed", self.weights["confluence"], price_confirmed)
                 ]
                 
@@ -259,7 +266,8 @@ class DivergenceStrategy(TradingStrategy):
                     base_threshold=self.score_threshold,
                     required_factors=[FactorName.DIVERGENCE],
                     determined_factors=[FactorName.DIVERGENCE],
-                    is_volatility_ok=bool(trend_strength.volatility.get('signal', True))
+                    is_volatility_ok=is_vol_healthy, # Use gatekeeper
+                    volatility_penalty=0.05
                 )
                 
                 res: ScoringResult = engine.compute_score(factors, side=side)
@@ -310,7 +318,6 @@ def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
             "atr_period": 14,
             "adx_period": 14,
             "vol_zscore_window": 20,
-            "vol_zscore_threshold": 1.5,
             "score_threshold": 0.70,
             
             # [NEW] Tuned Weights
@@ -332,7 +339,6 @@ def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
             "atr_period": 14,
             "adx_period": 14,
             "vol_zscore_window": 50,
-            "vol_zscore_threshold": 1.2,       # Lower volume threshold for macro moves
             "score_threshold": 0.75,           # Higher conviction needed
             
             # [NEW] Tuned Weights
