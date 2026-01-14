@@ -26,7 +26,6 @@ class PatternResult:
     stop: float
     target: float
     # Optional metadata
-    confidence: float = 0.8
     meta: Optional[Dict[str, Any]] = None
 
 class ChartPatternDetector(ABC):
