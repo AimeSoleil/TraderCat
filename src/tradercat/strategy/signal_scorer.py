@@ -1,6 +1,5 @@
 from dataclasses import dataclass
-from importlib.simple import SimpleReader
-from typing import List, Literal
+from typing import List, Literal, Optional
 from enum import Enum
 
 from tradercat.logger.logger import get_logger
@@ -42,6 +41,7 @@ class FactorName(Enum):
     EMA_ALIGNMENT = "ema_alignment"
     MOMENTUM_CONFIRM = "momentum_confirm"
     CONFLUENCE_BONUS = "confluence_bonus"
+    VOLATILITY_OK = "volatility_ok"  # Gatekeeper factor
 
 
 # ---------------- DATA CLASSES ----------------
@@ -61,8 +61,7 @@ class ScoringResult:
         }
 
     def pretty_print(self):
-        logger.info(f"Score: {self.score}, Threshold: {self.threshold}, Signal: {self.signal}")
-        logger.info("Reasons:")
+        logger.info(f"Signal: {self.signal.upper()} | Score: {self.score:.2f}/{self.threshold:.2f}")
         for r in self.reasons:
             logger.info(f" - {r}")
 
@@ -74,23 +73,30 @@ class Factor:
     weight: float
     condition: bool
 
+
 # ---------------- SCORING ENGINE ----------------
 class ScoringEngine:
     def __init__(
         self,
-        required_factors: List[FactorName],
-        determined_factors: List[FactorName] = None,
         base_threshold: float = 0.7,
-        is_volatility_ok: bool = False,
+        required_factors: Optional[List[FactorName]] = None,
+        determined_factors: Optional[List[FactorName]] = None,
+        is_volatility_ok: bool = True,
     ):
+        """
+        :param base_threshold: logic threshold to trigger a trade (e.g. 0.7)
+        :param required_factors: List of factors that MUST be present in the calculation input (for validation).
+        :param determined_factors: List of factors that MUST be TRUE. If any is False, score becomes 0 (Veto).
+        :param is_volatility_ok: Market regime flag. If False, threshold increases to reduce risk.
+        """
         self.base_threshold = base_threshold
-        self.required_factors = required_factors
+        self.required_factors = required_factors or []
         self.determined_factors = determined_factors or []
         self.is_volatility_ok = is_volatility_ok
 
-    def _validate_factors(self, factors: List[Factor]) -> List[str]:
+    def _validate_factors(self, factors: List[Factor]) -> None:
         if not self.required_factors:
-            raise ValueError("Missing required scoring factors definition")
+            return
 
         existing_names = {f.name for f in factors}
         missing = [
@@ -99,63 +105,89 @@ class ScoringEngine:
             if name not in existing_names
         ]
         if missing:
-            raise ValueError(f"Missing factors: {missing}")
-    
+            raise ValueError(f"Scoring Engine Configuration Error: Missing factors {missing}")
+
     def _adaptive_threshold(self) -> float:
-        # increase threshold in high volatility
-        return self.base_threshold + (0.05 if self.is_volatility_ok else 0.0)
+        # LOGIC:
+        # If volatility is OK (Healthy), use base threshold.
+        # If volatility is NOT OK (Bad/Crash Risk/Dead), PENALIZE by raising threshold (make it harder to trade).
+        if not self.is_volatility_ok:
+            return min(1.0, self.base_threshold + 0.15)
+        return self.base_threshold
 
     def _trading_signal(self, side: Literal["long", "short", "neutral"]) -> Literal["buy", "sell", "hold"]:
         if side == "neutral":
             return "hold"
-        
         return "buy" if side == "long" else "sell"
-    
+
     def compute_score(
         self, 
         factors: List[Factor], 
         side: Literal["long", "short", "neutral"]
     ) -> ScoringResult:
-        # Validate
+        
+        # 1. Validation
         self._validate_factors(factors)
 
-        # Scoring Logic
-        # Normalize weights
+        # 2. Veto Check (Critical Factors)
+        # We check this first because if critical factors fail, score implies 0 immediately.
+        if self.determined_factors:
+            factor_map = {f.name: f.condition for f in factors}
+            for mandatory_name in self.determined_factors:
+                # If the mandatory factor exists AND is False -> VETO
+                if mandatory_name in factor_map and not factor_map[mandatory_name]:
+                    return ScoringResult(
+                        score=0.0,
+                        threshold=self.base_threshold,
+                        signal="hold",
+                        reasons=[f"VETO: Critical factor '{mandatory_name.value}' not met."]
+                    )
+
+        # 3. Calculate Normalized Score
         total_weight = sum(f.weight for f in factors)
+        if total_weight < EPS:
+            logger.warning("Total factor weight is near zero. Check configuration.")
+            return ScoringResult(0.0, self.base_threshold, "hold", ["Configuration Error: Zero Weight"])
+
         normalized_score = 0.0
         reasons = []
 
         for factor in factors:
+            contrib = (factor.weight / total_weight)
+            
             if factor.condition:
-                contribution = factor.weight / (total_weight if total_weight > EPS else 1.0)
-                normalized_score += contribution
-                reasons.append(f"{factor.description} (+{contribution:.2f})")
-
-        # Determine signal
-        normalized_score = min(1.0, normalized_score)
-        threshold = self._adaptive_threshold()
-        signal = "neutral"
-        if side != "neutral":
-            if normalized_score >= threshold:
-                if self.determined_factors:
-                    filtered = [f for f in factors if f.name in self.determined_factors]
-                    if all(f.condition for f in filtered):
-                        signal = self._trading_signal(side)
-                    else:
-                        signal = self._trading_signal("neutral")
-                        reasons.append("关键确认因子未全部满足")
-                else:
-                    signal = self._trading_signal(side)
+                normalized_score += contrib
+                reasons.append(f"[✓] {factor.description} (+{contrib:.2f})")
             else:
-                signal = self._trading_signal("neutral")
-                reasons.append(f"得分 ({normalized_score:.2f}) 未超过阈值 ({threshold:.2f})")
+                reasons.append(f"[x] {factor.description} (Missed)")
+
+        # Cap score at 1.0 (float robustness)
+        normalized_score = min(1.0, normalized_score)
+
+        # 4. Determine Threshold
+        threshold = self._adaptive_threshold()
+        if not self.is_volatility_ok:
+            reasons.append("(!) Volatility Penalty Applied (+0.15 to threshold)")
+
+        # 5. Final Decision Logic
+        final_signal = "hold"
+        is_score_passing = normalized_score >= threshold
+
+        if is_score_passing:
+            if side == "neutral":
+                # High Score + Neutral Side = High Quality Setup emerging, but no trigger yet.
+                # Use HOLD, but valid score indicates "Watchlist Candidate".
+                final_signal = "hold"
+                reasons.append("High Score (Setup Quality Good), waiting for Trigger/Direction")
+            else:
+                # High Score + Direction = TRADE
+                final_signal = self._trading_signal(side)
         else:
-            signal = self._trading_signal(side)
-            reasons.append("暂时没有明确的方向")
+            reasons.append(f"Score ({normalized_score:.2f}) < Threshold ({threshold:.2f})")
 
         return ScoringResult(
             score=round(normalized_score, 3),
-            threshold=threshold,
-            signal=signal,
+            threshold=round(threshold, 3),
+            signal=final_signal,
             reasons=reasons
         )
