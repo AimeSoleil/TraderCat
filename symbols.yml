@@ -60,6 +60,18 @@ symbols: [
   "ZBRA",   # Zebra Tech [Machine Vision & Autonomous Warehouse Units]
   "ROK",    # Rockwell Automation [Industrial IoT & Smart Manufacturing]
 
+  # --- Drones, UAVs & Air Defense (Robotics of the Sky) ---
+  "AVAV",   # AeroVironment [Kamikaze Drones / Loitering Munitions Leader]
+  "KTOS",   # Kratos [Defense Drones / Valkyrie UAV]
+  "EH",     # EHang [Autonomous Passenger Drones - eVTOL Beta]
+  "ACHR",   # Archer Aviation [eVTOL / Air Taxi]
+  "JOBY",   # Joby Aviation [eVTOL Leader]
+  "LMT",    # Lockheed Martin [Defense Tech / Skunkworks anchor]
+  "RCAT",   # Red Cat Holdings [Defense/NATO Small Drones - Strong Narrative]
+  "ONDS",   # Ondas Holdings [Autonomous Drone Infrastructure]
+  "PRZO",   # ParaZero [Drone Safety Systems]
+  "UAVS",   # AgEagle Aerial [Commercial Drones - Penny Stock Volatility]
+
   # ==============================================================================
   # 3. SOFTWARE, SECURITY & DATA
   # ==============================================================================
@@ -94,9 +106,19 @@ symbols: [
   "CCJ",    # Cameco [Uranium]
   "OKLO",   # Oklo [Speculative Nuclear]
   "SMR",    # NuScale Power [SMR]
-  "GE",     # GE Aerospace [Industrial Giant]
-  "CAT",    # Caterpillar [Global Infra]
-  "HON",    # Honeywell [Automation]
+  
+  # --- Critical Minerals & Rare Earths (The Base Layer) ---
+  "MP",     # MP Materials [US Rare Earth Leader / Neodymium]
+  "CRML",   # Critical Metals Corp [European Lithium / Strategic Minerals]
+  "USAR",   # USA Rare Earth [Domestic Supply Chain / Heavy Rare Earths]
+  "ALB",    # Albemarle [Lithium Global Leader]
+  "SQM",    # Sociedad Quimica [Lithium Chile]
+  "LAC",    # Lithium Americas [Thacker Pass Asset]
+  "UCOL",   # Uranium Energy Corp [Uranium Beta]
+  "NXE",    # NexGen Energy [Uranium Development]
+  "FCX",    # Freeport-McMoRan [Copper King]
+  "SCCO",   # Southern Copper [Copper Yield]
+  "VALE",   # Vale [Nickel/Iron]
 
   # ==============================================================================
   # 5. BIOTECH & HEALTHCARE (Growth)
@@ -169,9 +191,7 @@ symbols: [
   "RGTI",   # Rigetti [Quantum]
   "QBTS",   # D-Wave Quantum
   "QUBT",   # Quantum Computing Inc
-  "KTOS",   # Kratos [Defense Drones]
-  "AVAV",   # AeroVironment [Kamikaze Drones]
-  "JOBY",   # Joby Aviation [eVTOL]
+  # Note: KTOS, AVAV, JOBY moved to Drones section above
 
   # ==============================================================================
   # 9. SPECIAL SITUATIONS: Micro / Meme / Sentiment (don’t miss opportunities bucket)
@@ -180,5 +200,6 @@ symbols: [
   "LIN",    # Linde [Industrial Gas]
   "DJT",    # Trump Media [Event Driven]
   "RDDT",   # Reddit [Data Licensing]
-  "BA"     # Boeing [Turnaround]
+  "BA",     # Boeing [Turnaround]
+  "FFAI",   # Faraday Future [EV Turnaround]
 ]
