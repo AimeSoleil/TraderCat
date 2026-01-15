@@ -1,12 +1,12 @@
 import asyncio
 import argparse
 import os
-import sys
 from datetime import datetime
 from typing import List, Dict
 import yaml
 
 # 仅保留轻量级的 logger, 以避免启动时的性能开销
+from tradercat.ai.llm_provider import MockAIProvider, OpenAIProvider
 from tradercat.logger.logger import get_logger
 
 logger = get_logger(__name__)
@@ -161,6 +161,54 @@ async def run_trading_session(symbols: List[str],
     duration = datetime.now() - start_time
     logger.info(f"✅ Session finished in {duration.total_seconds():.2f}s")
 
+# --- AI Subsystem ---
+async def run_ai_analysis(symbols: list, model_type: str, analyst_name: str):
+    # Imports
+    from tradercat.bot import TraderBot
+    from tradercat.execution.trade_execution import TradeExecutor
+    from tradercat.ai.llm_provider import GitHubModelsProvider  # [UPDATED]
+    from tradercat.ai.stock_analyst import AIStockAnalyst
+    from tradercat.ai.prompt_manager import PromptManager
+
+    # 1. Setup Logic
+    if model_type == "openai":
+        llm = OpenAIProvider()
+    elif model_type == "copilot":
+        # 'gpt-4o' is the flagship model available in GitHub Models
+        llm = GitHubModelsProvider(model_name="gpt-4o") 
+    else:
+        llm = MockAIProvider()
+
+    executor = TradeExecutor()
+    bot = TraderBot(executor=executor)
+    prompt_manager = PromptManager() # Defaults to ./prompts
+    
+    analyst = AIStockAnalyst(llm, bot, prompt_manager)
+
+    # 2. Run
+    print(f"\n🤖 Session: {llm.get_model_name()} | Persona: {analyst_name}")
+    print("=" * 60)
+
+    for sym in symbols:
+        report = await analyst.analyze_symbol(sym, analyst_name=analyst_name)
+        print(f"\n📊 [{sym}] Report by {analyst_name}:")
+        print("-" * 30)
+        print(report)
+        print("-" * 30)
+
+def list_analysts():
+    from tradercat.ai.prompt_manager import PromptManager
+    pm = PromptManager()
+    analysts = pm.list_analysts()
+    print("\n📋 Available AI Analysts (Prompts):")
+    print("=" * 30)
+    if not analysts:
+        print("No prompts found in ./prompts/ folder.")
+        print("Create a file like 'wyckoff-en.txt' to start.")
+    for a in analysts:
+        print(f"  • {a}")
+    print("\nUsage: tradercat ai -s TSLA --analyst " + (analysts[0] if analysts else "name"))
+
 # --- Entry Point ---
 
 def main():
@@ -175,6 +223,16 @@ def main():
     run_parser.add_argument("-S", "--stagger", type=int, default=2, help="Stagger seconds")
     run_parser.add_argument("--scope", choices=["all", "single", "portfolio"], default="single", 
                         help="Execution scope: 'single' (assets, default), 'all' (single + portfolio), or 'portfolio' strategies.")
+
+    # --- Command: ai ---
+    ai_parser = subparsers.add_parser("ai", help="Ask AI to analyze stocks")
+    ai_parser.add_argument("-s", "--symbols", type=str, help="Symbol to analyze")
+    # [UPDATED] Added 'copilot' to choices
+    ai_parser.add_argument("--model", choices=["mock", "openai", "copilot"], default="mock", help="AI Model Provider")
+    ai_parser.add_argument("--analyst", type=str, default="standard-en", help="Name of the prompt file")
+    
+    # New command alias or flag for listing
+    ai_parser.add_argument("-l", "--list-analysts", action="store_true", help="List available analyst personas")
 
     # --- Command: help ---
     subparsers.add_parser("help", help="Show this help message")
@@ -205,6 +263,18 @@ def main():
                                             args.concurrency, args.stagger, args.scope))
         except KeyboardInterrupt:
             logger.info("🛑 Bot stopped by user.")
+
+    elif args.command == "ai":
+        if args.list_analysts:
+            list_analysts()
+            return
+
+        if not args.symbols:
+            print("Error: Please provide symbols via -s or use -l to list analysts.")
+            return
+
+        target_symbols = [s.strip().upper() for s in args.symbols.split(",")]
+        asyncio.run(run_ai_analysis(target_symbols, args.model, args.analyst))
 
     elif args.command == "help":
         parser.print_help()
