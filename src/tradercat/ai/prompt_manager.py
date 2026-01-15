@@ -1,45 +1,37 @@
-import os
-import glob
-from typing import Dict, List, Optional
-from pathlib import Path
+from typing import List
+from tradercat.ai.prompts import buffett, livermore, ptj, wyckoff
 
 class PromptManager:
-    def __init__(self, prompts_dir: str = "prompts"):
-        # Automatically find the project root or use relative path
-        self.prompts_dir = Path(os.getcwd()) / prompts_dir
-        self._cache: Dict[str, str] = {} # Cache content to avoid re-reading disk
+    """
+    Manages AI persona templates via in-memory constants.
+    """
+
+    # Map aliases to the imported string variables
+    PROMPT_REGISTRY = {        
+        "wyckoff": wyckoff.PROMPT,
+        "livermore": livermore.PROMPT,
+        "buffett": buffett.PROMPT,
+        "ptj": ptj.PROMPT,        
+    }
+
+    def __init__(self):
+        pass
 
     def list_analysts(self) -> List[str]:
         """
-        Returns a list of available analyst names (filenames without extension).
-        Example: ['wyckoff-en', 'standard-en', 'buffett-zh']
+        Returns a sorted list of unique available analyst keys (aliases).
         """
-        if not self.prompts_dir.exists():
-            return []
+        return sorted(list(self.PROMPT_REGISTRY.keys()))
+
+    def get_prompt_template(self, alias: str) -> str:
+        """
+        Retrieves the prompt content directly from memory.
+        """
+        alias_lower = alias.lower()
         
-        files = glob.glob(str(self.prompts_dir / "*.txt"))
-        return [Path(f).stem for f in files]
+        if alias_lower not in self.PROMPT_REGISTRY:
+            valid_keys = ", ".join(self.list_analysts()[:5]) + "..."
+            raise ValueError(f"Unknown analyst alias: '{alias}'. Available: {valid_keys}")
 
-    def get_prompt_template(self, analyst_name: str) -> str:
-        """
-        Loads the content of a specific analyst file.
-        Adjusts for missing language suffixes if needed.
-        """
-        # Try exact match first
-        if analyst_name in self._cache:
-            return self._cache[analyst_name]
-
-        start_path = self.prompts_dir / f"{analyst_name}.txt"
-        
-        # Fallback: if user typed "wyckoff" but file is "wyckoff-en.txt", try finding it
-        if not start_path.exists():
-            candidates = glob.glob(str(self.prompts_dir / f"{analyst_name}-*.txt"))
-            if candidates:
-                start_path = Path(candidates[0]) # Use the first match (e.g., english)
-            else:
-                raise FileNotFoundError(f"Analyst '{analyst_name}' not found in {self.prompts_dir}")
-
-        with open(start_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-            self._cache[analyst_name] = content
-            return content
+        # Direct memory access - extremely fast & reliable
+        return self.PROMPT_REGISTRY[alias_lower]

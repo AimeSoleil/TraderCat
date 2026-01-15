@@ -1,3 +1,5 @@
+import asyncio
+from typing import List, Any
 from tradercat.ai.llm_interface import LLMProvider
 from tradercat.ai.prompt_manager import PromptManager
 from tradercat.bot import TraderBot
@@ -6,76 +8,166 @@ from tradercat.logger.logger import get_logger
 logger = get_logger(__name__)
 
 class AIStockAnalyst:
+    """
+    Orchestrates the analysis process.
+    Stateless regarding the Model ID (passed at runtime).
+    """
+
     def __init__(self, llm: LLMProvider, bot: TraderBot, prompt_manager: PromptManager):
         self.llm = llm
         self.bot = bot
         self.prompt_manager = prompt_manager
 
-    def _prepare_data_context(self, symbol: str, candles: list) -> dict:
+    def _prepare_data_context(self, symbol: str, candles: List[Any]) -> dict:
         """
         Prepares a dictionary of data to be injected into the prompt template.
+        Fixes: Uses the passed 'candles' argument, not self.candles.
         """
-        current_close = candles[-1].close
-        prev_close = candles[-2].close
+        # Safety Check
+        if not candles or len(candles) < 2:
+            return {
+                "symbol": symbol,
+                "curr_price": "N/A",
+                "market_data_block": "Insufficient price data available."
+            }
         
-        # Simple calculations (expand this with real indicators later)
-        daily_change_pct = ((current_close - prev_close) / prev_close) * 100
+        # Access the last two candles
+        current_candle = candles[-1]
+        prev_candle = candles[-2]
         
-        # Calculate a basic 200 SMA manually for context
-        closes = [c.close for c in candles]
+        # Determine attribute names (pydantic object vs dict support)
+        curr_close = getattr(current_candle, 'close', 0)
+        prev_close = getattr(prev_candle, 'close', 0)
+        volume = getattr(current_candle, 'volume', 0)
+        
+        # 1. Calculate Daily Change
+        daily_change_pct = 0.0
+        if prev_close > 0:
+            daily_change_pct = ((curr_close - prev_close) / prev_close) * 100
+        
+        # 2. Basic Trend Context (Simple Moving Average approximation)
+        closes = [getattr(c, 'close', 0) for c in candles]
         sma_200 = sum(closes[-200:]) / 200 if len(closes) >= 200 else 0
         
-        trend_status = "ABOVE 200 SMA (Bullish Bias)" if current_close > sma_200 else "BELOW 200 SMA (Bearish Bias)"
+        trend_status = "Unknown"
+        if sma_200 > 0:
+            trend_status = "ABOVE 200 SMA (Bullish Bias)" if curr_close > sma_200 else "BELOW 200 SMA (Bearish Bias)"
         
-        # This string block corresponds to {market_data_block} in the prompt file
+        # 3. Construct Data Block
         data_block = f"""
         Symbol: {symbol}
-        Latest Price: {current_close:.2f}
+        Latest Price: {curr_close:.2f}
         Daily Change: {daily_change_pct:.2f}%
         Trend Context: {trend_status}
-        Volume (Last): {candles[-1].volume}
+        Volume (Last Session): {volume}
         """
         
         return {
             "symbol": symbol,
-            "curr_price": current_close,
+            "curr_price": f"{curr_close:.2f}",
             "market_data_block": data_block
         }
 
-    async def analyze_symbol(self, symbol: str, analyst_name: str = "standard-en") -> str:
+    async def analyze_symbol(self, symbol: str, model_name: str, analyst_name: str = "wyckoff") -> str:
         """
-        Pipe: Fetch Data -> Load Template -> Inject Data -> Call LLM
+        Pipe: Load Template -> Fetch Data -> Call LLM (with specific model_name)
         """
-        # 1. Fetch Data
+        request_id = f"{symbol}::{analyst_name}::{model_name}"
+        logger.info(f"🧠 AI Analysis Request: {request_id}")
+
+        # 1. Fetch Data via Bot Executor or Data Provider
+        candles = []
         try:
-            # Assuming bot has fetch_daily_candles implemented (from previous context)
-            candles = self.bot.provider.fetch_daily_candles(symbol, limit=250)
-            if not candles:
-                return f"Error: No data found for {symbol}"
+            candles = self.bot.data_provider.get_price_data(symbol, interval="1d", lookback=30)
         except Exception as e:
-            logger.error(f"Data fetch error: {e}")
-            return f"Error fetching data for {symbol}"
+            logger.warning(f"Data fetch warning for {symbol}: {e}")
+        
+        if not candles:
+            return f"⚠️ Data Error: Unable to retrieve price history for {symbol}."
 
         # 2. Load Prompt Template
         try:
             template = self.prompt_manager.get_prompt_template(analyst_name)
-        except Exception as e:
-            return f"Analyst Error: {str(e)}"
+        except ValueError as e:
+            return f"❌ Configuration Error: {str(e)}"
 
-        # 3. Inject Data
-        context_data = self._prepare_data_context(symbol, candles)
-        
-        # Safe format: only replaces keys that exist in the template
-        # Using .format allows the text file to contain {curr_price}, {symbol}, etc.
+        # 3. Format Prompt
         try:
-            final_prompt = template.format(**context_data)
-        except KeyError as e:
-            # Fallback if the prompt file asks for data we didn't calculate
-            logger.warning(f"Prompt template requested missing data: {e}")
-            final_prompt = template # Send raw template or handle gracefully
+            data_context = self._prepare_data_context(symbol, candles)
+            final_prompt = template.format(**data_context)
+        except Exception as e:
+            logger.error(f"Template formatting failed: {e}")
+            return f"❌ Prompt Error: Failed to format analyst template."
 
-        # 4. Call AI
-        logger.info(f"🧠 {analyst_name} ({self.llm.get_model_name()}) is analyzing {symbol}...")
-        analysis = await self.llm.generate_thought(final_prompt)
+        # 4. Call AI (Stateless Provider + Runtime Model ID)
+        system_msg = f"You are a professional trader acting as {analyst_name}."
         
-        return analysis
+        try:
+            analysis = await self.llm.generate_thought(
+                prompt=final_prompt, 
+                model_id=model_name,  # <--- [CRITICAL UPDATE] Passed at runtime
+                system_prompt=system_msg
+            )
+            return analysis
+        except Exception as e:
+            logger.error(f"LLM Generation Failed ({model_name}): {e}")
+            return f"❌ AI Generation Error: {str(e)}"
+
+    async def start_chat_session(self, symbol: str, initial_report: str, model_name: str, analyst_name: str):
+        """
+        Starts an interactive session where context accumulates every round.
+        """
+        print(f"\n💬 Entering Live Chat with {analyst_name} (Symbol: {symbol})")
+        print("   (Type 'exit', 'quit', or 'q' to stop)")
+        print("-" * 60)
+
+        # --- 1. BUILD INITIAL CONTEXT ---
+        # The history list will grow with every turn.
+        conversation_history = []
+
+        # A. System Persona
+        conversation_history.append({
+            "role": "system",
+            "content": f"You are a professional trader acting as {analyst_name}. You are discussing the stock {symbol}. Keep answers concise and strictly in character."
+        })
+
+        # B. The First Result (The Anchor)
+        # We treat the initial report as an 'assistant' message that already happened.
+        conversation_history.append({
+            "role": "assistant",
+            "content": initial_report
+        })
+
+        # --- 2. INTERACTIVE LOOP ---
+        while True:
+            # A. Get User Input
+            try:
+                # Use executor for input to avoid blocking the asyncio loop completely
+                user_text = await asyncio.get_event_loop().run_in_executor(None, input, "\n👤 You: ")
+            except EOFError:
+                break
+            
+            user_text = user_text.strip()
+            if user_text.lower() in ["exit", "q", "quit"]:
+                print("👋 Session ended.")
+                break
+            
+            if not user_text:
+                continue
+
+            # B. Append User Input to Context
+            conversation_history.append({"role": "user", "content": user_text})
+            
+            print(f"🤖 {analyst_name} is thinking...")
+
+            # C. Call AI with FULL Context
+            response_text = await self.llm.chat(
+                messages=conversation_history, 
+                model_id=model_name
+            )
+
+            # D. Output & Append AI Response to Context
+            print(f"\n🤖 {analyst_name}:\n{response_text}")
+            
+            # [CRITICAL] This ensures the *next* round knows what the AI just said
+            conversation_history.append({"role": "assistant", "content": response_text})

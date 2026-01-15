@@ -5,18 +5,17 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/AimeSoleil/TraderCat/graphs/commit-activity)
 
-**TraderCat** is a robust, asynchronous quantitative trading bot and backtesting framework designed for multi-symbol and multi-strategy execution. It leverages the power of **OpenBB** for market data and provides a flexible architecture for implementing custom trading strategies.
+**TraderCat** is a robust, asynchronous quantitative trading bot and terminal. It combines traditional algorithmic indicators with **Generative AI** analysis to provide deep market insights. It leverages **OpenBB** for high-quality market data and offers a flexible plugin architecture for custom strategies and AI personalities.
 
 ## 🚀 Features
 
-*   **Multi-Strategy Support**: Run multiple strategies simultaneously (e.g., Bollinger Breakout, Chart Patterns, Momentum).
-*   **Signal Scoring Engine**: Integrated weighted scoring system to evaluate signal quality based on customizable factors (Volume, Trend Alignment, Volatility Health).
-*   **Advanced Chart Patterns**: Detection of macro price structures (Head & Shoulders, Triangles, Flags) using Pivot Point logic.
-*   **AsyncIO Architecture**: Efficiently process hundreds of symbols concurrently using Python's `asyncio`.
-*   **Modular Design**: Clean separation of concerns between Data, Strategy, Execution, and Notification layers.
-*   **Backtesting Engine**: Built-in framework to test strategies against historical data.
-*   **Notifications**: Integrated Discord support for real-time trade alerts.
-*   **OpenBB Integration**: Uses the OpenBB SDK for high-quality financial data.
+*   **🧠 AI Analyst Core**: Chat with specialized AI personas (e.g., "Warren Buffett", "Wyckoff") about any stock.
+*   **🤖 Multi-Model Support**: Plug-and-play support for GitHub Models (Azure AI), OpenAI, and more.
+*   **⚡ AsyncIO Architecture**: Efficiently process hundreds of symbols concurrently for traditional algo-trading.
+*   **📊 Multi-Strategy Engine**: Run technical strategies (Bollinger, Patterns, Momentum) alongside AI analysis.
+*   **💬 Interactive Chat**: Don't just get a report—ask follow-up questions to the AI about the chart.
+*   **🛠️ Modular Design**: Clean separation between Data, Strategy, AI Providers, and Execution layers.
+*   **📈 Backtesting Engine**: Built-in framework to test algorithmic strategies against historical data.
 
 ## 📂 Project Structure
 
@@ -26,18 +25,14 @@ The project follows a modern Python `src` layout:
 TraderCat/
 ├── src/
 │   └── tradercat/           # Core Package
-│       ├── bot.py           # Main Bot Logic
-│       ├── backtest/        # Backtesting Engine
+│       ├── ai/              # AI Subsystem (Providers, Analysts, Prompts)
+│       ├── bot.py           # Algo Trading Bot Logic
+│       ├── core/            # Core Session Runners
 │       ├── data/            # Data Providers (OpenBB)
-│       ├── execution/       # Trade Execution Logic
-│       ├── logger/          # Logging Configuration
-│       ├── notification/    # Notification Services (Discord)
-│       ├── strategy/        # Trading Strategies
-│       │   ├── chart_pattern/  # OOP Detectors for geometric patterns
-│       │   └── ...
+│       ├── strategy/        # Algorithmic Strategies
 │       └── utils/           # Helper Utilities
 ├── tests/                   # Unit Tests
-├── pyproject.toml           # Project Configuration & Dependencies
+├── pyproject.toml           # Project Configuration
 └── README.md                # Documentation
 ```
 
