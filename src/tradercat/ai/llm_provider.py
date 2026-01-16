@@ -102,6 +102,9 @@ class MockAIProvider(LLMProvider):
     def __init__(self, api_key: str = None):
         super().__init__(api_key=api_key)
 
+        if api_key:
+            logger.info("MockAIProvider initialized with API key (not used).")
+
     @staticmethod
     def get_provider_name() -> str: return "mock"
     
@@ -121,8 +124,10 @@ class GitHubModelsProvider(LLMProvider):
 
     def __init__(self, api_key: str = None):
         super().__init__(api_key=api_key)
-        
+
         self.token = api_key or os.environ.get("GITHUB_TOKEN")
+        if not self.token:
+            logger.warning("GitHub/Azure Token not found in TRADERCAT_AI_TOKEN or GITHUB_TOKEN.")
         
         if not ChatCompletionsClient or not self.token:
             self.client = None

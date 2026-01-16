@@ -27,7 +27,6 @@ TraderCat/
 │   └── tradercat/           # Core Package
 │       ├── ai/              # AI Subsystem (Providers, Analysts, Prompts)
 │       ├── bot.py           # Algo Trading Bot Logic
-│       ├── core/            # Core Session Runners
 │       ├── data/            # Data Providers (OpenBB)
 │       ├── strategy/        # Algorithmic Strategies
 │       └── utils/           # Helper Utilities

@@ -47,6 +47,8 @@ class AIStockAnalyst:
         
         # 2. Basic Trend Context (Simple Moving Average approximation)
         closes = [getattr(c, 'close', 0) for c in candles]
+        if len(closes) < 200:
+            logger.warning(f"Not enough data to compute 200 SMA for {symbol}. Only {len(closes)} data points available.")
         recent_closes = closes[-200:]
         sma_200 = (sum(recent_closes) / len(recent_closes)) if recent_closes else 0
         
