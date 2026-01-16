@@ -33,15 +33,13 @@ class AICommandHandler:
         Handles: Input Validation -> Provider Setup -> Bot Setup -> Report -> Chat Loop
         """
         # 1. Input Validation & Single Symbol Enforcement
-        if not args.symbols:
+        if not getattr(args, "symbol", None):
             print("❌ Error: You must specify a symbol. Usage: tradercat ai analyze TSLA")
             return
-        raw_symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
-        if len(raw_symbols) != 1:
-            print("❌ Error: AI Deep Dive supports exactly one symbol at a time.")
-            print("   Usage: tradercat ai analyze TSLA")
+        target_symbol = args.symbol.strip().upper()
+        if not target_symbol:
+            print("❌ Error: You must specify a symbol. Usage: tradercat ai analyze TSLA")
             return
-        target_symbol = raw_symbols[0]
 
         # 2. Setup LLM Provider
         try:

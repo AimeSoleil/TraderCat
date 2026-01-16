@@ -9,7 +9,7 @@ PROMPT = """
 
 Current Price: {curr_price}
 
-And please analyze the latest stock in the market, including but not limited to:
+Based on the input data and also analyze the latest stock in the market, including but not limited to:
 - Price movement information (including date, open, high, low, close)
 - Volume data
 - Key moving average positions (such as MA50, MA200, etc.)

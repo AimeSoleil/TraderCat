@@ -6,16 +6,13 @@ class PromptManager:
     Manages AI persona templates via in-memory constants.
     """
 
-    # Map aliases to the imported string variables
-    PROMPT_REGISTRY = {        
-        "wyckoff": wyckoff.PROMPT,
-        "livermore": livermore.PROMPT,
-        "buffett": buffett.PROMPT,
-        "ptj": ptj.PROMPT,        
-    }
-
     def __init__(self):
-        pass
+        self.PROMPT_REGISTRY = {        
+            "wyckoff": wyckoff.PROMPT,
+            "livermore": livermore.PROMPT,
+            "buffett": buffett.PROMPT,
+            "ptj": ptj.PROMPT,        
+        }
 
     def list_analysts(self) -> List[str]:
         """

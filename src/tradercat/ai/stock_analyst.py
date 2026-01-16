@@ -47,7 +47,8 @@ class AIStockAnalyst:
         
         # 2. Basic Trend Context (Simple Moving Average approximation)
         closes = [getattr(c, 'close', 0) for c in candles]
-        sma_200 = sum(closes[-200:]) / 200 if len(closes) >= 200 else 0
+        recent_closes = closes[-200:]
+        sma_200 = (sum(recent_closes) / len(recent_closes)) if recent_closes else 0
         
         trend_status = "Unknown"
         if sma_200 > 0:
@@ -78,7 +79,7 @@ class AIStockAnalyst:
         # 1. Fetch Data via Bot Executor or Data Provider
         candles = []
         try:
-            candles = self.bot.data_provider.get_price_data(symbol, interval="1d", lookback=30)
+            candles = self.bot.data_provider.get_price_data(symbol, interval="1d", lookback=200)
         except Exception as e:
             logger.warning(f"Data fetch warning for {symbol}: {e}")
         
