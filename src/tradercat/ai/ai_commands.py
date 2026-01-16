@@ -61,7 +61,9 @@ class AICommandHandler:
         
         # Taking only the first symbol for AI analysis as per design
         raw_symbols = [s.strip().upper() for s in args.symbol.split(",")]
-        target_symbol = raw_symbols[0] 
+        target_symbol = raw_symbols[0]
+        if len(raw_symbols) > 1:
+            logger.info(f"Multiple symbols provided in 'symbol' argument, using only {target_symbol} for analysis") 
 
         # 2. Setup LLM Provider
         logger.info("Setting up AI Provider...")
