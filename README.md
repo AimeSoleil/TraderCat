@@ -35,9 +35,9 @@ TraderCat/
 │   └── tradercat/
 │       ├── main.py          # Unified CLI Entry Point (Router)
 │       ├── ai/              # AI Subsystem
-│       │   ├── commands.py  # AI CLI Controller (View Logic)
-│       │   ├── providers.py # LLM Backends (GitHub/Azure, Mock)
-│       │   └── personas/    # Prompt Templates (Wyckoff, etc.)
+│       │   ├── ai_commands.py  # AI CLI Controller (View Logic)
+│       │   ├── llm_providers.py # LLM Backends (GitHub/Azure, Mock)
+│       │   └── prompts/    # Prompt Templates (Wyckoff, etc.)
 │       ├── core/            # Core Session Engine (SessionRunner)
 │       ├── bot.py           # Trading Bot Logic
 │       ├── strategy/        # Algorithmic Strategies

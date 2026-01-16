@@ -11,7 +11,6 @@ try:
     from rich.prompt import Prompt
     from rich.table import Table
 except ImportError:
-    # Fallback if rich is not installed (though recommended in README)
     Console = None
     print("⚠️  'rich' library not found. Install it for a better UI: pip install rich")
 
@@ -143,12 +142,16 @@ class AICommandHandler:
 
         while True:
             # 1. User Input
-            if console:
-                user_text = await asyncio.get_running_loop().run_in_executor(
-                    None, lambda: Prompt.ask("\n[bold cyan]👤 You[/bold cyan]")
-                )
-            else:
-                user_text = input("\nYou: ")
+            try:
+                if console:
+                    user_text = await asyncio.get_running_loop().run_in_executor(
+                        None, lambda: Prompt.ask("\n[bold cyan]👤 You[/bold cyan]")
+                    )
+                else:
+                    user_text = input("\nYou: ")
+            except EOFError:
+                if console:
+                    console.print("[dim]👋 EOF received, ending session.[/dim]")
             
             if user_text.lower() in ["exit", "quit", "q"]:
                 if console:
