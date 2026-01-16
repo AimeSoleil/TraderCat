@@ -29,12 +29,11 @@ dependencies = [
     "colorama>=0.4.6",
     "google-api-python-client>=2.0.0",
     "rich>=13.0.0",
-    "azure-ai-inference>=1.0.0b1",
-    "azure-core>=1.28.0"
+    "azure-core>=1.28.0",
     "google-auth-httplib2>=0.1.0",
     "google-auth-oauthlib>=1.0.0",
-    "azure-ai-inference==1.0.0b9",
-    "rich>=14.2.0"
+    "azure-ai-inference>=1.0.0b9",
+    "rich>=14.2.0",
 ]
 
 [project.optional-dependencies]

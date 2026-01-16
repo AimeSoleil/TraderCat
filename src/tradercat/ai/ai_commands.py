@@ -4,13 +4,11 @@ from tradercat.logger.logger import get_logger
 from tradercat.ai.llm_provider import LLMFactory
 from tradercat.ai.prompt_manager import PromptManager
 
-# [NEW] Rich UI Imports for enhanced terminal experience
 try:
     from rich.console import Console
     from rich.markdown import Markdown
     from rich.panel import Panel
     from rich.prompt import Prompt
-    from rich.live import Live
     from rich.table import Table
 except ImportError:
     # Fallback if rich is not installed (though recommended in README)
@@ -144,14 +142,15 @@ class AICommandHandler:
         while True:
             # 1. User Input
             if console:
-                user_text = await asyncio.get_event_loop().run_in_executor(
+                user_text = await asyncio.get_running_loop().run_in_executor(
                     None, lambda: Prompt.ask("\n[bold cyan]👤 You[/bold cyan]")
                 )
             else:
                 user_text = input("\nYou: ")
             
             if user_text.lower() in ["exit", "quit", "q"]:
-                if console: console.print("[dim]👋 Ending session.[/dim]")
+                if console:
+                    console.print("[dim]👋 Ending session.[/dim]")
                 break
             
             if not user_text.strip():
