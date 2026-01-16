@@ -59,5 +59,7 @@ class SymbolLoader:
         
         if unique_symbols:
             logger.info(f"✅ Loaded {len(unique_symbols)} unique symbols.")
+        else:
+            logger.warning("No symbols were loaded after deduplication; symbol list is empty.")
         
         return unique_symbols

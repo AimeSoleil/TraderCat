@@ -96,9 +96,44 @@ class SessionRunner:
                     "Details": getattr(signal, "details", "")
                 })
         
-        if not rows: return
+        if not rows: 
+            logger.info("No signal rows to save; skipping CSV export.")
+            return
 
         df = pd.DataFrame(rows)
         filename = f"results/trade_signals_{scope}_{datetime.now().strftime('%Y%m%d%H%M')}.csv"
         os.makedirs("results", exist_ok=True)
-        df.to
+        df.to_csv(filename, index=False, encoding='utf-8-sig')
+        logger.info(f"📄 Signals CSV created: {filename}")
+        
+        if self.drive_storage:
+            self.drive_storage.upload_file(filename)
+
+    async def _send_discord_summary(self, all_signals: List[Dict]):
+        """Internal helper: Formats and sends a summary to Discord."""
+        if not self.notifier:
+            return
+
+        today_str = datetime.today().strftime("%Y-%m-%d")
+        message_lines = [f"** 💸 Daily [{today_str}] Trade Signals Summary: **"]
+        
+        has_signals = False
+        for entry in all_signals:
+            for s in entry["signals"]:
+                if s.signal in ("buy", "sell", "rebalance"):
+                    has_signals = True
+                    line = (f"* **{entry['symbol']}**: {s.signal.upper()} | "
+                            f"Strat: {s.strategy} | Conf: {s.confidence:.2f} | "
+                            f"Reason: {s.reason} *")
+                    message_lines.append(line)
+
+        if not has_signals:
+            message_lines.append("No actionable BUY/SELL/REBALANCE signals generated.")
+
+        full_message = "\n".join(message_lines)
+        logger.info(f"🔔 Sending Discord Notification:\n{full_message}")
+        
+        try:
+            await self.notifier.send(full_message)
+        except Exception as e:
+            logger.error(f"Failed to send Discord notification: {e}")

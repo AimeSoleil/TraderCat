@@ -12,7 +12,6 @@ except ImportError:
 
 try:
     from azure.ai.inference import ChatCompletionsClient
-    # [IMPORTANT] Import message types
     from azure.ai.inference.models import SystemMessage, UserMessage, AssistantMessage
     from azure.core.credentials import AzureKeyCredential
 except ImportError:
@@ -99,8 +98,9 @@ class LLMFactory:
 
 @LLMFactory.register("mock")
 class MockAIProvider(LLMProvider):
+
     def __init__(self, api_key: str = None):
-        pass
+        super().__init__(api_key=api_key)
 
     @staticmethod
     def get_provider_name() -> str: return "mock"
@@ -118,7 +118,10 @@ class MockAIProvider(LLMProvider):
 
 @LLMFactory.register("copilot")
 class GitHubModelsProvider(LLMProvider):
+
     def __init__(self, api_key: str = None):
+        super().__init__(api_key=api_key)
+        
         self.token = api_key or os.environ.get("GITHUB_TOKEN")
         
         if not ChatCompletionsClient or not self.token:

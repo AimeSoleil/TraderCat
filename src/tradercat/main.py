@@ -6,7 +6,7 @@ import traceback
 from tradercat.logger.logger import get_logger
 from tradercat.ai.ai_commands import AICommandHandler
 from tradercat.utils.symbol_loader import SymbolLoader
-from tradercat.core.session_runner import SessionRunner
+from tradercat.session_runner import SessionRunner
 
 logger = get_logger(__name__)
 
@@ -33,7 +33,7 @@ def main():
 
     # [Action] analyze
     analyze_parser = ai_subparsers.add_parser("analyze", help="Generate technical deep-dive reports")
-    analyze_parser.add_argument("symbols", type=str, help="Target Symbol (Single ticker only, e.g. TSLA)")
+    analyze_parser.add_argument("symbol", type=str, help="Target Symbol (Single ticker only, e.g. TSLA)")
     analyze_parser.add_argument("-m", "--model", type=str, default="copilot_gpt-4o", 
                             help="AI Provider string (e.g. copilot_gpt-4o, mock)")
     analyze_parser.add_argument("-p", "--persona", type=str, default="wyckoff", 

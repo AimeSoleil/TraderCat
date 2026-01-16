@@ -36,14 +36,12 @@ class AICommandHandler:
         if not args.symbols:
             print("❌ Error: You must specify a symbol. Usage: tradercat ai analyze TSLA")
             return
-
         raw_symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
-        
-        if len(raw_symbols) > 1:
-            target_symbol = raw_symbols[0]
-            print(f"⚠️  Note: AI Deep Dive supports one symbol at a time. Analyzing [{target_symbol}] only.")
-        else:
-            target_symbol = raw_symbols[0]
+        if len(raw_symbols) != 1:
+            print("❌ Error: AI Deep Dive supports exactly one symbol at a time.")
+            print("   Usage: tradercat ai analyze TSLA")
+            return
+        target_symbol = raw_symbols[0]
 
         # 2. Setup LLM Provider
         try:

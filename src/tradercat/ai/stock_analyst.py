@@ -143,7 +143,7 @@ class AIStockAnalyst:
             # A. Get User Input
             try:
                 # Use executor for input to avoid blocking the asyncio loop completely
-                user_text = await asyncio.get_event_loop().run_in_executor(None, input, "\n👤 You: ")
+                user_text = await asyncio.get_running_loop().run_in_executor(None, input, "\n👤 You: ")
             except EOFError:
                 break
             
