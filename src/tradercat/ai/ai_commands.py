@@ -153,7 +153,9 @@ class AICommandHandler:
             except EOFError:
                 if console:
                     console.print("[dim]👋 EOF received, ending session.[/dim]")
-            
+                else:
+                    print("EOF received, ending session.")
+                break
             if user_text.lower() in ["exit", "quit", "q"]:
                 if console:
                     console.print("[dim]👋 Ending session.[/dim]")
