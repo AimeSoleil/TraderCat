@@ -5,34 +5,45 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/AimeSoleil/TraderCat/graphs/commit-activity)
 
-**TraderCat** is a robust, asynchronous quantitative trading bot and terminal. It combines traditional algorithmic indicators with **Generative AI** analysis to provide deep market insights. It leverages **OpenBB** for high-quality market data and offers a flexible plugin architecture for custom strategies and AI personalities.
+**TraderCat** is a next-generation hybrid trading terminal. It merges high-performance **Quantitative Algorithmic Trading** with contextual **Generative AI** analysis.
 
-## 🚀 Features
+Unlike traditional bots that rely solely on hard-coded indicators, TraderCat can "see" the market through the lens of legendary investors (via AI Personas) and allows you to chat interactively with the data, all while running a highly concurrent algorithmic execution engine in the background.
 
-*   **🧠 AI Analyst Core**: Chat with specialized AI personas (e.g., "Warren Buffett", "Wyckoff") about any stock.
-*   **🤖 Multi-Model Support**: Plug-and-play support for GitHub Models (Azure AI), OpenAI, and more.
-*   **⚡ AsyncIO Architecture**: Efficiently process hundreds of symbols concurrently for traditional algo-trading.
-*   **📊 Multi-Strategy Engine**: Run technical strategies (Bollinger, Patterns, Momentum) alongside AI analysis.
-*   **💬 Interactive Chat**: Don't just get a report—ask follow-up questions to the AI about the chart.
-*   **🛠️ Modular Design**: Clean separation between Data, Strategy, AI Providers, and Execution layers.
-*   **📈 Backtesting Engine**: Built-in framework to test algorithmic strategies against historical data.
+## 🚀 Key Features
 
-## 📂 Project Structure
+### 🧠 AI Market Intelligence
+*   **Persona-Driven Analysis**: Ask "Wyckoff" about distribution phases or "Buffett" about value zones.
+*   **Interactive Chat**: Don't just read a static report—enter a live chat session to ask follow-up questions about the specific symbol context.
+*   **Multi-Model Core**: Seamlessly switch between **GitHub Models** (GPT-4o, o1, Phi-3) or mock providers for testing.
+*   **Stateless Architecture**: Hot-swap models and personas on the fly.
 
-The project follows a modern Python `src` layout:
+### ⚡ Quantitative Engine
+*   **AsyncIO Performance**: Process hundreds of symbols concurrently with efficient staggering.
+*   **Multi-Strategy Support**: Technical (Bollinger, RSI), Pattern Recognition (Candlesticks), and Portfolio (Sector Rotation) strategies.
+*   **OpenBB Integration**: Uses institutional-grade data sources.
+*   **Robust Reporting**: Automated CSV logging and Discord notifications.
+
+---
+
+## 📂 Architecture
+
+The system has been refactored into a clean, modular `src` layout:
 
 ```text
 TraderCat/
 ├── src/
-│   └── tradercat/           # Core Package
-│       ├── ai/              # AI Subsystem (Providers, Analysts, Prompts)
-│       ├── bot.py           # Algo Trading Bot Logic
-│       ├── data/            # Data Providers (OpenBB)
+│   └── tradercat/
+│       ├── main.py          # Unified CLI Entry Point (Router)
+│       ├── ai/              # AI Subsystem
+│       │   ├── ai_commands.py  # AI CLI Controller (View Logic)
+│       │   ├── llm_providers.py # LLM Backends (GitHub/Azure, Mock)
+│       │   └── prompts/    # Prompt Templates (Wyckoff, etc.)
+│       ├── session_runner.py    # Core Session Engine (SessionRunner)
+│       ├── bot.py           # Trading Bot Logic
 │       ├── strategy/        # Algorithmic Strategies
-│       └── utils/           # Helper Utilities
+│       └── utils/           # SymbolLoader, Logger
 ├── tests/                   # Unit Tests
-├── pyproject.toml           # Project Configuration
-└── README.md                # Documentation
+└── public/                  # Assets and images
 ```
 
 ## 🛠️ Installation
@@ -63,49 +74,100 @@ TraderCat/
 
 ## ⚙️ Configuration
 
-### Environment Variables
-Create a `.env` file or export these variables in your shell:
+Create a `.env` file in the root directory.
 
-*   `DISCORD_WEBHOOK_URL`: (Optional) URL for Discord notifications.
-*   `ENV_SYMBOLS`: (Optional) Default comma-separated list of symbols (e.g., "AAPL,MSFT").
+### 1. AI Authentication (Required for AI Features)
+TraderCat uses **GitHub Models** (via Azure AI Inference). You need a GitHub Personal Access Token.
+*   `TRADERCAT_AI_TOKEN`: Your GitHub PAT (or Azure Key).
 
-### Symbol Configuration
-You can provide symbols via:
-1.  **CLI Argument**: `-s "AAPL,MSFT"`
-2.  **File**: `-f symbols.txt` (One symbol per line) or `symbols.yaml` (`symbols: [...]`)
-3.  **Environment Variable**: `ENV_SYMBOLS`
+### 2. General Settings
+*   `DISCORD_WEBHOOK_URL`: (Optional) For trade alerts.
+*   `ENV_SYMBOLS`: (Optional) Default fallback symbols (e.g., "AAPL,TSLA").
 
 ## 🖥️ Usage
 
-After installation, the `tradercat` command is available in your terminal.
+TraderCat operates with two main modes: `ai` (Intelligence) and `run` (Automation).
 
-### Commands
+### Mode 1: 🧠 AI Intelligence (`ai`)
 
-*   `tradercat run`: Start the trading bot session.
-*   `tradercat help`: Show help information.
+Use this mode for deep-dive analysis and interactive research.
 
-### Run Once (Immediate Execution)
+<p align="center">
+  <img src="public/buffett_chat_1.png" width="48%" alt="Warren Buffett Persona Analysis" />
+  <img src="public/buffett_chat_2.png" width="48%" alt="Interactive Chat Session" />
+  <br>
+  <i>Interactive chat session with the "Warren Buffett" persona for clear chart data analysis.</i>
+</p>
 
+**Analyze a Symbol (Deep Dive):**
+Generates a report and starts a chat session.
 ```bash
-# Display Help
-tradercat help
+tradercat ai analyze TSLA
+```
 
-# Run for specific symbols
+**Advanced Usage:**
+Switch analysts and models.
+```bash
+# Ask "Warren Buffett" about Apple
+tradercat ai analyze AAPL --persona buffett
+
+# Use a specific reasoning model
+tradercat ai analyze NVDA --model copilot_o1 --no-chat
+```
+
+**Discovery Commands:**
+```bash
+# See all supported personas (e.g., wyckoff, livermore)
+tradercat ai list-personas
+
+# See all supported models from your provider
+tradercat ai list-models
+```
+
+### Mode 2: 🚀 Automated Trading (`run`)
+
+Use this mode for batch processing, scanning, and signal generation.
+
+**Execute a Trading Session:**
+```bash
+# Scan specific symbols
 tradercat run -s "AAPL,MSFT,GOOG"
 
-# Run using a symbols file
+# Scan from a file (YAML or TXT)
 tradercat run -f symbols.yml
 
-# Run only Single Asset strategies
-tradercat run -f symbols.yml --scope single
-
-# Run only Portfolio strategies (No symbols file required)
+# Run only Sector Rotation strategies (Portfolio Scope)
 tradercat run --scope portfolio
 ```
 
-### Automation (Cron / Systemd)
+**CLI Options Table:**
+| Flag | Description | Default |
+| :--- | :--- | :--- |
+| `-s`, `--symbols` | Comma-separated tickers. | `None` |
+| `-f`, `--symbols-file` | Path to symbols file. | `None` |
+| `-c`, `--concurrency` | Max concurrent bots. | `5` |
+| `--scope` | `single` (stocks), `portfolio` (sectors), or `all`. | `single` |
 
-Since the internal scheduler has been removed in favor of robust system-level tools, use **Cron** (Linux/macOS) to schedule daily runs.
+---
+
+## 🤖 AI Providers & Personas
+
+### Supported Providers
+The system uses a factory pattern to load LLMs.
+1.  **Copilot (GitHub Models)**: Access to GPT-4o, Phi-3, Llama-3, etc. free with a GitHub account.
+2.  **Mock**: A dummy provider for testing flow without API calls (`--model mock`).
+
+### Analyst Personas
+*   **Standard**: Balanced technical/fundamental mix.
+*   **Wyckoff**: Focus on accumulation/distribution and market cycles.
+*   **Buffett**: Focus on value, moats, and long-term hold.
+*   **Livermore**: Focus on price action, pivot points, and trend following.
+
+---
+
+## ⏰ Automation (Cron)
+
+Since the internal scheduler is decoupled, use **Cron** (Linux/Mac) for daily automation.
 
 **Example Crontab:**
 
