@@ -120,7 +120,7 @@ tradercat ai analyze NVDA --model copilot_o1 --no-chat
 # See all supported personas (e.g., wyckoff, livermore)
 tradercat ai list-personas
 
-# See all supported models supported by your provider
+# See all supported models from your provider
 tradercat ai list-models
 ```
 

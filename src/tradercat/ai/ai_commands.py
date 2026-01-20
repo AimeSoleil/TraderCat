@@ -12,10 +12,11 @@ try:
     from rich.table import Table
 except ImportError:
     Console = None
-    print("⚠️  'rich' library not found. Install it for a better UI: pip install rich")
 
 logger = get_logger(__name__)
 
+if Console is None:
+    logger.warning("⚠️  'rich' library not found. Install it for a better UI: pip install rich")
 # Initialize Console if available
 console = Console() if Console else None
 
@@ -150,7 +151,9 @@ class AICommandHandler:
             except EOFError:
                 if console:
                     console.print("[dim]👋 EOF received, ending session.[/dim]")
-            
+                else:
+                    print("EOF received, ending session.")
+                break
             if user_text.lower() in ["exit", "quit", "q"]:
                 if console:
                     console.print("[dim]👋 Ending session.[/dim]")
