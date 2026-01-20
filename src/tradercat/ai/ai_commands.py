@@ -27,7 +27,6 @@ class AICommandHandler:
 
     def list_models(self):
         """Displays supported AI models."""
-        # Use existing tabulation logic in factory, or we could lift it here for consistent styling
         LLMFactory.list_all_supported_models()
 
     def list_personas(self):
@@ -92,7 +91,6 @@ class AICommandHandler:
 
         try:
             # A. Generate Initial Report with Spinner
-            report = ""
             logger.info(f"Starting analysis for symbol: {target_symbol}")
             
             if console:

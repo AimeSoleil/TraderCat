@@ -38,7 +38,7 @@ TraderCat/
 │       │   ├── ai_commands.py  # AI CLI Controller (View Logic)
 │       │   ├── llm_providers.py # LLM Backends (GitHub/Azure, Mock)
 │       │   └── prompts/    # Prompt Templates (Wyckoff, etc.)
-│       ├── core/            # Core Session Engine (SessionRunner)
+│       ├── session_runner.py    # Core Session Engine (SessionRunner)
 │       ├── bot.py           # Trading Bot Logic
 │       ├── strategy/        # Algorithmic Strategies
 │       └── utils/           # SymbolLoader, Logger
