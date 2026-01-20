@@ -129,9 +129,9 @@ class AICommandHandler:
         Orchestrates the UI here while using the analyst's purely functional LLM capability.
         """
         if console:
-            console.print(Panel(f"[bold yellow]💬 Entering Live Chat with {persona.capitalize()}[/bold yellow]\n[dim]Ask follow-up questions about the chart or strategy. Type 'exit' to quit.[/dim]", border_style="yellow"))
+            console.print(Panel(f"[bold yellow]💬 Entering Live Chat with {persona.capitalize()}[/bold yellow]\n[dim]Ask follow-up questions about the chart or strategy. Type 'exit', 'quit', or 'q' to quit.[/dim]", border_style="yellow"))
         else:
-            print(f"--- Chat with {persona} (type 'exit' to quit) ---")
+            print(f"--- Chat with {persona} (type 'exit', 'quit', or 'q' to quit) ---")
 
         # Initialize History
         history = [
@@ -165,7 +165,6 @@ class AICommandHandler:
             history.append({"role": "user", "content": user_text})
 
             # 2. AI Response
-            response_text = ""
             try:
                 if console:
                     with console.status(f"[bold magenta]🤖 {persona.capitalize()} is thinking...[/bold magenta]", spinner="earth"):

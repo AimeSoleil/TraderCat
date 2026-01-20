@@ -96,7 +96,7 @@ Use this mode for deep-dive analysis and interactive research.
   <img src="public/buffett_chat_1.png" width="48%" alt="Warren Buffett Persona Analysis" />
   <img src="public/buffett_chat_2.png" width="48%" alt="Interactive Chat Session" />
   <br>
-  <i>Interactive chat session with the "Warren Buffett" persona analyzing chart data clearly.</i>
+  <i>Interactive chat session with the "Warren Buffett" persona for clear chart data analysis.</i>
 </p>
 
 **Analyze a Symbol (Deep Dive):**
