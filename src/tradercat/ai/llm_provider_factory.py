@@ -55,7 +55,6 @@ class LLMFactory:
             # Import modules here to trigger @register decorators
             import tradercat.ai.providers.mock_provider
             import tradercat.ai.providers.github_models
-            import tradercat.ai.providers.copilot_sdk
             cls._providers_loaded = True
 
     @classmethod
