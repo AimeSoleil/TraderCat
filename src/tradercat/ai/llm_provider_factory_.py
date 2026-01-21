@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Type, Tuple, List
+from typing import Dict, Type, Tuple, List, Union
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.logger.logger import get_logger
 
@@ -13,15 +13,26 @@ logger = get_logger(__name__)
 
 class LLMFactory:
     """
-    Factory to register and instantiate LLM Providers dynamically.
+    Factory to register and hold LLM Provider Singleton Instances.
     """
-    _registry: Dict[str, Type[LLMProvider]] = {}
+    # Registry now holds Instances, not Classes
+    _registry: Dict[str, LLMProvider] = {}
     _providers_loaded = False
 
     @classmethod
     def register(cls, prefix: str):
         def wrapper(provider_cls):
-            cls._registry[prefix] = provider_cls
+            try:
+                # Instantiate immediately upon registration (Import Time)
+                # Pass the global AI token if available
+                token = os.environ.get("TRADERCAT_AI_TOKEN")
+                
+                # Initialize the provider with the token
+                instance = provider_cls(api_key=token)
+                
+                cls._registry[prefix] = instance
+            except Exception as e:
+                logger.error(f"Failed to auto-init provider '{prefix}': {e}")
             return provider_cls
         return wrapper
 
@@ -39,7 +50,7 @@ class LLMFactory:
 
     @classmethod
     def _ensure_providers_loaded(cls):
-        """Lazy load providers to avoid circular import issues at toplevel"""
+        """Lazy load provider modules to invoke the @register decorators"""
         if not cls._providers_loaded:
             # Import modules here to trigger @register decorators
             import tradercat.ai.providers.mock_provider
@@ -50,7 +61,7 @@ class LLMFactory:
     @classmethod
     def create_provider(cls, model_spec: str) -> Tuple[LLMProvider, str]:
         """
-        Validates model spec and returns (ProviderInstance, ModelName).
+        Retrieves the pre-initialized Provider instance and validates the model.
         """
         cls._ensure_providers_loaded()
 
@@ -59,42 +70,38 @@ class LLMFactory:
         if provider_key not in cls._registry:
             raise ValueError(f"Unknown AI Provider '{provider_key}'. Available: {list(cls._registry.keys())}")
 
-        provider_cls = cls._registry[provider_key]
+        # Retrieve the existing singleton instance
+        instance = cls._registry[provider_key]
         
-        # Verify Model Support (Strict)
-        supported_models = provider_cls().list_supported_models()
+        # Validate Model
+        supported_models = instance.list_supported_models()
         if raw_model_name == "default":
             final_model = supported_models[0] if supported_models else "unknown"
             logger.info(f"Defaulting to model: {final_model}")
         else:
             if raw_model_name not in supported_models:
                 valid_str = ", ".join(supported_models)
-                # Soft warning instead of crash? No, strict is better for now.
-                # Just logger warning might be safer if user appends custom models.
-                if "default" not in supported_models: # If provider uses strict lists
-                    logger.warning(f"Model '{raw_model_name}' might not be supported. Valid: {valid_str}")
+                # Ensure strict checking or soft warning depending on provider nature
+                if "default" not in supported_models: 
+                    logger.warning(f"Model '{raw_model_name}' might not be supported by {provider_key}. Valid: {valid_str}")
             final_model = raw_model_name
-
-        # Instantiate Provider (Auth Only)
-        api_key = os.environ.get("TRADERCAT_AI_TOKEN")
-        instance = provider_cls(api_key=api_key)
         
         return instance, final_model
 
     @classmethod
     def list_all_supported_models(cls):
         """
-        Introspects all registered providers to print available models using a table.
+        Introspects all registered provider instances to print available models.
         """
         cls._ensure_providers_loaded()
         
         headers = ["Provider", "Model ID", "CLI Command Param"]
         table_data = []
 
-        for provider_key, cls_ref in cls._registry.items():
-            models = cls_ref.list_supported_models()
+        for provider_key, instance in cls._registry.items():
+            # Instance is already created, so we call method directly without cls()
+            models = instance.list_supported_models()
             for model in models:
-                # Format: provider_modelName
                 cli_param = f"{provider_key}_{model}"
                 table_data.append([provider_key, model, f"--model {cli_param}"])
 
