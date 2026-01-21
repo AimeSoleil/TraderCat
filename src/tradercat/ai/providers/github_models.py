@@ -1,6 +1,7 @@
 import os
 import asyncio
 import trace
+import traceback
 from typing import List, Dict
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.ai.llm_provider_factory_ import LLMFactory
