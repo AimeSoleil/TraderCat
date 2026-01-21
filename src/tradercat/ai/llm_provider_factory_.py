@@ -62,7 +62,7 @@ class LLMFactory:
         provider_cls = cls._registry[provider_key]
         
         # Verify Model Support (Strict)
-        supported_models = provider_cls.list_supported_models()
+        supported_models = provider_cls().list_supported_models()
         if raw_model_name == "default":
             final_model = supported_models[0] if supported_models else "unknown"
             logger.info(f"Defaulting to model: {final_model}")
