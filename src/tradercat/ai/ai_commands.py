@@ -178,6 +178,7 @@ class AICommandHandler:
                         
                         with Live(Panel("", title=panel_title, border_style="magenta", expand=False), refresh_per_second=10) as live:
                             async for chunk in analyst.llm.chat_stream(history, model_id=model_name):
+                                logger.info(f"Received chunk: {chunk}")
                                 response_text += chunk
                                 # Update the panel with accumulated Markdown
                                 live.update(Panel(Markdown(response_text), title=panel_title, border_style="magenta", expand=False))

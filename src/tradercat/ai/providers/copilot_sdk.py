@@ -157,10 +157,32 @@ class CopilotSDKProvider(LLMProvider):
         while True:
             # Wait for either new data or task completion
             get_chunk = asyncio.create_task(queue.get())
-            done, _ = await asyncio.wait(
+            
+            # Wait until we get a chunk OR the session task finishes (session.idle)
+            done, pending = await asyncio.wait(
                 [get_chunk, task], 
                 return_when=asyncio.FIRST_COMPLETED
             )
 
+            # Case A: We got a chunk of data
             if get_chunk in done:
-                yield get_chunk
+                yield get_chunk.result()
+            
+            # Case B: The session task finished (meaning session.idle happened)
+            if task in done:
+                # Cancel the pending get_chunk if it's still waiting
+                if get_chunk not in done:
+                    get_chunk.cancel()
+
+                # Drain any remaining items that might have been pushed just before finish
+                while not queue.empty():
+                    yield queue.get_nowait()
+                
+                # Check if the task failed specifically
+                if task.exception():
+                    err = task.exception()
+                    logger.error(f"Streaming task failed: {err}")
+                    yield f"\n[System Error: {err}]"
+
+                # Stop the iterator
+                break
