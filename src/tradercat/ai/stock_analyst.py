@@ -129,11 +129,12 @@ class AIStockAnalyst:
         
         # 2. Load Prompts
         try:
+            lang_hint = analyst_name.lower().split("-")[1] if "-" in analyst_name else "en"
             system_prompt = self.prompt_manager.get_system_prompt(analyst_name)
             
             # 3. Inject JSON into User Prompt Template
             # ensure get_user_prompt accepts the string directly
-            user_prompt = self.prompt_manager.get_user_prompt(data_json=data_json_str) 
+            user_prompt = self.prompt_manager.get_user_prompt(data_json=data_json_str, lang_hint=lang_hint) 
             
         except ValueError as e:
             logger.error(f"Template formatting failed: {e}")
