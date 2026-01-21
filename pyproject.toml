@@ -32,6 +32,7 @@ dependencies = [
     "google-auth-oauthlib>=1.0.0",
     "azure-ai-inference>=1.0.0b9",
     "rich>=14.2.0",
+    "github-copilot-sdk>=0.1.14"
 ]
 
 [project.optional-dependencies]

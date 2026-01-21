@@ -1,6 +1,6 @@
 import asyncio
 from typing import List, Any
-from tradercat.ai.llm_interface import LLMProvider
+from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.ai.prompt_manager import PromptManager
 from tradercat.bot import TraderBot
 from tradercat.logger.logger import get_logger

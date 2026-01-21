@@ -12,15 +12,13 @@ class LLMProvider(ABC):
         """Initialize the client connection (Auth only)."""
         pass
     
-    @staticmethod
     @abstractmethod
-    def get_provider_name() -> str:
+    def get_provider_name(self) -> str:
         """Returns the unique ID for this provider (e.g., 'copilot')."""
         pass
 
-    @staticmethod
     @abstractmethod
-    def list_supported_models() -> List[str]:
+    def list_supported_models(self) -> List[str]:
         """Returns a list of valid model identifiers for this provider."""
         pass
 

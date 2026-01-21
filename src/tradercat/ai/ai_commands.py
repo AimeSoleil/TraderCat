@@ -1,7 +1,7 @@
 import asyncio
 import traceback
 from tradercat.logger.logger import get_logger
-from tradercat.ai.llm_provider import LLMFactory
+from tradercat.ai.llm_provider_factory import LLMFactory
 from tradercat.ai.prompt_manager import PromptManager
 
 try:
@@ -169,16 +169,15 @@ class AICommandHandler:
                 if console:
                     with console.status(f"[bold magenta]🤖 {persona.capitalize()} is thinking...[/bold magenta]", spinner="earth"):
                         response_text = await analyst.llm.chat(history, model_id=model_name)
-                    
+
                     # Markdown Rendering for Chat Bubbles
                     console.print(Panel(Markdown(response_text), title=f"🤖 {persona.capitalize()}", border_style="magenta", expand=False))
                 else:
                     print("Thinking...")
                     response_text = await analyst.llm.chat(history, model_id=model_name)
                     print(f"\n{persona}: {response_text}")
-
             except Exception as e:
-                self._print_error(f"AI Error: {e}")
+                self._print_error(f"AI Error: {traceback.format_exc()}")
                 continue
             
             # 3. Update History
