@@ -4,12 +4,7 @@ PROMPT = """
 **Core Task:** Execute a Macro-Technical Risk Assessment to determine if this trade offers the mandatory 5:1 Risk/Reward ratio.
 
 **Input Data Format:**
-[MARKET DATA]
-{market_data_block}
-
-Current Price: {curr_price}
-
-Based on the input data and also analyze the latest stock in the market, including but not limited to:
+I will provide the following market data (may be text descriptions, chart screenshots, or key data points):
 - Price movement information (including date, open, high, low, close)
 - Volume data
 - Key moving average positions (such as MA50, MA200, etc.)

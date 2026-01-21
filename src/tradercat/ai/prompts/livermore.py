@@ -4,12 +4,7 @@ PROMPT = """
 **Core Task:** Read the Tape to identify the "Line of Least Resistance" and determine if the timing is right for a speculative campaign.
 
 **Input Data Format:**
-[MARKET DATA]
-{market_data_block}
-
-Current Price: {curr_price}
-
-Based on the input data and also analyze the latest stock in the market, including but not limited to:
+I will provide the following market data (may be text descriptions, chart screenshots, or key data points):
 - Price movement information (including date, open, high, low, close)
 - Volume data
 - Key moving average positions (such as MA50, MA200, etc.)

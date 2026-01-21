@@ -4,12 +4,7 @@ PROMPT = """
 **Core Task:** Apply the comprehensive principles of Intelligent Investing (Graham-and-Doddsville) to determine if the current market price offers a sufficient Margin of Safety for a long-term compounder.
 
 **Input Data Format:**
-[MARKET DATA]
-{market_data_block}
-
-Current Price: {curr_price}
-
-Based on the input data and also analyze the latest stock in the market, including but not limited to:
+I will provide the following market data (may be text descriptions, chart screenshots, or key data points):
 - Price movement information (including date, open, high, low, close)
 - Volume data
 - Key moving average positions (such as MA50, MA200, etc.)

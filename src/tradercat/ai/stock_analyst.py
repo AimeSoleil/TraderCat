@@ -1,4 +1,5 @@
-import asyncio
+import json
+import statistics
 from typing import List, Any
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.ai.prompt_manager import PromptManager
@@ -18,100 +19,134 @@ class AIStockAnalyst:
         self.bot = bot
         self.prompt_manager = prompt_manager
 
-    def _prepare_data_context(self, symbol: str, candles: List[Any]) -> dict:
+    def _calculate_rsi(self, prices: List[float], period: int = 14) -> float:
+        """Helper: Calculate RSI using standard smoothing."""
+        if len(prices) < period + 1:
+            return 50.0 # Neural fallback
+        
+        deltas = [prices[i] - prices[i-1] for i in range(1, len(prices))]
+        gain = [x for x in deltas if x > 0]
+        loss = [-x for x in deltas if x < 0]
+        
+        avg_gain = sum(gain) / period if gain else 0
+        avg_loss = sum(loss) / period if loss else 0
+        
+        if avg_loss == 0: return 100.0
+        rs = avg_gain / avg_loss
+        return 100.0 - (100.0 / (1.0 + rs))
+
+    def _prepare_data_context(self, symbol: str, candles: List[Any]) -> str:
         """
-        Prepares a dictionary of data to be injected into the prompt template.
-        Fixes: Uses the passed 'candles' argument, not self.candles.
+        Constructs a RICH DATA JSON string for the AI.
+        Includes: Basic Snapshot, Technical Indicators, and Recent Tape (History).
         """
-        # Safety Check
-        if not candles or len(candles) < 2:
-            return {
-                "symbol": symbol,
-                "curr_price": "N/A",
-                "market_data_block": "Insufficient price data available."
-            }
-        
-        # Access the last two candles
-        current_candle = candles[-1]
-        prev_candle = candles[-2]
-        
-        # Determine attribute names (pydantic object vs dict support)
-        curr_close = getattr(current_candle, 'close', 0)
-        prev_close = getattr(prev_candle, 'close', 0)
-        volume = getattr(current_candle, 'volume', 0)
-        
-        # 1. Calculate Daily Change
-        daily_change_pct = 0.0
-        if prev_close > 0:
-            daily_change_pct = ((curr_close - prev_close) / prev_close) * 100
-        
-        # 2. Basic Trend Context (Simple Moving Average approximation)
+        # 1. Safety Checks
+        if not candles or len(candles) < 20:
+            return json.dumps({"error": "Insufficient data", "symbol": symbol})
+
+        # Extract Lists for Math
         closes = [getattr(c, 'close', 0) for c in candles]
-        if len(closes) < 200:
-            logger.warning(f"Not enough data to compute 200 SMA for {symbol}. Only {len(closes)} data points available.")
-        recent_closes = closes[-200:]
-        sma_200 = (sum(recent_closes) / len(recent_closes)) if recent_closes else 0
+        volumes = [getattr(c, 'volume', 0) for c in candles]
+        current = candles[-1]
         
-        trend_status = "Unknown"
-        if sma_200 > 0:
-            trend_status = "ABOVE 200 SMA (Bullish Bias)" if curr_close > sma_200 else "BELOW 200 SMA (Bearish Bias)"
+        curr_price = closes[-1]
+        prev_price = closes[-2]
         
-        # 3. Construct Data Block
-        data_block = f"""
-        Symbol: {symbol}
-        Latest Price: {curr_close:.2f}
-        Daily Change: {daily_change_pct:.2f}%
-        Trend Context: {trend_status}
-        Volume (Last Session): {volume}
-        """
+        # 2. Compute Technical Indicators
+        # -- Trend (SMA) --
+        sma_20 = statistics.mean(closes[-20:])
+        sma_50 = statistics.mean(closes[-50:]) if len(closes) >= 50 else 0
+        sma_200 = statistics.mean(closes[-200:]) if len(closes) >= 200 else 0
         
-        return {
-            "symbol": symbol,
-            "curr_price": f"{curr_close:.2f}",
-            "market_data_block": data_block
+        trend_state = "Neutral"
+        if sma_50 > 0 and sma_200 > 0:
+            if curr_price > sma_50 and sma_50 > sma_200: trend_state = "Strong Uptrend"
+            elif curr_price < sma_50 and sma_50 < sma_200: trend_state = "Strong Downtrend"
+        
+        # -- Momentum (RSI) --
+        rsi_14 = self._calculate_rsi(closes, 14)
+        
+        # -- Volatility / Change --
+        daily_change_pct = ((curr_price - prev_price) / prev_price) * 100
+        avg_vol = statistics.mean(volumes[-20:])
+        rvol = (volumes[-1] / avg_vol) if avg_vol > 0 else 1.0
+        
+        # 3. Recent Price Action (The "Tape")
+        # We give the LLM the last 7 days of raw data to find candlestick patterns
+        recent_tape = []
+        for c in candles[-7:]:
+            date_str = getattr(c, 'time', 'N/A') # Adjust attribute based on your object
+            recent_tape.append({
+                "date": str(date_str),
+                "open": round(getattr(c, 'open', 0), 2),
+                "high": round(getattr(c, 'high', 0), 2),
+                "low": round(getattr(c, 'low', 0), 2),
+                "close": round(getattr(c, 'close', 0), 2),
+                "volume": getattr(c, 'volume', 0)
+            })
+
+        # 4. Construct Final Structure
+        context_data = {
+            "meta": {
+                "symbol": symbol,
+                "interval": "1d",
+                "observation_time": "Latest Close"
+            },
+            "snapshot": {
+                "price": round(curr_price, 2),
+                "change_percent": round(daily_change_pct, 2),
+                "volume": volumes[-1],
+                "relative_volume_rvol": round(rvol, 2)
+            },
+            "technicals": {
+                "rsi_14": round(rsi_14, 2),
+                "sma_20": round(sma_20, 2),
+                "sma_50": round(sma_50, 2),
+                "sma_200": round(sma_200, 2),
+                "trend_assessment": trend_state,
+                "price_vs_sma200": "ABOVE" if curr_price > sma_200 else "BELOW"
+            },
+            "recent_candle_tape": recent_tape
         }
+        
+        # Return as JSON string directly to be injected into prompt
+        return json.dumps(context_data, indent=2)
 
     async def analyze_symbol(self, symbol: str, model_name: str, analyst_name: str = "wyckoff") -> str:
-        """
-        Pipe: Load Template -> Fetch Data -> Call LLM (with specific model_name)
-        """
+        
         request_id = f"{symbol}::{analyst_name}::{model_name}"
         logger.info(f"🧠 AI Analysis Request: {request_id}")
 
-        # 1. Fetch Data via Bot Executor or Data Provider
+        # 1. Fetch Data
         candles = []
         try:
-            candles = self.bot.data_provider.get_price_data(symbol, interval="1d", lookback=200)
+            candles = self.bot.data_provider.get_price_data(symbol, interval="1d", lookback=250)
+            # data_json_str IS NOW A JSON STRING
+            data_json_str = self._prepare_data_context(symbol, candles)
         except Exception as e:
             logger.warning(f"Data fetch warning for {symbol}: {e}")
+            return f"⚠️ Data Error: {e}"
         
-        if not candles:
-            return f"⚠️ Data Error: Unable to retrieve price history for {symbol}."
-
-        # 2. Load Prompt Template
+        # 2. Load Prompts
         try:
-            template = self.prompt_manager.get_prompt_template(analyst_name)
+            system_prompt = self.prompt_manager.get_system_prompt(analyst_name)
+            
+            # 3. Inject JSON into User Prompt Template
+            # ensure get_user_prompt accepts the string directly
+            user_prompt = self.prompt_manager.get_user_prompt(data_json=data_json_str) 
+            
         except ValueError as e:
-            return f"❌ Configuration Error: {str(e)}"
-
-        # 3. Format Prompt
-        try:
-            data_context = self._prepare_data_context(symbol, candles)
-            final_prompt = template.format(**data_context)
-        except Exception as e:
             logger.error(f"Template formatting failed: {e}")
-            return f"❌ Prompt Error: Failed to format analyst template."
+            return f"❌ Prompt Error: {e}"
 
-        # 4. Call AI (Stateless Provider + Runtime Model ID)
-        system_msg = f"You are a professional trader acting as {analyst_name}."
-        
+        # 4. Call AI
         try:
             analysis = await self.llm.generate_thought(
-                prompt=final_prompt, 
-                model_id=model_name,  # <--- [CRITICAL UPDATE] Passed at runtime
-                system_prompt=system_msg
+                prompt=user_prompt, 
+                model_id=model_name,
+                system_prompt=system_prompt
             )
             return analysis
         except Exception as e:
-            logger.error(f"LLM Generation Failed ({model_name}): {e}")
+            logger.error(f"LLM Error: {e}")
             return f"❌ AI Generation Error: {str(e)}"
