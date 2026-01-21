@@ -1,5 +1,6 @@
 import os
 import asyncio
+import trace
 from typing import List, Dict
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.ai.llm_provider_factory_ import LLMFactory
@@ -80,7 +81,7 @@ class GitHubModelsProvider(LLMProvider):
             response = await loop.run_in_executor(None, _blocking_call)
             return response.choices[0].message.content
         except Exception as e:
-            return f"AI Error: {str(e)}"
+            return f"AI Error: {traceback.format_exc()}"
 
     async def chat(self, messages: List[Dict[str, str]], model_id: str) -> str:
         if not self.client:

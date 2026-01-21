@@ -178,7 +178,7 @@ class AICommandHandler:
                     print(f"\n{persona}: {response_text}")
 
             except Exception as e:
-                self._print_error(f"AI Error: {e}")
+                self._print_error(f"AI Error: {traceback.format_exc()}")
                 continue
             
             # 3. Update History
