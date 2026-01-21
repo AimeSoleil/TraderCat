@@ -168,13 +168,13 @@ class AICommandHandler:
             try:
                 if console:
                     with console.status(f"[bold magenta]🤖 {persona.capitalize()} is thinking...[/bold magenta]", spinner="earth"):
-                        response_text = await analyst.llm.chat(history, model_id=model_name)
+                        response_text = await analyst.llm.chat_stream(history, model_id=model_name)
                     
                     # Markdown Rendering for Chat Bubbles
                     console.print(Panel(Markdown(response_text), title=f"🤖 {persona.capitalize()}", border_style="magenta", expand=False))
                 else:
                     print("Thinking...")
-                    response_text = await analyst.llm.chat(history, model_id=model_name)
+                    response_text = await analyst.llm.chat_stream(history, model_id=model_name)
                     print(f"\n{persona}: {response_text}")
 
             except Exception as e:
