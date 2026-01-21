@@ -1,7 +1,7 @@
 import asyncio
 import traceback
 from tradercat.logger.logger import get_logger
-from tradercat.ai.llm_provider import LLMFactory
+from tradercat.ai.llm_provider_factory_ import LLMFactory
 from tradercat.ai.prompt_manager import PromptManager
 
 try:

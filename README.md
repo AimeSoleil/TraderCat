@@ -79,6 +79,8 @@ Create a `.env` file in the root directory.
 ### 1. AI Authentication (Required for AI Features)
 TraderCat uses **GitHub Models** (via Azure AI Inference). You need a GitHub Personal Access Token.
 *   `TRADERCAT_AI_TOKEN`: Your GitHub PAT (or Azure Key).
+*   `TRADERCAT_AI_MODELS`: (Optional) Comma-separated model list to append/override available Copilot models.
+    * Example: `TRADERCAT_AI_MODELS=gpt-4o,gpt-4o-mini,o1`
 
 ### 2. General Settings
 *   `DISCORD_WEBHOOK_URL`: (Optional) For trade alerts.
