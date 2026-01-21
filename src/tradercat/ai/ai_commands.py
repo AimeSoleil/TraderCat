@@ -1,7 +1,7 @@
 import asyncio
 import traceback
 from tradercat.logger.logger import get_logger
-from tradercat.ai.llm_provider_factory_ import LLMFactory
+from tradercat.ai.llm_provider_factory import LLMFactory
 from tradercat.ai.prompt_manager import PromptManager
 
 try:
@@ -165,43 +165,17 @@ class AICommandHandler:
             history.append({"role": "user", "content": user_text})
 
             # 2. AI Response
-            response_text = ""
             try:
-                # Check if provider supports streaming
-                if hasattr(analyst.llm, "chat_stream"):
-                    if console:
-                        # Use Rich Live display for streaming effect
-                        from rich.live import Live
-                        
-                        # Create a placeholder panel
-                        panel_title = f"🤖 {persona.capitalize()}"
-                        
-                        with Live(Panel("", title=panel_title, border_style="magenta", expand=False), refresh_per_second=10) as live:
-                            async for chunk in analyst.llm.chat_stream(history, model_id=model_name):
-                                logger.info(f"Received chunk: {chunk}")
-                                response_text += chunk
-                                # Update the panel with accumulated Markdown
-                                live.update(Panel(Markdown(response_text), title=panel_title, border_style="magenta", expand=False))
-                    else:
-                        # Fallback for no console: basic print stream
-                        print(f"\n{persona}: ", end="", flush=True)
-                        async for chunk in analyst.llm.chat_stream(history, model_id=model_name):
-                            response_text += chunk
-                            print(chunk, end="", flush=True)
-                        print() # Newline at end
-                
-                else:
-                    # Non-streaming Fallback (Standard wait)
-                    if console:
-                        with console.status(f"[bold magenta]🤖 {persona.capitalize()} is thinking...[/bold magenta]", spinner="earth"):
-                            response_text = await analyst.llm.chat(history, model_id=model_name)
-                        # Display Final Result
-                        console.print(Panel(Markdown(response_text), title=f"🤖 {persona.capitalize()}", border_style="magenta", expand=False))
-                    else:
-                        print("Thinking...")
+                if console:
+                    with console.status(f"[bold magenta]🤖 {persona.capitalize()} is thinking...[/bold magenta]", spinner="earth"):
                         response_text = await analyst.llm.chat(history, model_id=model_name)
-                        print(f"\n{persona}: {response_text}")
 
+                    # Markdown Rendering for Chat Bubbles
+                    console.print(Panel(Markdown(response_text), title=f"🤖 {persona.capitalize()}", border_style="magenta", expand=False))
+                else:
+                    print("Thinking...")
+                    response_text = await analyst.llm.chat(history, model_id=model_name)
+                    print(f"\n{persona}: {response_text}")
             except Exception as e:
                 self._print_error(f"AI Error: {traceback.format_exc()}")
                 continue

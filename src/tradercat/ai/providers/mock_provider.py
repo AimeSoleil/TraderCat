@@ -1,6 +1,6 @@
 from typing import List, Dict
 from tradercat.ai.providers.llm_interface import LLMProvider
-from tradercat.ai.llm_provider_factory_ import LLMFactory
+from tradercat.ai.llm_provider_factory import LLMFactory
 from tradercat.logger.logger import get_logger
 
 logger = get_logger(__name__)
