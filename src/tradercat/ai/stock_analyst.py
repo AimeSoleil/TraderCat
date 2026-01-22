@@ -1,117 +1,233 @@
-import asyncio
+import json
 from typing import List, Any
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.ai.prompt_manager import PromptManager
 from tradercat.bot import TraderBot
+from tradercat.utils.technical_indicators import TechUtils
 from tradercat.logger.logger import get_logger
 
 logger = get_logger(__name__)
 
 class AIStockAnalyst:
-    """
-    Orchestrates the analysis process.
-    Stateless regarding the Model ID (passed at runtime).
-    """
-
+    
     def __init__(self, llm: LLMProvider, bot: TraderBot, prompt_manager: PromptManager):
         self.llm = llm
         self.bot = bot
         self.prompt_manager = prompt_manager
 
-    def _prepare_data_context(self, symbol: str, candles: List[Any]) -> dict:
+    def _prepare_data_context(self, symbol: str, candles: List[Any]) -> str:
         """
-        Prepares a dictionary of data to be injected into the prompt template.
-        Fixes: Uses the passed 'candles' argument, not self.candles.
+        Constructs a Massive Quant Database for the LLM using extracted Utils.
+        Includes comprehensive Trend, Momentum, Volatility, and Liquidity metrics.
+        REFACTORED: To match updated TechUtils signatures (High/Low aware) & Volume Z-Score.
         """
-        # Safety Check
-        if not candles or len(candles) < 2:
-            return {
+        if not candles or len(candles) < 60:
+            return json.dumps({"error": "Insufficient data (need 60+ candles)", "symbol": symbol})
+
+        # 0. Data Prep (Safe attribute extraction)
+        # Using list comprehensions for speed
+        closes = [float(getattr(c, 'close', 0)) for c in candles]
+        highs = [float(getattr(c, 'high', 0)) for c in candles]
+        lows = [float(getattr(c, 'low', 0)) for c in candles]
+        volumes = [float(getattr(c, 'volume', 0)) for c in candles]
+        dates = [str(getattr(c, 'time', '')) for c in candles]
+        
+        curr = closes[-1]
+        prev = closes[-2]
+        
+        # --- 1. HISTORICAL COMPUTATION (The "Tape") ---
+        # "State" trajectory: We calc indicators for past 5 candles to show LLM the momentum slope.
+        # Note: We pass sliced arrays to TechUtils to simulate 'past point in time'.
+        
+        tape_history = []
+        for i in range(1, 6): # T-1 to T-5
+            idx = -i
+            # Slicing up to that point
+            h_c = closes[:len(closes) - i + 1]
+            h_h = highs[:len(highs) - i + 1]
+            h_l = lows[:len(lows) - i + 1]
+            h_v = volumes[:len(volumes) - i + 1]
+            
+            # Recalc dynamic indicators using correct OHLC signatures
+            h_rsi = TechUtils.rsi(h_c, 14)
+            h_macd = TechUtils.macd(h_c)
+            h_bb = TechUtils.bollinger(h_c)
+            h_adx = TechUtils.adx(h_h, h_l, h_c, 14) # Now uses highs/lows
+            h_vol_z = TechUtils.volume_z_score(h_v, 30) # NEW: Historical Volume Z-Score
+            
+            tape_history.insert(0, {
+                "date": dates[idx],
+                "close": round(closes[idx], 2),
+                "volume_hist": h_v[-1],
+                "volume_z_5d": h_vol_z, # Capture history state of volume anomaly
+                "rsi_14": h_rsi,
+                "macd_hist": h_macd['hist'],
+                "bb_width": h_bb.get('width_pct', 0),
+                "adx": h_adx
+            })
+
+        # --- 2. RAW OHLCV HISTORY (Last 30 Days) ---
+        # For Pattern Recognition (Head & Shoulders, Flags, etc.)
+        ohlcv_30d = []
+        start_idx = max(0, len(candles) - 30)
+        for i in range(start_idx, len(candles)):
+            c = candles[i]
+            ohlcv_30d.append({
+                "d": str(getattr(c, 'time', '')).split(' ')[0],
+                "o": round(float(getattr(c, 'open', 0)), 2),
+                "h": round(float(getattr(c, 'high', 0)), 2),
+                "l": round(float(getattr(c, 'low', 0)), 2),
+                "c": round(float(getattr(c, 'close', 0)), 2),
+                "v": int(getattr(c, 'volume', 0))
+            })
+
+        # --- 3. TREND ANALYSIS (Current Snapshot) ---
+        ema_12 = TechUtils.ema(closes, 12)[-1] if len(closes) > 12 else 0
+        ema_26 = TechUtils.ema(closes, 26)[-1] if len(closes) > 26 else 0
+        sma_50 = TechUtils.sma(closes, 50)
+        sma_200 = TechUtils.sma(closes, 200)
+        
+        # New Signatures applied here:
+        supertrend = TechUtils.supertrend(highs, lows, closes)
+        ichimoku = TechUtils.ichimoku(highs, lows, closes)
+        adx_val = TechUtils.adx(highs, lows, closes, 14)
+        
+        donchian = TechUtils.donchian(highs, lows, period=20)
+        keltner = TechUtils.keltner(highs, lows, closes, period=20, atr_mult=2.0)
+
+        # --- 4. MOMENTUM ANALYSIS (Current Snapshot) ---
+        rsi = TechUtils.rsi(closes, 14)
+        kdj = TechUtils.kdj(highs, lows, closes)
+        cci = TechUtils.cci(highs, lows, closes, period=20)
+        wr = TechUtils.williams_r(highs, lows, closes, period=14)
+        mfi = TechUtils.mfi(highs, lows, closes, volumes, period=14)
+        macd = TechUtils.macd(closes)
+
+        # --- 5. VOLATILITY & LEVELS (Current Snapshot) ---
+        atr = TechUtils.atr(highs, lows, closes, period=14)
+        bb = TechUtils.bollinger(closes, period=20, std_dev=2)
+        pivots = TechUtils.pivots(highs[-2], lows[-2], closes[-2]) # Yesterday's Pivots
+
+        # --- 6. VOLUME & LIQUIDITY ---
+        obv_state = TechUtils.obv_slope(closes, volumes)
+        vwap = TechUtils.vwap_benchmark(closes, volumes, period=20)
+        liq_ratio = TechUtils.liquidity_ratio(closes, volumes)
+        
+        # Calculate RVol Manually or use simple ratio
+        vol_sma = TechUtils.sma(volumes, 20)
+        rvol = (volumes[-1] / vol_sma) if vol_sma > 0 else 1.0
+
+        # --- 7. LOGIC FIXES ---
+        # MACD Logic: Compare Current Hist vs Previous (T-1 from tape_history)
+        prev_macd_hist = tape_history[-1]['macd_hist'] if tape_history else 0
+        macd_bullish = macd['hist'] > 0 and macd['hist'] > prev_macd_hist
+
+        # Construct Final JSON structure
+        context_data = {
+            "meta": {
                 "symbol": symbol,
-                "curr_price": "N/A",
-                "market_data_block": "Insufficient price data available."
+                "price": round(curr, 2),
+                "change_pct": round(((curr - prev) / prev) * 100, 2)
+            },
+            
+            "raw_ohlcv_last_30": ohlcv_30d,
+
+            "trend_matrix": {
+                "ema_12": round(ema_12, 2),
+                "ema_26": round(ema_26, 2),
+                "supertrend_signal": supertrend.get("trend", "N/A"),
+                "supertrend_level": supertrend.get("value", 0),
+                "adx_strength": adx_val, 
+                "adx_history_5d": [x['adx'] for x in tape_history], 
+                "long_term_ma": "BULLISH" if (sma_200 > 0 and curr > sma_200) else "BEARISH",
+                "golden_cross_potential": True if (sma_50 > sma_200 and sma_50 > 0) else False,
+                
+                "ichimoku_cloud": {
+                    "signal": ichimoku.get("signal", "NEUTRAL"),
+                    "position": "ABOVE_CLOUD" if curr > ichimoku.get("cloud_top", 999999) else "BELOW_OR_INSIDE"
+                },
+                "channel_boundaries": {
+                    "donchian_upper": donchian.get("upper", 0),
+                    "donchian_lower": donchian.get("lower", 0),
+                    "keltner_upper": keltner.get("upper", 0)
+                }
+            },
+            
+            "momentum_oscillators": {
+                "rsi_14": rsi, 
+                "rsi_5d_history": [x['rsi_14'] for x in tape_history], 
+                "macd": {
+                    "histogram": macd['hist'], 
+                    "history_5d": [x['macd_hist'] for x in tape_history], 
+                    "crossover_signal": "BULLISH" if macd_bullish else "BEARISH"
+                },
+                "stochastics": {
+                    "kdj": kdj, # Pass full dict {k, d, j}
+                    "williams_r": wr 
+                },
+                "cci_20": cci,
+                "mfi_money_flow": mfi,
+                "volume_5d_history": [x['volume'] for x in tape_history],
+            },
+
+            "volatility_risk": {
+                "atr_14": atr,
+                "bollinger_bands": {
+                    "width_pct": bb.get("width_pct", 0),
+                    "width_history_5d": [x['bb_width'] for x in tape_history],
+                    "squeeze_on": True if bb.get("width_pct", 1) < 0.10 else False, # < 10% width is a tight squeeze
+                    "position_pct_b": round((curr - bb.get('lower',0)) / (bb.get('upper',1) - bb.get('lower',0)), 2) if bb.get('upper',1)!=bb.get('lower',0) else 0.5
+                },
+                "support_resistance_pivots": pivots
+            },
+
+            "liquidity_profile": {
+                "smart_money_obv": obv_state,
+                "vwap_benchmark": vwap,
+                "relative_volume_rvol": round(rvol, 2),
+                "volume_z_score": tape_history[-1]['volume_z_5d'] if tape_history else 0,
+                "volume_z_score_5d_history": [x['volume_z_5d'] for x in tape_history], # Trajectory of anomalies
+                "liquidity_impact_score": liq_ratio
             }
-        
-        # Access the last two candles
-        current_candle = candles[-1]
-        prev_candle = candles[-2]
-        
-        # Determine attribute names (pydantic object vs dict support)
-        curr_close = getattr(current_candle, 'close', 0)
-        prev_close = getattr(prev_candle, 'close', 0)
-        volume = getattr(current_candle, 'volume', 0)
-        
-        # 1. Calculate Daily Change
-        daily_change_pct = 0.0
-        if prev_close > 0:
-            daily_change_pct = ((curr_close - prev_close) / prev_close) * 100
-        
-        # 2. Basic Trend Context (Simple Moving Average approximation)
-        closes = [getattr(c, 'close', 0) for c in candles]
-        if len(closes) < 200:
-            logger.warning(f"Not enough data to compute 200 SMA for {symbol}. Only {len(closes)} data points available.")
-        recent_closes = closes[-200:]
-        sma_200 = (sum(recent_closes) / len(recent_closes)) if recent_closes else 0
-        
-        trend_status = "Unknown"
-        if sma_200 > 0:
-            trend_status = "ABOVE 200 SMA (Bullish Bias)" if curr_close > sma_200 else "BELOW 200 SMA (Bearish Bias)"
-        
-        # 3. Construct Data Block
-        data_block = f"""
-        Symbol: {symbol}
-        Latest Price: {curr_close:.2f}
-        Daily Change: {daily_change_pct:.2f}%
-        Trend Context: {trend_status}
-        Volume (Last Session): {volume}
-        """
-        
-        return {
-            "symbol": symbol,
-            "curr_price": f"{curr_close:.2f}",
-            "market_data_block": data_block
         }
+        
+        return json.dumps(context_data, indent=2)
 
     async def analyze_symbol(self, symbol: str, model_name: str, analyst_name: str = "wyckoff") -> str:
-        """
-        Pipe: Load Template -> Fetch Data -> Call LLM (with specific model_name)
-        """
+        
         request_id = f"{symbol}::{analyst_name}::{model_name}"
         logger.info(f"🧠 AI Analysis Request: {request_id}")
 
-        # 1. Fetch Data via Bot Executor or Data Provider
         candles = []
         try:
-            candles = self.bot.data_provider.get_price_data(symbol, interval="1d", lookback=200)
+            # Lookback needs to be sufficient for 200 MA + Warmup for EMA/RMA
+            candles = self.bot.data_provider.get_price_data(symbol, interval="1d", lookback=300)
+            data_json_str = self._prepare_data_context(symbol, candles)
         except Exception as e:
             logger.warning(f"Data fetch warning for {symbol}: {e}")
+            return f"⚠️ Data Error: {e}"
         
-        if not candles:
-            return f"⚠️ Data Error: Unable to retrieve price history for {symbol}."
-
-        # 2. Load Prompt Template
         try:
-            template = self.prompt_manager.get_prompt_template(analyst_name)
+            lang_hint = analyst_name.lower().split("-")[1] if "-" in analyst_name else "en"
+            # Get Prompt templates
+            system_prompt = self.prompt_manager.get_system_prompt(analyst_name)
+            # Make sure we pass the correct params to user_prompt
+            user_prompt = self.prompt_manager.get_user_prompt(
+                data_json=data_json_str, 
+                lang_hint=lang_hint
+            ) 
+            
         except ValueError as e:
-            return f"❌ Configuration Error: {str(e)}"
-
-        # 3. Format Prompt
-        try:
-            data_context = self._prepare_data_context(symbol, candles)
-            final_prompt = template.format(**data_context)
-        except Exception as e:
             logger.error(f"Template formatting failed: {e}")
-            return f"❌ Prompt Error: Failed to format analyst template."
+            return f"❌ Prompt Error: {e}"
 
-        # 4. Call AI (Stateless Provider + Runtime Model ID)
-        system_msg = f"You are a professional trader acting as {analyst_name}."
-        
         try:
             analysis = await self.llm.generate_thought(
-                prompt=final_prompt, 
-                model_id=model_name,  # <--- [CRITICAL UPDATE] Passed at runtime
-                system_prompt=system_msg
+                prompt=user_prompt, 
+                model_id=model_name,
+                system_prompt=system_prompt
             )
             return analysis
         except Exception as e:
-            logger.error(f"LLM Generation Failed ({model_name}): {e}")
+            logger.error(f"LLM Error: {e}")
             return f"❌ AI Generation Error: {str(e)}"
