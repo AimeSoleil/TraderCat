@@ -19,7 +19,7 @@ class AIStockAnalyst:
         """
         Constructs a Massive Quant Database for the LLM using extracted Utils.
         Includes comprehensive Trend, Momentum, Volatility, and Liquidity metrics.
-        REFACTORED: To match updated TechUtils signatures (High/Low aware).
+        REFACTORED: To match updated TechUtils signatures (High/Low aware) & Volume Z-Score.
         """
         if not candles or len(candles) < 60:
             return json.dumps({"error": "Insufficient data (need 60+ candles)", "symbol": symbol})
@@ -53,10 +53,13 @@ class AIStockAnalyst:
             h_macd = TechUtils.macd(h_c)
             h_bb = TechUtils.bollinger(h_c)
             h_adx = TechUtils.adx(h_h, h_l, h_c, 14) # Now uses highs/lows
+            h_vol_z = TechUtils.volume_z_score(h_v, 30) # NEW: Historical Volume Z-Score
             
             tape_history.insert(0, {
                 "date": dates[idx],
                 "close": round(closes[idx], 2),
+                "volume_hist": h_v[-1],
+                "volume_z_5d": h_vol_z, # Capture history state of volume anomaly
                 "rsi_14": h_rsi,
                 "macd_hist": h_macd['hist'],
                 "bb_width": h_bb.get('width_pct', 0),
@@ -127,7 +130,7 @@ class AIStockAnalyst:
                 "change_pct": round(((curr - prev) / prev) * 100, 2)
             },
             
-            "raw_ohlcv_last_30": ohlcv_30d, 
+            "raw_ohlcv_last_30": ohlcv_30d,
 
             "trend_matrix": {
                 "ema_12": round(ema_12, 2),
@@ -163,7 +166,8 @@ class AIStockAnalyst:
                     "williams_r": wr 
                 },
                 "cci_20": cci,
-                "mfi_money_flow": mfi
+                "mfi_money_flow": mfi,
+                "volume_5d_history": [x['volume'] for x in tape_history],
             },
 
             "volatility_risk": {
@@ -181,6 +185,8 @@ class AIStockAnalyst:
                 "smart_money_obv": obv_state,
                 "vwap_benchmark": vwap,
                 "relative_volume_rvol": round(rvol, 2),
+                "volume_z_score": tape_history[-1]['volume_z_5d'] if tape_history else 0,
+                "volume_z_score_5d_history": [x['volume_z_5d'] for x in tape_history], # Trajectory of anomalies
                 "liquidity_impact_score": liq_ratio
             }
         }

@@ -19,7 +19,7 @@ class PromptManager:
         # IMPROVED PROMPT
         self.user_prompt_template = """
         **TASK:** Analyze the provided [MARKET DATA] strictly using the Persona defined in the System Prompt. 
-        and output in the {lang_hit} language.
+        and output in the {lang_hint} language.
 
         **INPUT DATA (JSON Data):**
         ===BEGIN MARKET DATA===
@@ -93,6 +93,6 @@ class PromptManager:
         else:
             lang_hint = "English"
         if data_json:
-            return self.user_prompt_template.format(lang_hit=lang_hint, data_json=data_json)
+            return self.user_prompt_template.format(lang_hint=lang_hint, data_json=data_json)
         else:
-            return self.user_prompt_template.format(lang_hit=lang_hint)
+            return self.user_prompt_template.format(lang_hint=lang_hint)

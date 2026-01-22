@@ -28,6 +28,8 @@ I will provide the following market data in JSON data format:
   - smart_money_obv: On-Balance Volume slope
   - vwap_benchmark: VWAP analysis
   - relative_volume_rvol: Relative Volume ratio
+  - volume_z_score: Z-score of current volume against historical average
+  - volume_z_score_5d_history: Recent history of volume Z-scores
   - liquidity_impact_score: Liquidity score
 
 **Analysis Steps:**

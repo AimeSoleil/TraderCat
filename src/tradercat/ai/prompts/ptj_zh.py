@@ -6,27 +6,33 @@ PROMPT = """
 **输入数据格式：**
 我将提供以下市场数据（以JSON格式）：
 
-- **meta**: 此刻价格及日涨跌幅
-- **raw_ohlcv_last_30**: 过去30天的原始OHLCV数据（Open/High/Low/Close/Volume），用于形态识别。
+- **meta**: 价格快照及日涨跌幅
+- **raw_ohlcv_last_30**: 过去 30 天的 OHLCV 数据（原始盘口纸带），用于肉眼观察价格行为。
 - **trend_matrix (趋势矩阵)**:
-  - `ema_12 / ema_26`: 指数移动平均线
-  - `supertrend_signal`: SuperTrend Indicator (超级趋势指标状态)
-  - `adx_strength`: Trend Strength (趋势强度)
-  - `long_term_ma`: SMA 200 (200日均线 - 你的生命线)
-  - `ichimoku_cloud`: 一目均衡云图
-  - `channel_boundaries`: 唐奇安通道与凯肯纳通道边界
+  - `ema_12 / ema_26`: 移动平均线（趋势指引）
+  - `supertrend_signal / supertrend_level`: 趋势定义（SuperTrend）
+  - `adx_strength`: 趋势强度
+  - `adx_history_5d`: 趋势强度历史（判断趋势是否加速）
+  - `long_term_ma`: 整体市场潮汐（长期均线）
+  - `ichimoku_cloud`: 阻力区域（一目均衡图）
+  - `channel_boundaries`: 唐奇安通道（识别“突破关键点”的关键数据）
 - **momentum_oscillators (动量振荡器)**:
-  - `rsi_14 / rsi_5d_history`: RSI及其历史走势（用于捕捉背离）
-  - `macd`: MACD柱状图及交叉信号
-  - `stochastics`: KDJ / 威廉指标
-  - `mfi_money_flow`: 资金流量指标
+  - `rsi_14 / rsi_5d_history`: 超买/超卖状况
+  - `macd`: 动能转换（动量偏移）
+  - `stochastics`: KDJ / 威廉指标（Williams %R - 摆动指标）
+  - `cci_20`: 商品通道指数
+  - `mfi_money_flow`: 资金流向（用来验证价格）
 - **volatility_risk (波动率与风险)**:
-  - `atr_14`: ATR (用于计算止损)
-  - `bollinger_bands`: 布林带带宽 (检测 Squeeze 挤压形态)
-  - `support_resistance_pivots`: 枢轴点
+  - `atr_14`: 正常波动范围（用于计算止损距离）
+  - `bollinger_bands`: 收缩与扩张（用于判断是否处于“沉闷”期或“活跃”期）
+  - `support_resistance_pivots`: 数学支撑位/阻力位（数学关键点）
 - **liquidity_profile (流动性与量能)**:
-  - `smart_money_obv`: OBV (聪明钱流向)
-  - `relative_volume_rvol`: RVOL (相对成交量)
+  - `smart_money_obv`: 累积/派发（聪明钱流向，吸筹还是出货？）
+  - `vwap_benchmark`: 平均价格控制线
+  - `relative_volume_rvol`: 成交量强度（确认突破有效性的核心）
+  - `volume_z_score`: 当前成交量的 Z-Score（标准分数）。用于检测异常放量（>3 表示高潮，<-1 表示极度低迷）。
+  - `volume_z_score_5d_history`: 近期成交量异常的历史轨迹。
+  - `liquidity_impact_score`: 易动性（流动性得分）
 
 **分析步骤：**
 

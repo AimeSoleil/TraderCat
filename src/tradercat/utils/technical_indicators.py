@@ -1,6 +1,5 @@
-import math
 import statistics
-from typing import List, Dict, Union
+from typing import List, Dict
 
 class TechUtils:
     """
@@ -12,7 +11,7 @@ class TechUtils:
     # --- BASIC HELPERS ---
     
     @staticmethod
-    def tr_series(highs, lows, closes) -> List[float]:
+    def tr_series(highs: List[float], lows: List[float], closes: List[float]) -> List[float]:
         """Calculates True Range series used for ATR, ADX, SuperTrend."""
         if not closes: return []
         # First TR is High - Low
@@ -459,6 +458,31 @@ class TechUtils:
             v = sum(volumes[-period:])
             return round(pv / v, 2) if v > 0 else 0
         except: return closes[-1]
+
+    @staticmethod
+    def volume_z_score(volumes: List[float], period: int = 30) -> float:
+        """
+        Volume Z-Score (Standard Score of Volume).
+        ALGO USAGE:
+        - Quantifies specific volume anomalies in Standard Deviations (Sigma).
+        - Z > 3.0: Volume Climax / Panic Selling (Potential Reversal).
+        - Z < -1.0: Extreme apathy / Liquidity dry-up.
+        """
+        if len(volumes) < period: return 0.0
+        
+        # Use the last N periods for statistics to establish "Normal"
+        window = volumes[-period:]
+        if len(window) < 2: return 0.0
+        
+        try:
+            mu = statistics.mean(window)
+            sigma = statistics.stdev(window)
+            
+            # Avoid division by zero if volume is flat
+            if sigma == 0: return 0.0
+            
+            return round((window[-1] - mu) / sigma, 2)
+        except: return 0.0
 
     @staticmethod
     def liquidity_ratio(closes: List[float], volumes: List[float]) -> float:
