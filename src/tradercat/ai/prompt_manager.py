@@ -1,5 +1,5 @@
 from typing import List
-from tradercat.ai.prompts import buffett, buffett_zh, livermore, livermore_zh, ptj, ptj_zh, wyckoff, wyckoff_zh
+from tradercat.ai.prompts import livermore, livermore_zh, ptj, ptj_zh, wyckoff, wyckoff_zh
 
 class PromptManager:
     """
@@ -12,8 +12,6 @@ class PromptManager:
             "wyckoff-zh": wyckoff_zh.PROMPT,
             "livermore": livermore.PROMPT,
             "livermore-zh": livermore_zh.PROMPT,
-            "buffett": buffett.PROMPT,
-            "buffett-zh": buffett_zh.PROMPT,
             "ptj": ptj.PROMPT,
             "ptj-zh": ptj_zh.PROMPT,        
         }
@@ -23,10 +21,11 @@ class PromptManager:
         **TASK:** Analyze the provided [MARKET DATA] strictly using the Persona defined in the System Prompt. 
         and output in the {lang_hit} language.
 
-        **INPUT DATA:**
+        **INPUT DATA (JSON Data):**
         ===BEGIN MARKET DATA===
         {data_json}
         ===END MARKET DATA===
+        You will also keep in mind the candle patterns from the INPUT DATA, and analysis should be also based on these patterns if any possible.
         """
         # self.user_prompt_template = """
         # **TASK:** Analyze the provided [MARKET DATA] strictly using the Persona defined in the System Prompt.

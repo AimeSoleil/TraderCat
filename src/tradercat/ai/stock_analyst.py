@@ -1,115 +1,181 @@
 import json
-import statistics
 from typing import List, Any
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.ai.prompt_manager import PromptManager
 from tradercat.bot import TraderBot
+from tradercat.utils.technical_indicators import TechUtils
 from tradercat.logger.logger import get_logger
 
 logger = get_logger(__name__)
 
 class AIStockAnalyst:
-    """
-    Orchestrates the analysis process.
-    Stateless regarding the Model ID (passed at runtime).
-    """
-
+    
     def __init__(self, llm: LLMProvider, bot: TraderBot, prompt_manager: PromptManager):
         self.llm = llm
         self.bot = bot
         self.prompt_manager = prompt_manager
 
-    def _calculate_rsi(self, prices: List[float], period: int = 14) -> float:
-        """Helper: Calculate RSI using standard smoothing."""
-        if len(prices) < period + 1:
-            return 50.0 # Neural fallback
-        
-        deltas = [prices[i] - prices[i-1] for i in range(1, len(prices))]
-        gain = [x for x in deltas if x > 0]
-        loss = [-x for x in deltas if x < 0]
-        
-        avg_gain = sum(gain) / period if gain else 0
-        avg_loss = sum(loss) / period if loss else 0
-        
-        if avg_loss == 0: return 100.0
-        rs = avg_gain / avg_loss
-        return 100.0 - (100.0 / (1.0 + rs))
-
     def _prepare_data_context(self, symbol: str, candles: List[Any]) -> str:
         """
-        Constructs a RICH DATA JSON string for the AI.
-        Includes: Basic Snapshot, Technical Indicators, and Recent Tape (History).
+        Constructs a Massive Quant Database for the LLM using extracted Utils.
+        Includes comprehensive Trend, Momentum, Volatility, and Liquidity metrics.
         """
-        # 1. Safety Checks
-        if not candles or len(candles) < 20:
-            return json.dumps({"error": "Insufficient data", "symbol": symbol})
+        if not candles or len(candles) < 60:
+            return json.dumps({"error": "Insufficient data (need 60+ candles)", "symbol": symbol})
 
-        # Extract Lists for Math
+        # 0. Data Prep (Vectors)
         closes = [getattr(c, 'close', 0) for c in candles]
+        highs = [getattr(c, 'high', 0) for c in candles]
+        lows = [getattr(c, 'low', 0) for c in candles]
         volumes = [getattr(c, 'volume', 0) for c in candles]
-        current = candles[-1]
+        dates = [str(getattr(c, 'time', '')) for c in candles] # Capture time
         
-        curr_price = closes[-1]
-        prev_price = closes[-2]
+        curr = closes[-1]
+        prev = closes[-2]
         
-        # 2. Compute Technical Indicators
-        # -- Trend (SMA) --
-        sma_20 = statistics.mean(closes[-20:])
-        sma_50 = statistics.mean(closes[-50:]) if len(closes) >= 50 else 0
-        sma_200 = statistics.mean(closes[-200:]) if len(closes) >= 200 else 0
+        # --- 1. HISTORICAL COMPUTATION (The "Tape") ---
+        # We calculate the last 5 days of key 'State' indicators to show trajectory.
         
-        trend_state = "Neutral"
-        if sma_50 > 0 and sma_200 > 0:
-            if curr_price > sma_50 and sma_50 > sma_200: trend_state = "Strong Uptrend"
-            elif curr_price < sma_50 and sma_50 < sma_200: trend_state = "Strong Downtrend"
-        
-        # -- Momentum (RSI) --
-        rsi_14 = self._calculate_rsi(closes, 14)
-        
-        # -- Volatility / Change --
-        daily_change_pct = ((curr_price - prev_price) / prev_price) * 100
-        avg_vol = statistics.mean(volumes[-20:])
-        rvol = (volumes[-1] / avg_vol) if avg_vol > 0 else 1.0
-        
-        # 3. Recent Price Action (The "Tape")
-        # We give the LLM the last 7 days of raw data to find candlestick patterns
-        recent_tape = []
-        for c in candles[-7:]:
-            date_str = getattr(c, 'time', 'N/A') # Adjust attribute based on your object
-            recent_tape.append({
-                "date": str(date_str),
-                "open": round(getattr(c, 'open', 0), 2),
-                "high": round(getattr(c, 'high', 0), 2),
-                "low": round(getattr(c, 'low', 0), 2),
-                "close": round(getattr(c, 'close', 0), 2),
-                "volume": getattr(c, 'volume', 0)
+        tape_history = []
+        for i in range(1, 6): # Last 5 candles for indicators
+            idx = -i
+            end_pos = len(closes) + idx + 1
+            h_c = closes[:end_pos]
+            h_h = highs[:end_pos]
+            h_l = lows[:end_pos]
+            
+            # Recalc dynamic indicators
+            h_rsi = TechUtils.rsi(h_c, 14)
+            h_macd = TechUtils.macd(h_c)
+            h_bb = TechUtils.bollinger(h_c)
+            h_adx = TechUtils.adx(h_h, h_l, h_c)
+            h_kdj = TechUtils.kdj(h_h, h_l, h_c)
+            
+            tape_history.insert(0, {
+                "date": dates[idx],
+                "close": round(closes[idx], 2),
+                "rsi_14": h_rsi,
+                "macd_hist": h_macd['hist'],
+                "bb_width": h_bb.get('width_pct', 0),
+                "adx": h_adx,
+                "kdj": h_kdj
             })
 
-        # 4. Construct Final Structure
+        # --- 2. RAW OHLCV HISTORY (Last 30 Days) ---
+        # Crucial for Pattern Recognition (Head & Shoulders, Flags, etc.)
+        ohlcv_30d = []
+        # Get the slice for the last 30 candles
+        start_idx = max(0, len(candles) - 30)
+        for i in range(start_idx, len(candles)):
+            c = candles[i]
+            ohlcv_30d.append({
+                "d": str(getattr(c, 'time', '')).split(' ')[0], # Simplify date
+                "o": round(getattr(c, 'open', 0), 2),
+                "h": round(getattr(c, 'high', 0), 2),
+                "l": round(getattr(c, 'low', 0), 2),
+                "c": round(getattr(c, 'close', 0), 2),
+                "v": getattr(c, 'volume', 0)
+            })
+
+        # --- 3. TREND ANALYSIS (Current Snapshot) ---
+        ema_12 = TechUtils.ema(closes, 12)[-1] if len(closes) > 12 else 0
+        ema_26 = TechUtils.ema(closes, 26)[-1] if len(closes) > 26 else 0
+        sma_50 = TechUtils.sma(closes, 50)
+        sma_200 = TechUtils.sma(closes, 200)
+        
+        supertrend = TechUtils.supertrend(highs, lows, closes)
+        ichimoku = TechUtils.ichimoku(highs, lows, closes)
+        adx_val = TechUtils.adx(highs, lows, closes)
+        
+        # Explicit calls with best-practice windows
+        donchian = TechUtils.donchian(highs, lows, period=20)
+        keltner = TechUtils.keltner(highs, lows, closes, period=20, atr_mult=2.0)
+
+        # --- 4. MOMENTUM ANALYSIS (Current Snapshot) ---
+        rsi = TechUtils.rsi(closes, 14)
+        kdj = TechUtils.kdj(highs, lows, closes)
+        cci = TechUtils.cci(highs, lows, closes, period=20)
+        wr = TechUtils.williams_r(highs, lows, closes, period=14)
+        mfi = TechUtils.mfi(highs, lows, closes, volumes, period=14)
+        macd = TechUtils.macd(closes)
+
+        # --- 5. VOLATILITY & LEVELS (Current Snapshot) ---
+        atr = TechUtils.atr(highs, lows, closes, period=14)
+        bb = TechUtils.bollinger(closes, period=20, std_dev=2)
+        pivots = TechUtils.pivots(highs[-2], lows[-2], closes[-2]) # Yesterday's Pivots
+
+        # --- 6. VOLUME & LIQUIDITY ---
+        obv_state = TechUtils.obv_slope(closes, volumes)
+        vwap = TechUtils.vwap_benchmark(closes, volumes, period=20)
+        liq_ratio = TechUtils.liquidity_ratio(closes, volumes)
+        rvol = (volumes[-1] / TechUtils.sma(volumes, 20)) if TechUtils.sma(volumes, 20) > 0 else 1.0
+
+        # Construct Final JSON structure
         context_data = {
             "meta": {
                 "symbol": symbol,
-                "interval": "1d",
-                "observation_time": "Latest Close"
+                "price": round(curr, 2),
+                "change_pct": round(((curr - prev) / prev) * 100, 2)
             },
-            "snapshot": {
-                "price": round(curr_price, 2),
-                "change_percent": round(daily_change_pct, 2),
-                "volume": volumes[-1],
-                "relative_volume_rvol": round(rvol, 2)
+            
+            "raw_ohlcv_last_30": ohlcv_30d, # ADDED: Raw data for chart pattern recognition
+
+            "trend_matrix": {
+                "ema_12": round(ema_12, 2),
+                "ema_26": round(ema_26, 2),
+                "supertrend_signal": supertrend.get("trend", "N/A"),
+                "supertrend_level": supertrend.get("value", 0),
+                "adx_strength": adx_val, 
+                "adx_history_5d": [x['adx'] for x in tape_history], 
+                "long_term_ma": "BULLISH" if (sma_200 > 0 and curr > sma_200) else "BEARISH",
+                "golden_cross_potential": True if (sma_50 > sma_200) else False,
+                
+                "ichimoku_cloud": {
+                    "signal": ichimoku.get("signal", "NEUTRAL"),
+                    "position": "ABOVE_CLOUD" if curr > ichimoku.get("cloud_top", 999999) else "BELOW_OR_INSIDE"
+                },
+                "channel_boundaries": {
+                    "donchian_upper": donchian.get("upper", 0),
+                    "donchian_lower": donchian.get("lower", 0),
+                    "keltner_upper": keltner.get("upper", 0)
+                }
             },
-            "technicals": {
-                "rsi_14": round(rsi_14, 2),
-                "sma_20": round(sma_20, 2),
-                "sma_50": round(sma_50, 2),
-                "sma_200": round(sma_200, 2),
-                "trend_assessment": trend_state,
-                "price_vs_sma200": "ABOVE" if curr_price > sma_200 else "BELOW"
+            
+            "momentum_oscillators": {
+                "rsi_14": rsi, 
+                "rsi_5d_history": [x['rsi_14'] for x in tape_history], 
+                "macd": {
+                    "histogram": macd['hist'], 
+                    "history_5d": [x['macd_hist'] for x in tape_history], 
+                    "crossover_signal": "BULLISH" if macd['hist'] > 0 and macd['hist'] > macd.get('prev_hist', 0) else "BEARISH"
+                },
+                "stochastics": {
+                    "kdj_j": kdj.get('j', 50),
+                    "williams_r": wr 
+                },
+                "cci_20": cci,
+                "mfi_money_flow": mfi
             },
-            "recent_candle_tape": recent_tape
+
+            "volatility_risk": {
+                "atr_14": atr,
+                "bollinger_bands": {
+                    "width_pct": bb.get("width_pct", 0),
+                    "width_history_5d": [x['bb_width'] for x in tape_history],
+                    "squeeze_on": True if bb.get("width_pct", 1) < 0.10 else False,
+                    "position_pct_b": round((curr - bb.get('lower',0)) / (bb.get('upper',1) - bb.get('lower',0)), 2) if bb.get('upper')!=bb.get('lower') else 0.5
+                },
+                "support_resistance_pivots": pivots
+            },
+
+            "liquidity_profile": {
+                "smart_money_obv": obv_state,
+                "vwap_benchmark": vwap,
+                "relative_volume_rvol": round(rvol, 2),
+                "liquidity_impact_score": liq_ratio
+            }
         }
         
-        # Return as JSON string directly to be injected into prompt
         return json.dumps(context_data, indent=2)
 
     async def analyze_symbol(self, symbol: str, model_name: str, analyst_name: str = "wyckoff") -> str:
@@ -117,30 +183,23 @@ class AIStockAnalyst:
         request_id = f"{symbol}::{analyst_name}::{model_name}"
         logger.info(f"🧠 AI Analysis Request: {request_id}")
 
-        # 1. Fetch Data
         candles = []
         try:
             candles = self.bot.data_provider.get_price_data(symbol, interval="1d", lookback=250)
-            # data_json_str IS NOW A JSON STRING
             data_json_str = self._prepare_data_context(symbol, candles)
         except Exception as e:
             logger.warning(f"Data fetch warning for {symbol}: {e}")
             return f"⚠️ Data Error: {e}"
         
-        # 2. Load Prompts
         try:
             lang_hint = analyst_name.lower().split("-")[1] if "-" in analyst_name else "en"
             system_prompt = self.prompt_manager.get_system_prompt(analyst_name)
-            
-            # 3. Inject JSON into User Prompt Template
-            # ensure get_user_prompt accepts the string directly
             user_prompt = self.prompt_manager.get_user_prompt(data_json=data_json_str, lang_hint=lang_hint) 
             
         except ValueError as e:
             logger.error(f"Template formatting failed: {e}")
             return f"❌ Prompt Error: {e}"
 
-        # 4. Call AI
         try:
             analysis = await self.llm.generate_thought(
                 prompt=user_prompt, 

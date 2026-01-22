@@ -4,11 +4,31 @@ PROMPT = """
 **Core Task:** Apply the Wyckoff technical analysis method to provide in-depth market interpretation and deliver a professional written analysis report.
 
 **Input Data Format:**
-I will provide the following market data (may be text descriptions, chart screenshots, or key data points):
-- Price movement information (including date, open, high, low, close)
-- Volume data
-- Key moving average positions (such as MA50, MA200, etc.)
-- Time period range
+I will provide the following market data in JSON data format:
+- Price snapshot and daily percentage change
+- raw_ohlcv_last_30: OHLCV data for the past 30 days (Open, High, Low, Close, Volume)
+- trend_matrix: Trend matrix data, including:
+  - ema_12, ema_26: Exponential Moving Averages
+  - supertrend_signal, supertrend_level: SuperTrend indicator status
+  - adx_strength, adx_history_5d: Average Directional Index (Trend Strength) with history
+  - long_term_ma, golden_cross_potential: Long-term Moving Average alignment and Golden Cross potential
+  - ichimoku_cloud: Ichimoku Kinko Hyo Cloud metrics and signals
+  - channel_boundaries: Volatility channel boundaries (Donchian Channels, Keltner Channels)
+- momentum_oscillators: Momentum indicators, including:
+  - rsi_14, rsi_5d_history: Relative Strength Index (RSI) with recent history
+  - macd: MACD histogram and crossover signals
+  - stochastics: Stochastic indicators (KDJ, Williams %R)
+  - cci_20: Commodity Channel Index
+  - mfi_money_flow: Money Flow Index (Volume-weighted momentum)
+- volatility_risk: Volatility risk metrics, including:
+  - atr_14: Average True Range
+  - bollinger_bands: Bollinger Band width (Squeeze detection) and position
+  - support_resistance_pivots: Floor Pivot Points for support/resistance
+- liquidity_profile: Liquidity and Volume profile, including:
+  - smart_money_obv: On-Balance Volume slope (Accumulation vs Distribution)
+  - vwap_benchmark: Volume Weighted Average Price analysis
+  - relative_volume_rvol: Relative Volume ratio
+  - liquidity_impact_score: Market liquidity interaction score
 
 **Analysis Steps:**
 
