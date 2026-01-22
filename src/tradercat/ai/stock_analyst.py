@@ -19,37 +19,40 @@ class AIStockAnalyst:
         """
         Constructs a Massive Quant Database for the LLM using extracted Utils.
         Includes comprehensive Trend, Momentum, Volatility, and Liquidity metrics.
+        REFACTORED: To match updated TechUtils signatures (High/Low aware).
         """
         if not candles or len(candles) < 60:
             return json.dumps({"error": "Insufficient data (need 60+ candles)", "symbol": symbol})
 
-        # 0. Data Prep (Vectors)
-        closes = [getattr(c, 'close', 0) for c in candles]
-        highs = [getattr(c, 'high', 0) for c in candles]
-        lows = [getattr(c, 'low', 0) for c in candles]
-        volumes = [getattr(c, 'volume', 0) for c in candles]
-        dates = [str(getattr(c, 'time', '')) for c in candles] # Capture time
+        # 0. Data Prep (Safe attribute extraction)
+        # Using list comprehensions for speed
+        closes = [float(getattr(c, 'close', 0)) for c in candles]
+        highs = [float(getattr(c, 'high', 0)) for c in candles]
+        lows = [float(getattr(c, 'low', 0)) for c in candles]
+        volumes = [float(getattr(c, 'volume', 0)) for c in candles]
+        dates = [str(getattr(c, 'time', '')) for c in candles]
         
         curr = closes[-1]
         prev = closes[-2]
         
         # --- 1. HISTORICAL COMPUTATION (The "Tape") ---
-        # We calculate the last 5 days of key 'State' indicators to show trajectory.
+        # "State" trajectory: We calc indicators for past 5 candles to show LLM the momentum slope.
+        # Note: We pass sliced arrays to TechUtils to simulate 'past point in time'.
         
         tape_history = []
-        for i in range(1, 6): # Last 5 candles for indicators
+        for i in range(1, 6): # T-1 to T-5
             idx = -i
-            end_pos = len(closes) + idx + 1
-            h_c = closes[:end_pos]
-            h_h = highs[:end_pos]
-            h_l = lows[:end_pos]
+            # Slicing up to that point
+            h_c = closes[:len(closes) - i + 1]
+            h_h = highs[:len(highs) - i + 1]
+            h_l = lows[:len(lows) - i + 1]
+            h_v = volumes[:len(volumes) - i + 1]
             
-            # Recalc dynamic indicators
+            # Recalc dynamic indicators using correct OHLC signatures
             h_rsi = TechUtils.rsi(h_c, 14)
             h_macd = TechUtils.macd(h_c)
             h_bb = TechUtils.bollinger(h_c)
-            h_adx = TechUtils.adx(h_h, h_l, h_c)
-            h_kdj = TechUtils.kdj(h_h, h_l, h_c)
+            h_adx = TechUtils.adx(h_h, h_l, h_c, 14) # Now uses highs/lows
             
             tape_history.insert(0, {
                 "date": dates[idx],
@@ -57,24 +60,22 @@ class AIStockAnalyst:
                 "rsi_14": h_rsi,
                 "macd_hist": h_macd['hist'],
                 "bb_width": h_bb.get('width_pct', 0),
-                "adx": h_adx,
-                "kdj": h_kdj
+                "adx": h_adx
             })
 
         # --- 2. RAW OHLCV HISTORY (Last 30 Days) ---
-        # Crucial for Pattern Recognition (Head & Shoulders, Flags, etc.)
+        # For Pattern Recognition (Head & Shoulders, Flags, etc.)
         ohlcv_30d = []
-        # Get the slice for the last 30 candles
         start_idx = max(0, len(candles) - 30)
         for i in range(start_idx, len(candles)):
             c = candles[i]
             ohlcv_30d.append({
-                "d": str(getattr(c, 'time', '')).split(' ')[0], # Simplify date
-                "o": round(getattr(c, 'open', 0), 2),
-                "h": round(getattr(c, 'high', 0), 2),
-                "l": round(getattr(c, 'low', 0), 2),
-                "c": round(getattr(c, 'close', 0), 2),
-                "v": getattr(c, 'volume', 0)
+                "d": str(getattr(c, 'time', '')).split(' ')[0],
+                "o": round(float(getattr(c, 'open', 0)), 2),
+                "h": round(float(getattr(c, 'high', 0)), 2),
+                "l": round(float(getattr(c, 'low', 0)), 2),
+                "c": round(float(getattr(c, 'close', 0)), 2),
+                "v": int(getattr(c, 'volume', 0))
             })
 
         # --- 3. TREND ANALYSIS (Current Snapshot) ---
@@ -83,11 +84,11 @@ class AIStockAnalyst:
         sma_50 = TechUtils.sma(closes, 50)
         sma_200 = TechUtils.sma(closes, 200)
         
+        # New Signatures applied here:
         supertrend = TechUtils.supertrend(highs, lows, closes)
         ichimoku = TechUtils.ichimoku(highs, lows, closes)
-        adx_val = TechUtils.adx(highs, lows, closes)
+        adx_val = TechUtils.adx(highs, lows, closes, 14)
         
-        # Explicit calls with best-practice windows
         donchian = TechUtils.donchian(highs, lows, period=20)
         keltner = TechUtils.keltner(highs, lows, closes, period=20, atr_mult=2.0)
 
@@ -108,7 +109,15 @@ class AIStockAnalyst:
         obv_state = TechUtils.obv_slope(closes, volumes)
         vwap = TechUtils.vwap_benchmark(closes, volumes, period=20)
         liq_ratio = TechUtils.liquidity_ratio(closes, volumes)
-        rvol = (volumes[-1] / TechUtils.sma(volumes, 20)) if TechUtils.sma(volumes, 20) > 0 else 1.0
+        
+        # Calculate RVol Manually or use simple ratio
+        vol_sma = TechUtils.sma(volumes, 20)
+        rvol = (volumes[-1] / vol_sma) if vol_sma > 0 else 1.0
+
+        # --- 7. LOGIC FIXES ---
+        # MACD Logic: Compare Current Hist vs Previous (T-1 from tape_history)
+        prev_macd_hist = tape_history[-1]['macd_hist'] if tape_history else 0
+        macd_bullish = macd['hist'] > 0 and macd['hist'] > prev_macd_hist
 
         # Construct Final JSON structure
         context_data = {
@@ -118,7 +127,7 @@ class AIStockAnalyst:
                 "change_pct": round(((curr - prev) / prev) * 100, 2)
             },
             
-            "raw_ohlcv_last_30": ohlcv_30d, # ADDED: Raw data for chart pattern recognition
+            "raw_ohlcv_last_30": ohlcv_30d, 
 
             "trend_matrix": {
                 "ema_12": round(ema_12, 2),
@@ -128,7 +137,7 @@ class AIStockAnalyst:
                 "adx_strength": adx_val, 
                 "adx_history_5d": [x['adx'] for x in tape_history], 
                 "long_term_ma": "BULLISH" if (sma_200 > 0 and curr > sma_200) else "BEARISH",
-                "golden_cross_potential": True if (sma_50 > sma_200) else False,
+                "golden_cross_potential": True if (sma_50 > sma_200 and sma_50 > 0) else False,
                 
                 "ichimoku_cloud": {
                     "signal": ichimoku.get("signal", "NEUTRAL"),
@@ -147,10 +156,10 @@ class AIStockAnalyst:
                 "macd": {
                     "histogram": macd['hist'], 
                     "history_5d": [x['macd_hist'] for x in tape_history], 
-                    "crossover_signal": "BULLISH" if macd['hist'] > 0 and macd['hist'] > macd.get('prev_hist', 0) else "BEARISH"
+                    "crossover_signal": "BULLISH" if macd_bullish else "BEARISH"
                 },
                 "stochastics": {
-                    "kdj_j": kdj.get('j', 50),
+                    "kdj": kdj, # Pass full dict {k, d, j}
                     "williams_r": wr 
                 },
                 "cci_20": cci,
@@ -162,8 +171,8 @@ class AIStockAnalyst:
                 "bollinger_bands": {
                     "width_pct": bb.get("width_pct", 0),
                     "width_history_5d": [x['bb_width'] for x in tape_history],
-                    "squeeze_on": True if bb.get("width_pct", 1) < 0.10 else False,
-                    "position_pct_b": round((curr - bb.get('lower',0)) / (bb.get('upper',1) - bb.get('lower',0)), 2) if bb.get('upper')!=bb.get('lower') else 0.5
+                    "squeeze_on": True if bb.get("width_pct", 1) < 0.10 else False, # < 10% width is a tight squeeze
+                    "position_pct_b": round((curr - bb.get('lower',0)) / (bb.get('upper',1) - bb.get('lower',0)), 2) if bb.get('upper',1)!=bb.get('lower',0) else 0.5
                 },
                 "support_resistance_pivots": pivots
             },
@@ -185,7 +194,8 @@ class AIStockAnalyst:
 
         candles = []
         try:
-            candles = self.bot.data_provider.get_price_data(symbol, interval="1d", lookback=250)
+            # Lookback needs to be sufficient for 200 MA + Warmup for EMA/RMA
+            candles = self.bot.data_provider.get_price_data(symbol, interval="1d", lookback=300)
             data_json_str = self._prepare_data_context(symbol, candles)
         except Exception as e:
             logger.warning(f"Data fetch warning for {symbol}: {e}")
@@ -193,8 +203,13 @@ class AIStockAnalyst:
         
         try:
             lang_hint = analyst_name.lower().split("-")[1] if "-" in analyst_name else "en"
+            # Get Prompt templates
             system_prompt = self.prompt_manager.get_system_prompt(analyst_name)
-            user_prompt = self.prompt_manager.get_user_prompt(data_json=data_json_str, lang_hint=lang_hint) 
+            # Make sure we pass the correct params to user_prompt
+            user_prompt = self.prompt_manager.get_user_prompt(
+                data_json=data_json_str, 
+                lang_hint=lang_hint
+            ) 
             
         except ValueError as e:
             logger.error(f"Template formatting failed: {e}")
