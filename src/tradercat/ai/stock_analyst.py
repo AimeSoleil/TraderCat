@@ -1,4 +1,5 @@
 import json
+import traceback
 from typing import List, Any
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.ai.prompt_manager import PromptManager
@@ -58,7 +59,7 @@ class AIStockAnalyst:
             tape_history.insert(0, {
                 "date": dates[idx],
                 "close": round(closes[idx], 2),
-                "volume_hist": h_v[-1],
+                "volume_hist": h_v,
                 "volume_z_5d": h_vol_z, # Capture history state of volume anomaly
                 "rsi_14": h_rsi,
                 "macd_hist": h_macd['hist'],
@@ -167,7 +168,6 @@ class AIStockAnalyst:
                 },
                 "cci_20": cci,
                 "mfi_money_flow": mfi,
-                "volume_5d_history": [x['volume'] for x in tape_history],
             },
 
             "volatility_risk": {
@@ -186,7 +186,6 @@ class AIStockAnalyst:
                 "vwap_benchmark": vwap,
                 "relative_volume_rvol": round(rvol, 2),
                 "volume_z_score": tape_history[-1]['volume_z_5d'] if tape_history else 0,
-                "volume_z_score_5d_history": [x['volume_z_5d'] for x in tape_history], # Trajectory of anomalies
                 "liquidity_impact_score": liq_ratio
             }
         }
@@ -204,8 +203,8 @@ class AIStockAnalyst:
             candles = self.bot.data_provider.get_price_data(symbol, interval="1d", lookback=300)
             data_json_str = self._prepare_data_context(symbol, candles)
         except Exception as e:
-            logger.warning(f"Data fetch warning for {symbol}: {e}")
-            return f"⚠️ Data Error: {e}"
+            logger.warning(f"Data fetch warning for {symbol}: {traceback.format_exc()}")
+            return f"⚠️ Data Error: {traceback.format_exc()}"
         
         try:
             lang_hint = analyst_name.lower().split("-")[1] if "-" in analyst_name else "en"
