@@ -1,6 +1,6 @@
 import os
 from typing import Dict, Type, Tuple, List, Union
-from tradercat.ai.providers.llm_interface import LLMProvider
+from tradercat.ai.providers.llm_provider import LLMProvider
 from tradercat.logger.logger import get_logger
 
 # Optional: Output formatting
@@ -54,7 +54,8 @@ class LLMFactory:
         if not cls._providers_loaded:
             # Import modules here to trigger @register decorators
             import tradercat.ai.providers.mock_provider
-            import tradercat.ai.providers.github_models
+            import tradercat.ai.providers.azure_provider
+            import tradercat.ai.providers.copilot_provider
             cls._providers_loaded = True
 
     @classmethod
@@ -94,25 +95,28 @@ class LLMFactory:
         """
         cls._ensure_providers_loaded()
         
-        headers = ["Provider", "Model ID", "CLI Command Param"]
+        headers = ["Provider", "Description", "Model Id", "Usage Example"]
         table_data = []
 
         for provider_key, instance in cls._registry.items():
-            # Instance is already created, so we call method directly without cls()
+            description = instance.get_provider_description()
             models = instance.list_supported_models()
-            for model in models:
-                cli_param = f"{provider_key}_{model}"
-                table_data.append([provider_key, model, f"--model {cli_param}"])
+            models_str = ", ".join(models)
+            usage_example = f"--model <provider_key>_<model_id>, e.g. --model {provider_key}_{models[0] if models else 'default'}"
+
+            table_data.append([provider_key, description, models_str, usage_example])
 
         print("\n🤖 Supported AI Models Registry:")
+        print("- Model Id may vary by provider. Ensure correct usage.")
+        print("- TRADERCAT_AI_MODELS env var can append additional models.")
         
         if tabulate:
-            print(tabulate(table_data, headers=headers, tablefmt="grid"))
+            print(tabulate(table_data, headers=headers, tablefmt="github"))
         else:
-            print(f"{'Provider':<15} | {'Model ID':<30} | {'CLI Command Param'}")
+            print(f"{'Provider':<15} | {'Description':<30} | {'Model Id':<20} | {'Usage Example':<20}")
             print("-" * 75)
             for row in table_data:
-                print(f"{row[0]:<15} | {row[1]:<30} | {row[2]}")
+                print(f"{row[0]:<15} | {row[1]:<30} | {row[2]:<20} | {row[3]:<20}")
 
         print("\n📝 Note: Set 'TRADERCAT_AI_TOKEN' env var for authentication.")
 

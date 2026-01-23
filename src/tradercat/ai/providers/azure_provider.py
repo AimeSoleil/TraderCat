@@ -1,9 +1,8 @@
 import os
 import asyncio
-import trace
 import traceback
-from typing import List, Dict
-from tradercat.ai.providers.llm_interface import LLMProvider
+from typing import List, Dict, Tuple
+from tradercat.ai.providers.llm_provider import LLMProvider
 from tradercat.ai.llm_provider_factory import LLMFactory
 from tradercat.logger.logger import get_logger
 
@@ -16,11 +15,11 @@ except ImportError:
 
 logger = get_logger(__name__)
 
-@LLMFactory.register("copilot-azure")
-class GitHubModelsProvider(LLMProvider):
+@LLMFactory.register("azure")
+class AzureProvider(LLMProvider):
     """
-    GitHub Copilot / Azure AI Models Provider.
-    Uses Azure AI Inference SDK to connect to GitHub-hosted models.
+    Azure AI Models Provider.
+    Uses Azure AI Inference SDK to connect to Azure-hosted models.
     """
     def __init__(self, api_key: str = None):
         super().__init__(api_key=api_key)
@@ -42,16 +41,15 @@ class GitHubModelsProvider(LLMProvider):
                 logger.error(f"Client Init Error: {e}")
                 self.client = None
 
-    def get_provider_name(self) -> str: return "copilot"
+    def get_provider_name(self) -> str: return "azure"
+
+    def get_provider_description(self) -> str:
+        return "https://pypi.org/project/azure-ai-inference/"
 
     def list_supported_models(self) -> List[str]:
         default_models = [
             "gpt-4o", 
-            "gpt-4o-mini", 
-            "o1", 
-            "o1-mini",
-            "Phi-3.5-mini-instruct", 
-            "Llama-3.2-90B-Vision-Instruct",
+            "gpt-4o-mini"
         ]
     
         extra = os.environ.get("TRADERCAT_AI_MODELS", "")
@@ -61,9 +59,12 @@ class GitHubModelsProvider(LLMProvider):
         seen = set()
         return [m for m in default_models if not (m in seen or seen.add(m))]
 
-    async def generate_thought(self, prompt: str, model_id: str, system_prompt: str = None) -> str:
+    async def generate_thought(self, prompt: str, model_id: str, system_prompt: str = None) -> Tuple[str, str]:
         if not self.client:
-            return "Error: Client not initialized."
+            return None, "Error: Client not initialized."
+
+        if model_id not in self.list_supported_models():
+            return None, f"Error: Model '{model_id}' not supported by {self.get_provider_name()} Provider."
 
         messages = []
         if system_prompt:
@@ -80,13 +81,13 @@ class GitHubModelsProvider(LLMProvider):
                     temperature=0.7
                 )
             response = await loop.run_in_executor(None, _blocking_call)
-            return response.choices[0].message.content
+            return None, response.choices[0].message.content
         except Exception as e:
-            return f"AI Error: {traceback.format_exc()}"
+            return None, f"AI Error: {traceback.format_exc()}"
 
-    async def chat(self, messages: List[Dict[str, str]], model_id: str) -> str:
+    async def chat(self, messages: List[Dict[str, str]], model_id: str, session_id: str | None = None) -> Tuple[str, str]:
         if not self.client:
-            return "Error: Client not initialized."
+            return None, "Error: Client not initialized."
 
         sdk_messages = []
         for msg in messages:
@@ -110,7 +111,7 @@ class GitHubModelsProvider(LLMProvider):
                     temperature=0.7
                 )
             response = await loop.run_in_executor(None, _blocking_call)
-            return response.choices[0].message.content
+            return None, response.choices[0].message.content
         except Exception as e:
             logger.error(f"Chat Error: {e}")
-            return f"❌ Chat Error: {str(e)}"
+            return None, f"❌ Chat Error: {str(e)}"

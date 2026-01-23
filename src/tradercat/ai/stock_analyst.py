@@ -1,7 +1,7 @@
 import json
 import traceback
-from typing import List, Any
-from tradercat.ai.providers.llm_interface import LLMProvider
+from typing import List, Any, Tuple
+from tradercat.ai.providers.llm_provider import LLMProvider
 from tradercat.ai.prompt_manager import PromptManager
 from tradercat.bot import TraderBot
 from tradercat.utils.technical_indicators import TechUtils
@@ -192,10 +192,10 @@ class AIStockAnalyst:
         
         return json.dumps(context_data, indent=2)
 
-    async def analyze_symbol(self, symbol: str, model_name: str, analyst_name: str = "wyckoff") -> str:
-        
+    async def analyze_symbol(self, symbol: str, model_name: str, analyst_name: str = "wyckoff") -> Tuple[str, List[dict]]:
         request_id = f"{symbol}::{analyst_name}::{model_name}"
         logger.info(f"🧠 AI Analysis Request: {request_id}")
+        analyze_context = None
 
         candles = []
         try:
@@ -204,7 +204,7 @@ class AIStockAnalyst:
             data_json_str = self._prepare_data_context(symbol, candles)
         except Exception as e:
             logger.warning(f"Data fetch warning for {symbol}: {traceback.format_exc()}")
-            return f"⚠️ Data Error: {traceback.format_exc()}"
+            return f"⚠️ Data Error: {traceback.format_exc()}", None
         
         try:
             lang_hint = analyst_name.lower().split("-")[1] if "-" in analyst_name else "en"
@@ -214,19 +214,23 @@ class AIStockAnalyst:
             user_prompt = self.prompt_manager.get_user_prompt(
                 data_json=data_json_str, 
                 lang_hint=lang_hint
-            ) 
-            
+            )
+            analyze_context = []
+            analyze_context.append({"role": "system", "content": system_prompt})
+            analyze_context.append({"role": "user", "content": user_prompt})
         except ValueError as e:
             logger.error(f"Template formatting failed: {e}")
-            return f"❌ Prompt Error: {e}"
+            return f"❌ Prompt Error: {e}", None
 
         try:
-            analysis = await self.llm.generate_thought(
+            _, analysis = await self.llm.generate_thought(
                 prompt=user_prompt, 
                 model_id=model_name,
                 system_prompt=system_prompt
             )
-            return analysis
+            analyze_context.append({"role": "assistant", "content": analysis})
+
+            return analysis, analyze_context
         except Exception as e:
             logger.error(f"LLM Error: {e}")
-            return f"❌ AI Generation Error: {str(e)}"
+            return f"❌ AI Generation Error: {str(e)}", None

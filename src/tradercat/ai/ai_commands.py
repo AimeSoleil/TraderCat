@@ -96,25 +96,24 @@ class AICommandHandler:
             
             if console:
                 with console.status(f"[bold green]🤖 {args.persona.capitalize()} is analyzing {target_symbol}...[/bold green]", spinner="dots"):
-                    report = await analyst.analyze_symbol(
+                    report, context = await analyst.analyze_symbol(
                         target_symbol, 
                         model_name=model_name, 
                         analyst_name=args.persona
                     )
+                    print(f"report------------------{report}")
                 self._display_analysis(target_symbol, args.persona, report)
             else:
-                print("Analyzing...")
-                report = await analyst.analyze_symbol(target_symbol, model_name=model_name, analyst_name=args.persona)
+                report, context = await analyst.analyze_symbol(target_symbol, model_name=model_name, analyst_name=args.persona)
                 print(report)
 
             # B. Enter Chat Loop
             if not args.no_chat:
-                await self._run_rich_chat_session(analyst, target_symbol, report, model_name, args.persona)
+                await self._run_rich_chat_session(analyst, target_symbol, model_name, args.persona, context)
 
         except Exception as e:
+            self._print_error(f"Error analyzing {target_symbol}: {traceback.format_exc()}")
             logger.error(f"Failed to analyze {target_symbol}: {e}")
-            self._print_error(f"Error analyzing {target_symbol}: {e}")
-            logger.debug(traceback.format_exc())
 
     def _display_analysis(self, symbol: str, persona: str, report_text: str):
         """Helper to print the main report as a Markdown Panel."""
@@ -123,7 +122,7 @@ class AICommandHandler:
             console.print(Panel(md, title=f"📊 Analysis Report: {symbol} ({persona})", border_style="green", expand=False))
             console.print()
 
-    async def _run_rich_chat_session(self, analyst, symbol, initial_report, model_name, persona):
+    async def _run_rich_chat_session(self, analyst, symbol, model_name, persona, context):
         """
         A visually improved chat loop using Rich.
         Orchestrates the UI here while using the analyst's purely functional LLM capability.
@@ -134,11 +133,12 @@ class AICommandHandler:
             print(f"--- Chat with {persona} (type 'exit', 'quit', or 'q' to quit) ---")
 
         # Initialize History
-        history = [
-            {"role": "system", "content": f"You are a professional trader acting as {persona}. You have just analyzed {symbol}. Keep answers concise and strictly in character."},
-            {"role": "assistant", "content": initial_report}
-        ]
+        history = []
+        if context:
+            history += context
+        history.append({"role": "system", "content": f"You've analyzed the symbol {symbol} as {persona}. Keep answers concise and strictly in character."})
 
+        session_id = None
         while True:
             # 1. User Input
             try:
@@ -168,14 +168,18 @@ class AICommandHandler:
             try:
                 if console:
                     with console.status(f"[bold magenta]🤖 {persona.capitalize()} is thinking...[/bold magenta]", spinner="earth"):
-                        response_text = await analyst.llm.chat(history, model_id=model_name)
+                        # Pass session_id to maintain context with stateful providers (like Copilot)
+                        new_session_id, response_text = await analyst.llm.chat(history, model_id=model_name, session_id=session_id)
 
                     # Markdown Rendering for Chat Bubbles
                     console.print(Panel(Markdown(response_text), title=f"🤖 {persona.capitalize()}", border_style="magenta", expand=False))
                 else:
                     print("Thinking...")
-                    response_text = await analyst.llm.chat(history, model_id=model_name)
+                    new_session_id, response_text = await analyst.llm.chat(history, model_id=model_name, session_id=session_id)
                     print(f"\n{persona}: {response_text}")
+
+                if new_session_id:
+                    session_id = new_session_id  # Update session ID for next turn
             except Exception as e:
                 self._print_error(f"AI Error: {traceback.format_exc()}")
                 continue
