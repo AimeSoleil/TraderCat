@@ -1,5 +1,17 @@
 from typing import List
-from tradercat.ai.prompts import livermore, livermore_zh, ptj, ptj_zh, wyckoff, wyckoff_zh
+from tradercat.ai.prompts import (
+    livermore,
+    livermore_zh,
+    ptj,
+    ptj_zh,
+    shaw,
+    shaw_zh,
+    simons,
+    simons_zh,
+    wyckoff,
+    wyckoff_zh,
+)
+
 
 class PromptManager:
     """
@@ -7,13 +19,17 @@ class PromptManager:
     """
 
     def __init__(self):
-        self.PROMPT_REGISTRY = {        
+        self.PROMPT_REGISTRY = {
             "wyckoff": wyckoff.PROMPT,
             "wyckoff-zh": wyckoff_zh.PROMPT,
             "livermore": livermore.PROMPT,
             "livermore-zh": livermore_zh.PROMPT,
             "ptj": ptj.PROMPT,
-            "ptj-zh": ptj_zh.PROMPT,        
+            "ptj-zh": ptj_zh.PROMPT,
+            "simons": simons.PROMPT,
+            "simons-zh": simons_zh.PROMPT,
+            "shaw": shaw.PROMPT,
+            "shaw-zh": shaw_zh.PROMPT,
         }
 
         # IMPROVED PROMPT
@@ -74,10 +90,12 @@ class PromptManager:
         Retrieves the prompt content directly from memory.
         """
         alias_lower = alias.lower()
-        
+
         if alias_lower not in self.PROMPT_REGISTRY:
             valid_keys = ", ".join(self.list_analysts()[:5]) + "..."
-            raise ValueError(f"Unknown analyst alias: '{alias}'. Available: {valid_keys}")
+            raise ValueError(
+                f"Unknown analyst alias: '{alias}'. Available: {valid_keys}"
+            )
 
         # Direct memory access - extremely fast & reliable
         return self.PROMPT_REGISTRY[alias_lower]
@@ -86,13 +104,15 @@ class PromptManager:
         """
         Retrieves the user prompt content directly from memory.
         """
-        if lang_hint.lower() == 'zh':
+        if lang_hint.lower() == "zh":
             lang_hint = "Chinese"
-        elif lang_hint.lower() == 'en':
+        elif lang_hint.lower() == "en":
             lang_hint = "English"
         else:
             lang_hint = "English"
         if data_json:
-            return self.user_prompt_template.format(lang_hint=lang_hint, data_json=data_json)
+            return self.user_prompt_template.format(
+                lang_hint=lang_hint, data_json=data_json
+            )
         else:
             return self.user_prompt_template.format(lang_hint=lang_hint)
