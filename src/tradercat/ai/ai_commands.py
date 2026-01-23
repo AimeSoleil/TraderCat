@@ -101,7 +101,6 @@ class AICommandHandler:
                         model_name=model_name, 
                         analyst_name=args.persona
                     )
-                    print(f"report------------------{report}")
                 self._display_analysis(target_symbol, args.persona, report)
             else:
                 report, context = await analyst.analyze_symbol(target_symbol, model_name=model_name, analyst_name=args.persona)
@@ -169,13 +168,13 @@ class AICommandHandler:
                 if console:
                     with console.status(f"[bold magenta]🤖 {persona.capitalize()} is thinking...[/bold magenta]", spinner="earth"):
                         # Pass session_id to maintain context with stateful providers (like Copilot)
-                        new_session_id, response_text = await analyst.llm.chat(history, model_id=model_name, session_id=session_id)
+                        new_session_id, response_text = await analyst.llm.chat(messages=history, model_id=model_name, prev_session_id=session_id)
 
                     # Markdown Rendering for Chat Bubbles
                     console.print(Panel(Markdown(response_text), title=f"🤖 {persona.capitalize()}", border_style="magenta", expand=False))
                 else:
                     print("Thinking...")
-                    new_session_id, response_text = await analyst.llm.chat(history, model_id=model_name, session_id=session_id)
+                    new_session_id, response_text = await analyst.llm.chat(messages=history, model_id=model_name, prev_session_id=session_id)
                     print(f"\n{persona}: {response_text}")
 
                 if new_session_id:
