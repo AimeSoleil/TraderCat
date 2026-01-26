@@ -1,4 +1,5 @@
 from datetime import date
+import os
 import traceback
 from openbb import obb
 from tradercat.data.market_data_provider import MarketDataProvider
@@ -6,12 +7,15 @@ from tradercat.logger.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Set your Tiingo API key
-# obb.user.credentials.tiingo_token = "your_tiingo_api_token"
+# Set your Tiingo API key: https://docs.openbb.co/odp/python/settings/user_settings/api_keys
+data_provider = "yfinance" # default to yahoo
+if os.environ.get("TIINGO_API_KEY"):
+    obb.user.credentials.tiingo_token = os.environ.get("TIINGO_API_KEY")
+    data_provider = "tiingo"
 
 class OpenBBProvider(MarketDataProvider):
     def get_price_data(self, symbol: str, interval: str, lookback: int):
-        df = obb.equity.price.historical(symbol=symbol, interval=interval, period=f"{lookback}d")
+        df = obb.equity.price.historical(symbol=symbol, interval=interval, period=f"{lookback}d", provider=data_provider)
         return df.results # list[EquityPrice]
 
     def get_price_data_by_range(self, symbol: str, start_date: str, end_date: str, interval: str='1d'):
