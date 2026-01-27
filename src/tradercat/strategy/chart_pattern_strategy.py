@@ -248,13 +248,50 @@ class ChartPatternStrategy(TradingStrategy):
         score_res = engine.compute_score(factors, side=best_p.bias)
 
         # 7. Construct Result
-        details = {
+        # Calculate extra technical context for professional analysis
+        current_adx = getattr(adx_series[-1], self.adx_field, 0.0) if adx_series else 0.0
+        avg_vol = sum(vols[-20:]) / 20 if len(vols) >= 20 else 0.0 
+        rel_vol = (vols[-1] / avg_vol) if avg_vol > 0 else 0.0
+        atr_pct = (curr_atr / close * 100.0) if close > 0 else 0.0
+        ema_dist_pct = ((close - curr_ema_trend) / curr_ema_trend * 100.0) if curr_ema_trend > 0 else 0.0
+        vol_z_val = vol_breakout_z if vol_breakout_z is not None else 0.0
+        
+        # Calculate Reward/Risk Ratio based on Pattern Targets
+        risk = abs(close - best_p.stop)
+        reward = abs(best_p.target - close)
+        rr_ratio = (reward / risk) if risk > 0 else 0.0
+
+        details: Dict[str, Any] = {
+            # OHLCV & Volume Context
+            "open": float(candles[-1].open),
+            "high": highs[-1],
+            "low": lows[-1],
+            "close": close,
+            "volume": vols[-1],
+            "avg_volume": round(avg_vol, 0),
+            "rel_volume": round(rel_vol, 2),
+            "vol_zscore": round(vol_z_val, 2),
+
+            # Pattern Geometry & Trade Logic
             "pattern": best_p.name,
             "target_price": round(best_p.target, 2),
             "stop_price": round(best_p.stop, 2),
-            "vol_breakout": vol_breakout,
+            "reward_risk_ratio": round(rr_ratio, 2),
+            
+            # Trend Context
+            "adx": round(current_adx, 1),
+            "ema_trend": round(curr_ema_trend, 2),
+            "ema_dist_pct": round(ema_dist_pct, 2),
             "trend_aligned": is_aligned,
-            "factors": score_res.reasons
+            
+            # Volatility Environment
+            "atr": round(curr_atr, 4),
+            "atr_pct": round(atr_pct, 2),
+            "vol_breakout_confirmed": vol_breakout,
+            
+            # Factor Breakdown
+            "factors": score_res.reasons,
+            "score": round(score_res.score, 3)
         }
         
         # Only generating exit plan if signal is valid

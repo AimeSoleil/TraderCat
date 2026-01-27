@@ -262,16 +262,56 @@ class BBandsReversalStrategy(TradingStrategy):
             prefer=side_bias
         )
 
+        # [UPDATE] 计算额外的技术指标用于详情报告 (Detailed Technical Data)
+        current_rsi = rsi_val_history[-1] if rsi_val_history else 50.0
+        current_macd_hist = macd_hist_val_history[-1] if macd_hist_val_history else 0.0
+        
+        avg_vol = sum(vols[-recent_window:]) / recent_window if recent_window > 0 else 0.0
+        rel_vol = (vols[-1] / avg_vol) if avg_vol > 0 else 0.0
+        
+        # Bandwidth & %B (布林带宽度与价格相对位置)
+        bw = ((u_curr - l_curr) / m_curr * 100.0) if m_curr else 0.0
+        pct_b = ((close - l_curr) / (u_curr - l_curr)) if (u_curr != l_curr) else 0.5
+        
+        # OHLC helpers
+        high_curr = highs[-1]
+        low_curr = lows[-1]
+        open_curr = opens[-1]
+
         details: Dict[str, Any] = {
+            # 基础价格与成交量
+            "open": open_curr,
+            "high": high_curr,
+            "low": low_curr,
             "close": close,
-            "upper": u_curr,
-            "lower": l_curr,
-            "atr": round(current_atr_val, 6),
-            "adx": round(current_adx_val, 3),
-            "rejection_pattern": rejection_res.name,
+            "volume": vols[-1],
+            "avg_volume": round(avg_vol, 0),
+            "rel_volume": round(rel_vol, 2),
             "vol_zscore": round(volume_z, 3) if volume_z is not None else 0,
+            
+            # 布林带详情
+            "bbu": u_curr,
+            "bbl": l_curr,
+            "bbm": m_curr,
+            "bandwidth": round(bw, 2),
+            "pct_b": round(pct_b, 2),
+            
+            # 趋势与动量指标
+            "adx": round(current_adx_val, 1),
+            "rsi": round(current_rsi, 1),
+            "macd_hist": round(current_macd_hist, 4),
+            
+            # 波动率
+            "atr": round(current_atr_val, 4),
+            "atr_pct": round((current_atr_val / close * 100), 2) if close > 0 else 0,
+            
+            # 策略状态
+            "rejection_pattern": rejection_res.name,
             "is_ranging": is_ranging,
             "momentum_ok": momentum_ok,
+            "near_upper": near_upper,
+            "near_lower": near_lower,
+            "mid_cross": middle_line_reversal
         }
 
         # --- SCORING ENGINE ---

@@ -315,7 +315,9 @@ class FibonacciRetracementStrategy(TradingStrategy):
         is_trend_adx_ok = trend_strength.signal
 
         recent_window = max(1, min(self.vol_zscore_window, len(vols)))
-        vol_ok, _ = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
+        # [UPDATED] Capture Z-Score for details
+        vol_ok, vol_z = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
+        
         mom_ok = self._momentum_confirm(rsi_val_history, macd_hist_val_history, prefer=impulse_type)
         
         # Trend Direction Confirm
@@ -346,12 +348,49 @@ class FibonacciRetracementStrategy(TradingStrategy):
         
         result: ScoringResult = engine.compute_score(factors, side=impulse_type)
 
-        details = {
-            "impulse": impulse_type,
-            "zone": (round(zone_low, 2), round(zone_high, 2)),
-            "curr": curr_close,
-            "atr": round(current_atr_val, 2),
-            "trend_match": trend_match
+        # [UPDATED] Comprehensive Technical Details
+        avg_vol = sum(vols[-recent_window:]) / recent_window if recent_window > 0 else 0.0
+        rel_vol = (vols[-1] / avg_vol) if avg_vol > 0 else 0.0
+        atr_pct = (current_atr_val / curr_close * 100) if curr_close > 0 else 0.0
+        current_macd_hist = macd_hist_val_history[-1] if macd_hist_val_history else 0.0
+        bar_change_pct = (curr_close - opens[-1]) / opens[-1] * 100 if opens[-1] != 0 else 0.0
+
+        details: Dict[str, Any] = {
+            # 基础 OHLCV 上下文
+            "open": opens[-1],
+            "high": highs[-1],
+            "low": lows[-1],
+            "close": curr_close,
+            "bar_change_pct": round(bar_change_pct, 2),
+            "volume": vols[-1],
+            "avg_volume": round(avg_vol, 0),
+            "rel_volume": round(rel_vol, 2),
+            "vol_zscore": round(vol_z if vol_z is not None else 0.0, 2),
+
+            # 斐波那契结构数据
+            "impulse_direction": impulse_type,
+            "impulse_start": impulse_start_val,
+            "impulse_end": impulse_end_val,
+            "fib_zone_low": round(zone_low, 4),
+            "fib_zone_high": round(zone_high, 4),
+            
+            # 趋势指标
+            "ema_fast": ema_fast_val,
+            "ema_slow": ema_slow_val,
+            "adx": round(current_adx_val, 1),
+            "trend_match": trend_match,
+
+            # 动量与波动率
+            "rsi": round(curr_rsi, 1),
+            "macd_hist": round(current_macd_hist, 4),
+            "atr": round(current_atr_val, 4),
+            "atr_pct": round(atr_pct, 2),
+            
+            # 策略状态
+            "trigger_reason": trigger_reason,
+            "momentum_confirmed": mom_ok,
+            "volume_confirmed": vol_ok,
+            "score": round(result.score, 3)
         }
 
         if result.signal != 'hold':

@@ -293,17 +293,44 @@ class CandlestickReversalStrategy(TradingStrategy):
         side_action = effective_bias if found_any else "neutral"
         result: ScoringResult = engine.compute_score(factors, side=side_action)
 
-        details = {
-            "pattern": pattern,
+        # [UPDATE] 计算额外的技术指标用于详情 (Detailed Technical Data)
+        current_macd_hist = macd_hist_val_history[-1] if macd_hist_val_history else 0.0
+        avg_vol = sum(vols[-recent_window:]) / recent_window if recent_window > 0 else 0.0
+        rel_vol = (vols[-1] / avg_vol) if avg_vol > 0 else 0.0
+        atr_pct = (current_atr_val / close * 100) if close > 0 else 0.0
+        bar_change_pct = (closes[-1] - opens[-1]) / opens[-1] * 100 if opens[-1] != 0 else 0.0
+
+        details: Dict[str, Any] = {
+            # 基础 OHLCV 与 价格行为
+            "open": opens[-1],
+            "high": highs[-1],
+            "low": lows[-1],
+            "close": closes[-1],
+            "bar_change_pct": round(bar_change_pct, 2),
+            "volume": vols[-1],
+            "avg_volume": round(avg_vol, 0),
+            "rel_volume": round(rel_vol, 2),
+            "vol_zscore": round(volume_z, 2) if volume_z is not None else None,
+
+            # 趋势指标
             "ema_fast": current_ema_fast_val,
             "ema_slow": current_ema_slow_val,
-            "atr": current_atr_val,
-            "adx": current_adx_val,
-            "vol_zscore": round(volume_z, 3) if volume_z is not None else None,
+            "adx": round(current_adx_val, 1),
             "trend_direction_ok": trend_direction_ok,
+            
+            # 动量指标
+            "rsi": round(current_rsi_val, 1),
+            "macd_hist": round(current_macd_hist, 4),
             "momentum_ok": mom_ok,
-            "reversal_confirmed": reversal_confirmed,
+            
+            # 波动率
+            "atr": round(current_atr_val, 4),
+            "atr_pct": round(atr_pct, 2),
+
+            # 策略逻辑状态
+            "pattern": pattern,
             "score": round(result.score, 3),
+            "reversal_confirmed": reversal_confirmed,
         }
             
         if result.signal != 'hold':
