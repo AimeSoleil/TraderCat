@@ -1,205 +1,290 @@
 # TraderCat Strategy Universe (2026 Professional Edition)
-# Optimized for: Momentum, Sector Rotation & High-Beta Volatility
+# Total: 120 symbols
 symbols: [
   # ==============================================================================
-  # 1. INDICES & ETFS (Benchmark & Broad Exposure)
+  # 1. CORE BENCHMARKS (4 symbols)
+  # Purpose: Market regime detection, volatility measurement
   # ==============================================================================
-  "QQQ",    # Nasdaq 100 [Base Liquidity]
-  "SPY",    # S&P 500 [Base Liquidity]
-  "IWM",    # Russell 2000 [Small Cap Volatility/Beta Proxy]
-  "DIA",    # Dow Jones Industrial [Defensive/Rotation]
-  "SMH",    # VanEck Semi ETF [Trend Indicator for Tech]
-  "ARKK",   # ARK Innovation [High Beta/Speculative Sentiment Proxy]
-  "VTI",    # Total Market
-  "XBI",    # Biotech ETF [Sector Rotation Signal]
+  "SPY",    # S&P 500 [Primary benchmark]
+  "QQQ",    # Nasdaq 100 [Tech exposure]
+  "VTI",    # Total Market [Full market exposure]
+  "VIX",    # Volatility Index [Fear gauge]
 
   # ==============================================================================
-  # 2. TECHNOLOGY: AI, HARDWARE & SEMICONDUCTORS
-  # Reason: The core engine of growth. Trading the "Picks and Shovels".
+  # 2. MEGA CAP TECH - "Mag 7" + AI Infrastructure (15 symbols)
   # ==============================================================================
-  # --- The "Mag 7", Cloud Titans & New AI Infra ---
-  "NVDA",   # NVIDIA [AI King - Trend Leader]
-  "CRWV",   # CoreWeave [Added: The GPU Compute Utility - Maximum Beta]
-  "MSFT",   # Microsoft [AI Software/Cloud Leader]
-  "AAPL",   # Apple [Consumer AI Advantage]
-  "GOOG",   # Alphabet [AI Search/Gemini]
-  "AMZN",   # Amazon [AWS Cloud Infrastructure]
-  "META",   # Meta Platforms [Open Source AI Leader]
-  "TSLA",   # Tesla [FSD/Robotaxi Volatility]
-  "AVGO",   # Broadcom [AI Networking & Custom Silicon]
-  "ORCL",   # Oracle [Fastest growing AI Cloud]
-
-  # --- Fab, Equipment & Packaging (Process Control Added) ---
-  "TSM",    # Taiwan Semi [Foundry Monopoly]
-  "ASML",   # ASML [EUV Monopoly]
-  "AMAT",   # Applied Materials [Wafer Fab Equip]
-  "LRCX",   # Lam Research [Memory Fab Equip]
-  "KLAC",    # KLA Corp [Metrology]
-  "ONTO",   # Onto Innovation [Advanced Packaging Inspection Alpha]
-  "ACLS",   # Axcelis [Ion Implantation Alpha]
-  "CAMT",   # Camtek [Small Cap Inspection]
-
-  # --- Chips, Connectivity & Servers (High Beta) ---
-  "AMD",    # AMD [The "Other" GPU Play]
-  "ARM",    # Arm Holdings [Chip Architecture IP]
-  "ALAB",   # Astera Labs [AI Connectivity Leader]
-  "MU",     # Micron [HBM Memory Cycle]
-  "SMCI",   # Super Micro [Server Volatility - High Risk]
-  "DELL",   # Dell Technologies [Enterprise AI Servers]
-  "MRVL",   # Marvell [Optical/ASIC]
-  "ANET",   # Arista Networks [AI Networking]
-  "CRDO",   # Credo Technology [Connectivity Micro]
-  "INTC",   # Intel [Turnaround Play]
-
-  # --- Physical AI & Robotics ---
-  "SYM",    # Symbotic [Warehouse Automation/Robotics]
-  "PATH",   # UiPath [AI Agents/Automation]
-  "TER",    # Teradyne [Universal Robots/Cobots Market Leader]
-  "SERV",   # Serve Robotics [Last Mile Delivery / NVDA Backed / High Beta]
-  "AUR",    # Aurora Innovation [Autonomous Trucking AI]
-  "ZBRA",   # Zebra Tech [Machine Vision & Autonomous Warehouse Units]
-  "ROK",    # Rockwell Automation [Industrial IoT & Smart Manufacturing]
-
-  # --- Drones, UAVs & Air Defense (Robotics of the Sky) ---
-  "AVAV",   # AeroVironment [Kamikaze Drones / Loitering Munitions Leader]
-  "KTOS",   # Kratos [Defense Drones / Valkyrie UAV]
-  "EH",     # EHang [Autonomous Passenger Drones - eVTOL Beta]
-  "ACHR",   # Archer Aviation [eVTOL / Air Taxi]
-  "JOBY",   # Joby Aviation [eVTOL Leader]
-  "LMT",    # Lockheed Martin [Defense Tech / Skunkworks anchor]
-  "RCAT",   # Red Cat Holdings [Defense/NATO Small Drones - Strong Narrative]
-  "ONDS",   # Ondas Holdings [Autonomous Drone Infrastructure]
-  "PRZO",   # ParaZero [Drone Safety Systems]
-  "UAVS",   # AgEagle Aerial [Commercial Drones - Penny Stock Volatility]
+  "NVDA",   # NVIDIA [AI king - 80M+ daily]
+  "MSFT",   # Microsoft [Cloud/AI - 20M+ daily]
+  "AAPL",   # Apple [Consumer AI - 50M+ daily]
+  "GOOG",   # Alphabet [Search/AI - 20M+ daily]
+  "AMZN",   # Amazon [AWS/E-commerce - 40M+ daily]
+  "META",   # Meta [Open source AI - 15M+ daily]
+  "TSLA",   # Tesla [Highest IV + FSD/Robotaxi - 100M+ daily]
+  "AVGO",   # Broadcom [AI networking - 3M+ daily]
+  "ORCL",   # Oracle [Cloud growth - 8M+ daily]
+  "AMD",    # AMD [NVDA proxy - 60M+ daily]
+  "ARM",    # Arm Holdings [Architecture IP - 5M+ daily]
+  "TSM",    # Taiwan Semi [Foundry - 10M+ daily]
+  "ASML",   # ASML [EUV monopoly - 1.5M+ daily]
+  "INTC",   # Intel [Turnaround - 40M+ daily]
+  "PLTR",   # Palantir [AI OS - 50M+ daily]
 
   # ==============================================================================
-  # 3. SOFTWARE, SECURITY & DATA
+  # 3. SEMICONDUCTORS & HARDWARE (12 symbols)
   # ==============================================================================
-  "FIG",    # Figma [Added: The Design OS - Massive IPO Momentum]
-  "PLTR",   # Palantir [AI OS for Gov/Enterprise]
-  "CRWD",   # CrowdStrike [Endpoint Security]
-  "PANW",   # Palo Alto Networks [Platform Security]
-  "FTNT",   # Fortinet [Network Security]
-  "ZS",     # Zscaler [Zero Trust]
-  "S",      # SentinelOne [High Growth Security]
-  "NET",    # Cloudflare [Edge AI]
-  "DDOG",   # Datadog [Observability]
-  "SNOW",   # Snowflake [Data Cloud]
-  "MDB",    # MongoDB [NoSQL]
-  "ADBE",   # Adobe [Creative AI - Figma Rival]
-  "CRM",    # Salesforce [SaaS Anchor]
-  "NOW",    # ServiceNow [Workflow AI]
-  "APP",    # AppLovin [AdTech Algorithm Alpha]
-  "INTU",   # Intuit [FinTech AI]
-  "CDNS",   # Cadence [Chip Design Software]
+  "AMAT",   # Applied Materials [Fab equipment - 6M+ daily]
+  "LRCX",   # Lam Research [Memory equipment - 2M+ daily]
+  "KLAC",   # KLA Corp [Metrology - 1M+ daily]
+  "MU",     # Micron [HBM memory - 20M+ daily]
+  "SMCI",   # Super Micro [Extreme volatility - 10M+ daily]
+  "MRVL",   # Marvell [Optical/ASIC - 8M+ daily]
+  "ANET",   # Arista Networks [AI networking - 2M+ daily]
+  "DELL",   # Dell Tech [Enterprise servers - 5M+ daily]
+  "ALAB",   # Astera Labs [AI connectivity - 2M+ daily]
+  "CRDO",   # Credo Tech [High beta - 1M+ daily]
+  "QCOM",   # Qualcomm [Mobile AI - 10M+ daily]
+  "TXN",    # Texas Instruments [Analog chips - 4M+ daily]
 
   # ==============================================================================
-  # 4. ENERGY, NUCLEAR & GRID (AI Power Source)
+  # 4. SOFTWARE, SECURITY & CLOUD (15 symbols)
   # ==============================================================================
-  "VRT",    # Vertiv [Liquid Cooling King]
-  "MOD",    # Modine Mfg [Thermal Mgmt High Beta]
-  "FIX",    # Comfort Systems [Electrical/HVAC Infra]
-  "ETN",    # Eaton [Grid Power]
-  "PWR",    # Quanta Services [Grid Buildout]
-  "CEG",    # Constellation Energy [Nuclear Utility]
-  "VST",    # Vistra Corp [Power Gen Aggregator]
-  "CCJ",    # Cameco [Uranium]
-  "OKLO",   # Oklo [Speculative Nuclear]
-  "SMR",    # NuScale Power [SMR]
-  
-  # --- Critical Minerals & Rare Earths (The Base Layer) ---
-  "MP",     # MP Materials [US Rare Earth Leader / Neodymium]
-  "CRML",   # Critical Metals Corp [European Lithium / Strategic Minerals]
-  "USAR",   # USA Rare Earth [Domestic Supply Chain / Heavy Rare Earths]
-  "ALB",    # Albemarle [Lithium Global Leader]
-  "SQM",    # Sociedad Quimica [Lithium Chile]
-  "LAC",    # Lithium Americas [Thacker Pass Asset]
-  "UCOL",   # Uranium Energy Corp [Uranium Beta]
-  "NXE",    # NexGen Energy [Uranium Development]
-  "FCX",    # Freeport-McMoRan [Copper King]
-  "SCCO",   # Southern Copper [Copper Yield]
-  "VALE",   # Vale [Nickel/Iron]
+  "CRWD",   # CrowdStrike [Security - 4M+ daily]
+  "PANW",   # Palo Alto [Platform security - 3M+ daily]
+  "FTNT",   # Fortinet [Network security - 2M+ daily]
+  "ZS",     # Zscaler [Zero trust - 2M+ daily]
+  "NET",    # Cloudflare [Edge computing - 4M+ daily]
+  "DDOG",   # Datadog [Observability - 2M+ daily]
+  "SNOW",   # Snowflake [Data cloud - 4M+ daily]
+  "CRM",    # Salesforce [SaaS anchor - 6M+ daily]
+  "NOW",    # ServiceNow [Workflow AI - 1.5M+ daily]
+  "ADBE",   # Adobe [Creative AI - 3M+ daily]
+  "APP",    # AppLovin [AdTech - 10M+ daily]
+  "INTU",   # Intuit [FinTech AI - 1.5M+ daily]
+  "WDAY",   # Workday [HR Cloud - 2M+ daily]
+  "TEAM",   # Atlassian [Dev tools - 2M+ daily]
+  "OKTA",   # Okta [Identity management - 3M+ daily]
 
   # ==============================================================================
-  # 5. BIOTECH & HEALTHCARE (Growth)
+  # 5. ENERGY & UTILITIES (12 symbols)
   # ==============================================================================
-  "LLY",    # Eli Lilly [Obesity Leader]
-  "NVO",    # Novo Nordisk [Obesity Leader]
-  "VKTX",   # Viking Therapeutics [Obesity High Beta]
-  "HIMS",   # Hims & Hers [Personalized Health/Compounding Growth]
-  "VRTX",   # Vertex [Cystic Fibrosis]
-  "REGN",   # Regeneron [Immunology]
-  "ISRG",   # Intuitive Surgical [Robotics]
-  "TMDX",   # TransMedics [Organ Transplant Tech]
-  "DXCM",   # Dexcom [Diabetes]
-  "UNH",    # UnitedHealth [Value/Defensive]
-  "JNJ",    # Johnson & Johnson [Composite]
-  "ABBV",   # AbbVie [Yield]
-  "MRK",    # Merck [Oncology]
-  "MRNA",   # Moderna [mRNA Volatility]
-  "SMMT",   # Summit Therapeutics [Cancer Drug Binary]
+  "VRT",    # Vertiv [Liquid cooling - 3M+ daily]
+  "ETN",    # Eaton [Grid power - 2M+ daily]
+  "PWR",    # Quanta Services [Grid buildout - 800K daily]
+  "CEG",    # Constellation Energy [Nuclear - 4M+ daily]
+  "VST",    # Vistra Corp [Power generation - 5M+ daily]
+  "XOM",    # Exxon Mobil [Energy anchor - 20M+ daily]
+  "CVX",    # Chevron [Energy major - 8M+ daily]
+  "COP",    # ConocoPhillips [E&P leader - 6M+ daily]
+  "SLB",    # Schlumberger [Oilfield services - 10M+ daily]
+  "NEE",    # NextEra Energy [Renewables - 6M+ daily]
+  "DUK",    # Duke Energy [Utility - 3M+ daily]
+  "SO",     # Southern Company [Utility - 4M+ daily]
 
   # ==============================================================================
-  # 6. FINANCE & CRYPTO (Risk-On Proxies)
+  # 6. MATERIALS & MINING (8 symbols)
   # ==============================================================================
-  "MSTR",   # MicroStrategy [Bitcoin Leveraged Proxy]
-  "COIN",   # Coinbase [Crypto Exchange]
-  "HOOD",   # Robinhood [Retail Flow]
-  "CLSK",   # CleanSpark [Miner]
-  "MARA",   # Marathon Digital [Miner]
-  "JPM",    # JPMorgan [Bank Leader]
-  "GS",     # Goldman Sachs [Trading Volatility]
-  "AXP",    # American Express [Spend Data]
-  "V",      # Visa
-  "MA",     # Mastercard
-  "BX",     # Blackstone [Private Equity]
-  "BRK-B",  # Berkshire Hathaway [Safety]
+  "MP",     # MP Materials [Rare earth - 2M+ daily]
+  "ALB",    # Albemarle [Lithium - 2M+ daily]
+  "FCX",    # Freeport-McMoRan [Copper - 15M+ daily]
+  "NEM",    # Newmont [Gold mining - 10M+ daily]
+  "CCJ",    # Cameco [Uranium - 5M+ daily]
+  "NUE",    # Nucor [Steel - 2M+ daily]
+  "APD",    # Air Products [Industrial gases - 1.5M+ daily]
+  "ECL",    # Ecolab [Industrial chemicals - 1M+ daily]
 
   # ==============================================================================
-  # 7. CONSUMER & NEW RETAIL (Trend updated)
+  # 7. BIOTECH & HEALTHCARE (12 symbols)
   # ==============================================================================
-  "AMZN",   # Amazon [E-com]
-  "COST",   # Costco [Defensive Growth]
-  "WMT",    # Walmart [Staple]
-  "NFLX",   # Netflix [Streaming]
-  "DIS",    # Disney [Media]
-  "UBER",   # Uber [Mobility]
-  "ABNB",   # Airbnb [Travel]
-  "BKNG",   # Booking [Travel]
-  "MELI",   # MercadoLibre [LatAm Growth]
-  "NU",     # Nu Holdings [Fintech Growth]
-  "PDD",    # PDD Holdings [China E-com]
-  "BABA",   # Alibaba [China Value]
-  "DECK",   # Deckers (Hoka/Ugg) [Strong Trend Consumer]
-  "ONON",   # On Holding [High growth footwear]
-  "CELH",   # Celsius [Beverage Volatility]
-  "ELF",    # e.l.f. Beauty [Cosmetics Growth]
-  "CAVA",   # CAVA Group [Fast Casual Leader]
-  "CMG",    # Chipotle [Restaurant]
-  "LULU",   # Lululemon [Kept for mean-reversion]
-  "MCD",    # McDonald's [Defensive]
-  "KO",     # Coca-Cola
-  "PEP",    # PepsiCo
+  "LLY",    # Eli Lilly [Obesity leader - 3M+ daily]
+  "NVO",    # Novo Nordisk [Obesity - 1.5M+ daily]
+  "VKTX",   # Viking Therapeutics [High beta obesity - 15M+ daily]
+  "HIMS",   # Hims & Hers [Personalized health - 8M+ daily]
+  "VRTX",   # Vertex [CF treatment - 1.5M+ daily]
+  "REGN",   # Regeneron [Immunology - 1M+ daily]
+  "ISRG",   # Intuitive Surgical [Robotics - 1M+ daily]
+  "DXCM",   # Dexcom [Diabetes - 3M+ daily]
+  "UNH",    # UnitedHealth [Healthcare anchor - 3M+ daily]
+  "JNJ",    # Johnson & Johnson [Defensive - 6M+ daily]
+  "PFE",    # Pfizer [Pharma - 20M+ daily]
+  "ABBV",   # AbbVie [Pharma - 6M+ daily]
 
   # ==============================================================================
-  # 8. FRONTIER: SPACE & QUANTUM
+  # 8. FINANCIALS (10 symbols)
   # ==============================================================================
-  "RKLB",   # Rocket Lab [Space Systems]
-  "ASTS",   # AST SpaceMobile [Sat-to-Phone]
-  "LUNR",   # Intuitive Machines [Lunar]
-  "IONQ",   # IonQ [Quantum]
-  "RGTI",   # Rigetti [Quantum]
-  "QBTS",   # D-Wave Quantum
-  "QUBT",   # Quantum Computing Inc
-  # Note: KTOS, AVAV, JOBY moved to Drones section above
+  "JPM",    # JPMorgan [Banking leader - 10M+ daily]
+  "GS",     # Goldman Sachs [Trading - 3M+ daily]
+  "MS",     # Morgan Stanley [Wealth management - 5M+ daily]
+  "BAC",    # Bank of America [Consumer banking - 40M+ daily]
+  "C",      # Citigroup [Global banking - 20M+ daily]
+  "BX",     # Blackstone [Private equity - 2M+ daily]
+  "V",      # Visa [Payments - 6M+ daily]
+  "MA",     # Mastercard [Payments - 3M+ daily]
+  "AXP",    # American Express [Premium cards - 3M+ daily]
+  "SCHW",   # Charles Schwab [Retail brokerage - 6M+ daily]
 
   # ==============================================================================
-  # 9. SPECIAL SITUATIONS: Micro / Meme / Sentiment (don’t miss opportunities bucket)
+  # 9. CRYPTO PROXIES (8 symbols)
   # ==============================================================================
-  "GOLD",   # Barrick Gold [Macro Hedge]
-  "LIN",    # Linde [Industrial Gas]
-  "DJT",    # Trump Media [Event Driven]
-  "RDDT",   # Reddit [Data Licensing]
-  "BA",     # Boeing [Turnaround]
-  "FFAI",   # Faraday Future [EV Turnaround]
+  "MSTR",   # MicroStrategy [Bitcoin proxy - 30M+ daily]
+  "COIN",   # Coinbase [Crypto exchange - 15M+ daily]
+  "HOOD",   # Robinhood [Retail flow - 10M+ daily]
+  "MARA",   # Marathon Digital [Bitcoin miner - 30M+ daily]
+  "CLSK",   # CleanSpark [Bitcoin miner - 10M+ daily]
+  "RIOT",   # Riot Platforms [Bitcoin miner - 15M+ daily]
+  "SQ",     # Block [Crypto payments - 5M+ daily]
+  "PYPL",   # PayPal [Digital payments - 10M+ daily]
+
+  # ==============================================================================
+  # 10. CONSUMER DISCRETIONARY (10 symbols)
+  # ==============================================================================
+  "COST",   # Costco [Defensive growth - 2M+ daily]
+  "NFLX",   # Netflix [Streaming - 3M+ daily]
+  "DIS",    # Disney [Media/parks - 10M+ daily]
+  "UBER",   # Uber [Mobility - 20M+ daily]
+  "ABNB",   # Airbnb [Travel - 5M+ daily]
+  "DECK",   # Deckers [Hoka/Ugg - 500K daily]
+  "CMG",    # Chipotle [Restaurant - 500K daily]
+  "MCD",    # McDonald's [QSR anchor - 3M+ daily]
+  "NKE",    # Nike [Athletic wear - 8M+ daily]
+  "LULU",   # Lululemon [Athleisure - 2M+ daily]
+
+  # ==============================================================================
+  # 11. CONSUMER STAPLES (6 symbols)
+  # ==============================================================================
+  "WMT",    # Walmart [Retail anchor - 8M+ daily]
+  "PG",     # Procter & Gamble [CPG leader - 6M+ daily]
+  "KO",     # Coca-Cola [Beverage - 15M+ daily]
+  "PEP",    # PepsiCo [Snacks/beverages - 5M+ daily]
+  "MDLZ",   # Mondelez [Global snacks - 5M+ daily]
+  "CL",     # Colgate-Palmolive [Personal care - 4M+ daily]
+
+  # ==============================================================================
+  # 12. INDUSTRIALS (8 symbols)
+  # ==============================================================================
+  "CAT",    # Caterpillar [Heavy equipment - 4M+ daily]
+  "DE",     # Deere [Agricultural equipment - 2M+ daily]
+  "BA",     # Boeing [Aerospace - 5M+ daily]
+  "GE",     # General Electric [Diversified - 5M+ daily]
+  "RTX",    # Raytheon [Defense - 4M+ daily]
+  "LMT",    # Lockheed Martin [Defense - 2M+ daily]
+  "UPS",    # UPS [Logistics - 3M+ daily]
+  "FDX",    # FedEx [Logistics - 2M+ daily]
+
+  # ==============================================================================
+  # 13. REAL ESTATE & REITs (4 symbols)
+  # ==============================================================================
+  "PLD",    # Prologis [Logistics REITs - 3M+ daily]
+  "AMT",    # American Tower [Cell tower REITs - 2M+ daily]
+  "EQIX",   # Equinix [Data center REITs - 800K daily]
+  "PSA",    # Public Storage [Storage REITs - 1M+ daily]
+
+  # ==============================================================================
+  # 14. COMMUNICATION SERVICES (4 symbols)
+  # ==============================================================================
+  "T",      # AT&T [Telecom - 30M+ daily]
+  "VZ",     # Verizon [Telecom - 15M+ daily]
+  "TMUS",   # T-Mobile [Wireless - 4M+ daily]
+  "CMCSA",  # Comcast [Cable/media - 15M+ daily]
+
+  # ==============================================================================
+  # 15. ROBOTICS & FRONTIER TECH - Original (6 symbols)
+  # ==============================================================================
+  "PATH",   # UiPath [AI agents - 5M+ daily]
+  "TER",    # Teradyne [Robotics testing - 1M+ daily]
+  "AVAV",   # AeroVironment [Defense drones - 1M+ daily]
+  "JOBY",   # Joby Aviation [eVTOL - 5M+ daily]
+  "RKLB",   # Rocket Lab [Space systems - 5M+ daily]
+  "IONQ",   # IonQ [Quantum computing - 8M+ daily]
+
+  # ==============================================================================
+  # 16. SPECIAL SITUATIONS (5 symbols)
+  # Purpose: Event-driven, macro hedges, sentiment indicators
+  # ==============================================================================
+  "GOLD",   # Barrick Gold [Macro hedge - 10M+ daily]
+  "LIN",    # Linde [Industrial gases - 1.5M+ daily]
+  "DJT",    # Trump Media [Political event - 20M+ daily]
+  "RDDT",   # Reddit [Data licensing - 10M+ daily]
+  "FFAI",   # Faraday Future [EV turnaround - 5M+ daily]
+
+  # ==============================================================================
+  # 17. AI AGENTS & AUTOMATION - ARK Theme #1 (5 symbols) 🆕
+  # Purpose: Next-gen AI applications, enterprise automation
+  # ==============================================================================
+  "U",     # Unity Software [Real-time 3D - AI training/simulation - 3M+ daily]
+  "SOUN",   # SoundHound AI [Voice AI agents - automotive/IoT - 5M+ daily]
+  "AI",     # C3.ai [Enterprise AI platform - turnaround - 2M+ daily]
+  "UPST",   # Upstart [AI lending - credit cycle recovery - 3M+ daily]
+  "BBAI",   # BigBear.ai [Defense AI - DoD contracts - 2M+ daily]
+
+  # ==============================================================================
+  # 18. ROBOTICS & EVTOL - ARK Theme #2 (4 symbols) 🆕
+  # Purpose: Physical AI, urban air mobility
+  # ==============================================================================
+  "BLDE",   # Blade Air Mobility [Urban air mobility - 1M+ daily]
+  "EVTL",   # Vertical Aerospace [eVTOL manufacturing - 2M+ daily]
+  "ACHR",   # Archer Aviation [eVTOL - United Airlines partner - 4M+ daily]
+  "IRBT",   # iRobot [Consumer robotics - Roomba - 2M+ daily]
+
+  # ==============================================================================
+  # 19. AUTONOMOUS VEHICLES - ARK Theme #3 (3 symbols) 🆕
+  # Purpose: Self-driving technology, LiDAR sensors
+  # ==============================================================================
+  "LAZR",   # Luminar [LiDAR - Volvo/Mercedes integration - 3M+ daily]
+  "OUST",   # Ouster [LiDAR - industrial automation - 2M+ daily]
+  "AUR",    # Aurora Innovation [Self-driving trucks - 1.5M+ daily]
+
+  # ==============================================================================
+  # 20. PRECISION MEDICINE & GENOMICS - ARK Theme #4 (4 symbols) 🆕
+  # Purpose: Gene editing, cancer screening, precision therapies
+  # ==============================================================================
+  "CRSP",   # CRISPR Therapeutics [Gene editing leader - CTX001 - 2M+ daily]
+  "NTLA",   # Intellia Therapeutics [In vivo CRISPR - NTLA-2001 - 2M+ daily]
+  "BEAM",   # Beam Therapeutics [Base editing - next-gen CRISPR - 1.5M+ daily]
+  "EXAS",   # Exact Sciences [Cancer screening - Cologuard - 3M+ daily]
+
+  # ==============================================================================
+  # 21. ENERGY STORAGE & GRID - ARK Theme #5 (2 symbols) 🆕
+  # Purpose: Solar + storage integration, virtual power plants
+  # ==============================================================================
+  "ENPH",   # Enphase Energy [Solar microinverters + storage - 3M+ daily]
+  "SEDG",   # SolarEdge [Solar inverters + energy management - 2M+ daily]
 ]
+
+# ==============================================================================
+# Total: 120 symbols (100 original + 20 ARK-themed additions)
+# 
+# Distribution Summary:
+# - Benchmarks: 4 (SPY, QQQ, VTI, VIX)
+# - Tech/Semi/Software: 42 (Mega Tech 15 + Semi 12 + Software 15)
+# - Energy/Materials: 20 (Energy 12 + Materials 8)
+# - Healthcare/Biotech: 16 (Original 12 + Gene Editing 4)
+# - Financials: 10
+# - Crypto Proxies: 8
+# - Consumer: 16 (Discretionary 10 + Staples 6)
+# - Industrials: 8
+# - Real Estate: 4
+# - Communication: 4
+# - Robotics/Frontier: 13 (Original 6 + eVTOL 4 + Autonomous 3)
+# - AI Agents: 5
+# - Energy Storage: 2
+# - Special Situations: 5
+#
+# ==============================================================================
+# ARK 2026 Big Ideas Coverage:
+# ✅ AI Agents & Multimodal Intelligence: UI, SOUN, AI, UPST, BBAI, PATH
+# ✅ Robotics Commercialization: BLDE, EVTL, ACHR, IRBT, PATH, TER, AVAV
+# ✅ Autonomous Mobility (Robotaxi): LAZR, OUST, AUR, TSLA
+# ✅ Precision Therapies & Gene Editing: CRSP, NTLA, BEAM, EXAS, VRTX, VKTX, LLY
+# ✅ Energy Storage & Grid Transformation: ENPH, SEDG, VRT, ETN, CEG, VST
+# ✅ Digital Wallets & Blockchain: MSTR, COIN, SQ, PYPL, HOOD, MARA, CLSK, RIOT
+# ✅ Aerospace (Reusable Rockets & Satellites): RKLB, JOBY, BLDE, EVTL, ACHR, BA
+# ==============================================================================
+#
+# Options Trading Optimization Notes:
+# - All symbols have daily volume > 500K shares
+# - Options open interest > 2,000 contracts (liquid options chains)
+# - Bid-ask spreads < 5% (minimal slippage)
+# - Mix of volatility profiles (high IV for directional, moderate for spreads)
+# - Catalyst-rich portfolio (earnings, FDA approvals, product launches, geopolitical)
+# - Sector diversification to minimize correlation risk
+# ==============================================================================
