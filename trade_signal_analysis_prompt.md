@@ -31,104 +31,252 @@ The CSV file contains the following columns:
 
 The `Details` column contains a JSON dictionary with **two types of fields**:
 
-#### A. Universal Fields (Present in ALL strategies)
+#### A. Universal Fields (Present in ALL individual stock strategies)
 
-These fields are guaranteed to exist in every signal:
+These fields are guaranteed to exist in every **individual stock signal** (all strategies except `sector_rotation_strategy`):
 
 ```json
 {
-  // Price Action (OHLCV)
-  "open": 150.25,
-  "high": 152.00,
-  "low": 149.80,
-  "close": 151.50,
+  // Price Action (OHLCV) - Core Data
+  "open": 150.25,          // Opening price of the current bar
+  "high": 152.00,          // Highest price of the current bar
+  "low": 149.80,           // Lowest price of the current bar
+  "close": 151.50,         // Closing price (most recent price)
   
-  // Volume Analysis
-  "volume": 5000000,
-  "avg_volume": 3000000,
-  "rel_volume": 1.67,      // Relative Volume (Current / Average)
-  "vol_zscore": 2.3,       // Volume Z-Score (Standard Deviations above mean)
+  // Volume Analysis - Institutional Interest Detection
+  "volume": 5000000,       // Current bar volume (shares traded)
+  "avg_volume": 3000000,   // Average volume over recent period (e.g., 20 bars)
+  "rel_volume": 1.67,      // Relative Volume = volume / avg_volume (>1.0 = above average)
+  "vol_zscore": 2.3,       // Volume Z-Score = standard deviations above mean (>2.0 = significant)
   
-  // Trend Indicators
-  "adx": 28.5,             // Average Directional Index (Trend Strength)
-  "rsi": 65.2,             // Relative Strength Index
+  // Trend Strength Indicators - Market Structure
+  "adx": 28.5,             // Average Directional Index (0-100, >25 = strong trend)
+  "rsi": 65.2,             // Relative Strength Index (0-100, >70 overbought, <30 oversold)
   
-  // Volatility
-  "atr": 2.15,             // Average True Range (Absolute)
-  "atr_pct": 1.42          // ATR as % of price
+  // Volatility Metrics - Options Viability Assessment
+  "atr": 2.15,             // Average True Range (absolute dollar amount)
+  "atr_pct": 1.42          // ATR as % of price (critical for options: need >1.0% minimum)
 }
 ```
+
+**⚠️ Exception: `sector_rotation_strategy`**
+
+The Sector Rotation strategy operates at the **portfolio level**, not individual stock level. It does NOT contain the above OHLCV fields. Instead, it has:
+- `context`: Market regime and benchmark analysis
+- `breadth`: Market internals (sector participation)
+- `holdings`: Portfolio composition with sector-level metrics
+
+For Sector Rotation signals, skip the individual stock audit rules in Phase 1 and instead evaluate the market regime and sector allocation logic.
 
 #### B. Strategy-Specific Fields (May or may not be present)
 
 Different strategies add additional context based on their logic:
 
-**Bollinger Band Strategies** (`BollingerBreakout`, `BBandsReversal`):
+**1. BollingerBreakout Strategy** (`bbands_breakout`):
 ```json
 {
-  "bbu": 153.00,           // Bollinger Upper Band
-  "bbl": 147.50,           // Bollinger Lower Band
-  "bbm": 150.25,           // Bollinger Middle Band (20 SMA)
-  "bandwidth": 5.5,        // Width of bands (volatility measure)
-  "pct_b": 0.73,           // %B: Position within bands (0-1 scale)
-  "squeeze": false,        // Is bandwidth contracting? (Bollinger Squeeze)
-  "candle_conviction": 0.85, // (Breakout only) Body size / total range
-  "rejection_pattern": "hammer" // (Reversal only) Candlestick pattern
-}
-```
-
-**Momentum/Trend Strategies** (`MomentumTrend`, `ChartPattern`):
-```json
-{
+  // Bollinger Bands Structure
+  "bbu": 153.00,                  // Bollinger Upper Band
+  "bbl": 147.50,                  // Bollinger Lower Band
+  "bbm": 150.25,                  // Bollinger Middle Band (20 SMA)
+  "bandwidth": 5.5,               // Width of bands (volatility measure)
+  "bw_pct": 45.2,                 // Bandwidth percentile (0-100)
+  "pct_b": 1.05,                  // %B: Position within bands (>1.0 = above upper band)
+  "squeeze": false,               // Was bandwidth contracting? (Bollinger Squeeze setup)
+  
+  // EMA Trend Context
   "ema_fast": 150.80,
   "ema_slow": 148.20,
-  "ema_spread_pct": 1.75,          // Divergence between fast/slow EMAs
-  "mom_score_risk_adj": 0.0234,    // (Momentum only) Risk-adjusted momentum
-  "ht_fast": 148.5,                // (Momentum only) Higher timeframe EMA
-  "ht_slow": 145.2,
-  "ht_ema_spread_pct": 2.2,
-  "pattern": "ascending_triangle"  // (ChartPattern only) Pattern name
+  "ema_spread_pct": 1.75,         // Fast/Slow EMA divergence (trend acceleration)
+  "ema_extension_pct": 2.1,       // Price distance from slow EMA (overextension risk)
+  
+  // Breakout Quality
+  "candle_conviction": 0.85,      // Candle body size / total range (0.0-1.0)
+  "candle_range_atr": 1.8,        // Current candle range in ATR units
+  "valid_candle": true,           // Clean directional candle (no confusion)
+  "vol_confirmed": true,          // Volume surge present
+  "trend_context_ok": true        // ADX + momentum alignment
 }
 ```
 
-**Reversal Strategies** (`CandlestickReversal`, `Divergence`):
+**2. BollingerReversal Strategy** (`bbands_reversal`):
 ```json
 {
-  "pattern": "bearish_engulfing",  // Candlestick pattern name
-  "reversal_confirmed": true,      // Price action confirmation
-  "div_type": "regular_bullish",   // (Divergence only) Type of divergence
-  "swing_indices": [45, 52],       // (Divergence only) Pivot points used
-  "bar_change_pct": -2.3           // Current bar's % change
+  // Bollinger Bands Structure
+  "bbu": 153.00,
+  "bbl": 147.50,
+  "bbm": 150.25,
+  "bandwidth": 5.5,
+  "pct_b": 0.05,                  // Price near lower band (reversal zone)
+  
+  // Reversal Pattern Recognition
+  "rejection_pattern": "hammer",  // Candlestick pattern name (e.g., hammer, shooting_star)
+  "is_ranging": true,             // Market in consolidation (low ADX)
+  "near_upper": false,            // Price at upper band? (for short reversals)
+  "near_lower": true,             // Price at lower band? (for long reversals)
+  "mid_cross": false,             // Price crossing middle band? (momentum shift)
+  
+  // Confirmation Factors
+  "momentum_ok": true,            // RSI/MACD divergence or hook
+  "vol_zscore": 2.1               // Volume spike on reversal bar
 }
 ```
 
-**Fibonacci Strategy**:
+**3. CandlestickReversal Strategy** (`candlestick_reversal`):
 ```json
 {
-  "impulse_direction": "long",
-  "impulse_start": 145.00,
-  "impulse_end": 155.00,
-  "fib_zone_low": 148.50,
-  "fib_zone_high": 149.80,
-  "trigger_reason": "EMA Reclaim + RSI Hook"
+  // Pattern Details
+  "pattern": "bearish_engulfing", // Detected candlestick pattern
+  "reversal_confirmed": true,     // Follow-through confirmation present
+  "bar_change_pct": -2.3,         // Current bar's percentage change
+  
+  // Trend Context
+  "ema_fast": 150.80,
+  "ema_slow": 148.20,
+  "trend_direction_ok": false,    // Is reversal against prevailing trend?
+  
+  // Supporting Indicators
+  "macd_hist": -0.15,             // MACD histogram value
+  "momentum_ok": true,            // Momentum divergence/exhaustion
+  "score": 0.782                  // Composite pattern score
 }
 ```
 
-**Sector Rotation Strategy**:
+**4. ChartPattern Strategy** (`chart_pattern`):
 ```json
 {
+  // Pattern Geometry
+  "pattern": "ascending_triangle",  // Detected chart pattern
+  "target_price": 165.50,           // Measured move target
+  "stop_price": 147.20,             // Pattern invalidation level
+  "reward_risk_ratio": 2.8,         // R:R based on pattern structure
+  
+  // Trend Alignment
+  "ema_trend": 148.50,              // EMA 200 (major trend)
+  "ema_dist_pct": 2.1,              // Distance from major trend line
+  "trend_aligned": true,            // Pattern direction matches trend
+  
+  // Breakout Confirmation
+  "vol_breakout_confirmed": true,   // Volume surge on breakout
+  "factors": [                      // List of supporting factors
+    "Pattern Quality: Strong",
+    "Volume Surge: Confirmed",
+    "Trend Aligned: Yes"
+  ]
+}
+```
+
+**5. Divergence Strategy** (`divergence`):
+```json
+{
+  // Divergence Details
+  "div_type": "regular_bullish",   // Type: regular_bullish/hidden_bullish/regular_bearish/hidden_bearish
+  "swing_indices": [45, 52],       // Price swing points used for detection
+  "indicator_val_1": 32.5,         // Indicator value at first swing
+  "indicator_val_2": 28.3,         // Indicator value at second swing
+  
+  // Supporting Context
+  "bar_change_pct": 1.8,           // Current bar momentum
+  "reasons": [                     // Qualitative factors
+    "Regular Bullish Divergence",
+    "RSI Divergence Confirmed",
+    "Volume Support"
+  ]
+}
+```
+
+**6. FibonacciRetracement Strategy** (`fibonacci_retracement`):
+```json
+{
+  // Impulse Wave Structure
+  "impulse_direction": "long",     // Impulse wave direction
+  "impulse_start": 145.00,         // Impulse wave starting price
+  "impulse_end": 155.00,           // Impulse wave ending price
+  
+  // Fibonacci Levels
+  "fib_zone_low": 148.50,          // 0.618 retracement level (bottom of buy zone)
+  "fib_zone_high": 149.80,         // 0.5 retracement level (top of buy zone)
+  
+  // Trigger Logic
+  "trigger_reason": "EMA Reclaim + RSI Hook",  // What triggered the signal
+  "trend_match": true,             // Does retracement align with higher timeframe trend?
+  "momentum_confirmed": true,      // RSI/MACD showing reversal hook
+  "volume_confirmed": true         // Volume on bounce bar
+}
+```
+
+**7. MomentumTrend Strategy** (`momentum`):
+```json
+{
+  // Risk-Adjusted Momentum
+  "mom_score_risk_adj": 0.0234,    // Momentum / Volatility (key metric)
+  
+  // Daily Timeframe EMAs
+  "ema_fast": 150.80,
+  "ema_slow": 148.20,
+  "ema_spread_pct": 1.75,          // Fast/Slow divergence (trend strength)
+  "daily_trend_up": true,          // Daily trend direction
+  
+  // Higher Timeframe (Weekly) Structure
+  "ht_fast": 148.5,                // Weekly EMA fast
+  "ht_slow": 145.2,                // Weekly EMA slow
+  "ht_ema_spread_pct": 2.2,        // Weekly EMA spread
+  "ht_trend_up": true,             // Weekly trend direction
+  
+  // Logic Gates
+  "is_adx_strong": true,           // ADX confirms trend
+  "long_cond": true,               // All long conditions met
+  "short_cond": false              // All short conditions met
+}
+```
+
+**8. SectorRotation Strategy** (`sector_rotation_strategy`):
+```json
+{
+  // Market Regime Context
   "context": {
-    "regime_state": "Risk On",
+    "regime_state": "Risk On",           // Risk-On / Defensive / Cash
     "benchmark_symbol": "SPY",
-    "benchmark_vs_sma_pct": 3.5
+    "benchmark_price": 450.25,
+    "benchmark_sma": 438.50,
+    "benchmark_vs_sma_pct": 3.5          // Benchmark above/below major trend
   },
+  
+  // Market Breadth (Internals)
   "breadth": {
-    "total_candidates": 11,
-    "market_breadth_pct": 68.2
+    "total_candidates": 11,              // Total sectors analyzed
+    "positive_momentum_count": 8,        // Sectors with positive momentum
+    "market_breadth_pct": 68.2,          // % of sectors in uptrend (>50% = healthy)
+    "median_sector_rsi": 58.5            // Median RSI across sectors
   },
+  
+  // Portfolio Holdings (Top Sectors Selected)
   "holdings": {
-    "XLK": {"weight": 0.30, "momentum_raw": 0.045},
-    "XLY": {"weight": 0.25, "rsi": 62.3}
+    "XLK": {
+      "role": "Alpha Component",
+      "weight": 0.30,
+      "momentum_raw": 0.045,             // Raw returns
+      "rsi": 62.3,
+      "composite_z_score": 1.8           // Relative rank strength
+    },
+    "XLY": {
+      "role": "Alpha Component",
+      "weight": 0.25,
+      "momentum_raw": 0.038,
+      "rsi": 59.1,
+      "composite_z_score": 1.5
+    },
+    "SHY": {                             // Safe haven (if Risk-Off)
+      "role": "Safe Haven",
+      "weight": 0.0,
+      "reason": "Not needed in Risk-On environment"
+    }
+  },
+  
+  // Top Candidates Ranking (for transparency)
+  "top_candidates": {
+    "XLK": {"momentum": 0.045, "rsi": 62.3, "composite_score": 1.8},
+    "XLY": {"momentum": 0.038, "rsi": 59.1, "composite_score": 1.5}
   }
 }
 ```
