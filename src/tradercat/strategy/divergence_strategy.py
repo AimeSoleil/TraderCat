@@ -287,26 +287,64 @@ class DivergenceStrategy(TradingStrategy):
                 if not best_result or ('regular' in name and 'regular' not in best_result[1]):
                     best_result = (res, name)
                     best_div_details = {
-                        "type": name,
+                        "div_type": name,
                         "swing_indices": (idx1, idx2),
-                        "indicator_vals": (v1, v2),
-                        "atr": curr_atr,
-                        "vol_z": vol_z,
-                        "rsi": rsi_val
+                        "indicator_val_1": round(v1, 2) if v1 is not None else 0.0,
+                        "indicator_val_2": round(v2, 2) if v2 is not None else 0.0,
                     }
                     if 'regular' in name: break # Found strongest signal
 
         # 5. Final Output
+        # Calculate Contextual Metrics for Reporting
+        avg_vol = sum(vols[-self.vol_zscore_window:]) / self.vol_zscore_window if len(vols) >= self.vol_zscore_window else 0.0
+        rel_vol = (vols[-1] / avg_vol) if avg_vol > 0 else 0.0
+        bar_change_pct = (close - float(candles[-1].open)) / float(candles[-1].open) * 100 if float(candles[-1].open) != 0 else 0.0
+        atr_pct = (curr_atr / close * 100) if close > 0 else 0.0
+        current_adx = adx_hist[-1] if adx_hist else 0.0
+        current_rsi = rsi_hist[-1] if rsi_hist else 50.0
+        current_macd_hist = macd_hist[-1] if macd_hist else 0.0
+
+        # Base Details (Always present even if hold, though usually we only return on signal)
+        details: Dict[str, Any] = {
+            # OHLCV Context
+            "open": float(candles[-1].open),
+            "high": highs[-1],
+            "low": lows[-1],
+            "close": close,
+            "bar_change_pct": round(bar_change_pct, 2),
+            "volume": vols[-1],
+            "avg_volume": round(avg_vol, 0),
+            "rel_volume": round(rel_vol, 2),
+            "vol_zscore": round(vol_z, 2),
+            
+            # Trend & Momentum
+            "adx": round(current_adx, 1),
+            "rsi": round(current_rsi, 1),
+            "macd_hist": round(current_macd_hist, 4),
+            
+            # Volatility
+            "atr": round(curr_atr, 4),
+            "atr_pct": round(atr_pct, 2),
+        }
+
         if not best_result or best_result[0].signal == 'hold':
+            # Optionally return details even on Hold for debugging
             return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=dates[-1], confidence=0.0, reason="No valid divergence")
 
         res, d_name = best_result
         
+        # Merge setup specific details
+        if best_div_details:
+            details.update(best_div_details)
+        
+        details["score"] = round(res.score, 3)
+        details["reasons"] = res.reasons
+
         if res.signal != 'hold':
             planner = ExitPlanner(highs=highs, lows=lows, atr=curr_atr, close_price=close)
             plan = planner.make_exit_plan(trading_signal=res.signal)
             # Divergence trades can have looser stops if confirmed by structure
-            best_div_details["plan"] = plan
+            details["plan"] = plan
 
         return SignalModel(
             symbol=symbol,
@@ -314,8 +352,8 @@ class DivergenceStrategy(TradingStrategy):
             signal=res.signal,
             date=dates[-1],
             confidence=round(res.score, 3),
-            reason=" | ".join(res.reasons),
-            details=best_div_details,
+            reason=f"{d_name} | {' | '.join(res.reasons)}",
+            details=details,
         )
 
 def make_divergence_presets() -> Dict[str, Dict[str, Any]]:

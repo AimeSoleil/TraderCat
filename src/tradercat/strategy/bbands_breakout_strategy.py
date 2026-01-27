@@ -217,9 +217,14 @@ class BollingerBreakoutStrategy(TradingStrategy):
 
         # 5. Volume Check
         recent_window = max(1, min(self.vol_zscore_window, len(vols)))
-        vol_ok = self._check_volume_zscore(
-            vols, recent_window, self.vol_zscore_threshold
-        )
+        
+        # [UPDATED] Robust Volume Z-Score checking
+        # Handling potential tuple return (bool, z_score) from base class or simple bool
+        _vol_res = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
+        if isinstance(_vol_res, tuple):
+            vol_ok, vol_z = _vol_res
+        else:
+            vol_ok, vol_z = _vol_res, 0.0
 
         # [UPDATED] Trend/Vol Logic for Breakouts
         # mode='breakout' checks for: Volatility Spike AND (Strong Trend OR Rising ADX)
@@ -237,16 +242,72 @@ class BollingerBreakoutStrategy(TradingStrategy):
         # The signal encapsulates the "Vol Spike + Momentum Context" logic
         is_trend_context_good = trend_strength.signal
 
-        # 构造详情
+        # 计算额外的技术指标用于详情
+        current_adx = adx_history[-1] if adx_history else 0.0
+        prev_adx = adx_history[-2] if len(adx_history) > 1 else current_adx
+        adx_slope = current_adx - prev_adx
+        
+        avg_vol = sum(vols[-recent_window:]) / recent_window if recent_window > 0 else 0.0
+        rel_vol = (vols[-1] / avg_vol) if avg_vol > 0 else 0.0
+
+        # Advanced Metrics
+        # %B: 1.0 = Upper Band, 0.0 = Lower Band. Breakout > 1.0
+        pct_b = (close - bbl) / (bbu - bbl) if (bbu - bbl) != 0 else 0.5
+        
+        # Candle Conviction: Body size relative to full range (0.0 - 1.0)
+        open_price = float(candles[idx].open)
+        bar_range = high - low
+        body_size = abs(close - open_price)
+        candle_conviction = (body_size / bar_range) if bar_range > 0 else 0.0
+        
+        # Extension: Distance from Slow EMA (Mean Reversion Risk)
+        ema_extension_pct = ((close - ema_s) / ema_s * 100) if ema_s else 0.0
+        
+        # EMA Spread: Divergence between fast and slow (Trend Maturity)
+        ema_spread_pct = ((ema_f - ema_s) / ema_s * 100) if ema_s else 0.0
+
+        # 构造详情 - 包含全面的技术指标
         details: Dict[str, Any] = {
+            # 基础 OHLCV
+            "open": open_price,
+            "high": high,
+            "low": low,
             "close": close,
+            "volume": vols[-1],
+            "avg_volume": round(avg_vol, 0),
+            "rel_volume": round(rel_vol, 2),
+            "vol_zscore": round(vol_z, 2),
+            
+            # 布林带深度数据
             "bbu": bbu,
             "bbl": bbl,
+            "bbm": bbm,
+            "bandwidth": curr_bw,
             "bw_pct": round(bw_pct, 1),
+            "pct_b": round(pct_b, 2),     # Key for breakout triggers
             "squeeze": in_squeeze,
-            "atr_pct": round(atr_pct, 2),
+            
+            # 趋势与均线分析
+            "ema_fast": ema_f,
+            "ema_slow": ema_s,
+            "ema_spread_pct": round(ema_spread_pct, 2),
+            "ema_extension_pct": round(ema_extension_pct, 2),
+            
+            # 动量深度数据
+            "adx": round(current_adx, 1),
+            "adx_slope": round(adx_slope, 2),
             "rsi": round(current_rsi, 1),
-            "valid_candle": valid_candle_shape
+            
+            # 波动率与蜡烛形态
+            "atr": round(current_atr, 4),
+            "atr_pct": round(atr_pct, 2),
+            "candle_conviction": round(candle_conviction, 2),
+            "candle_range_atr": round(bar_range / current_atr, 2) if current_atr > 0 else 0.0,
+            
+            # 逻辑状态
+            "valid_candle": valid_candle_shape,
+            "vol_confirmed": vol_ok,
+            "trend_context_ok": is_trend_context_good
         }
 
         # --- SCORING ENGINE ---

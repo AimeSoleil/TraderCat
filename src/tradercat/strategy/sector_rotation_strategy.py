@@ -270,11 +270,68 @@ class SectorRotationStrategy(TradingStrategy):
             
             reason = f"Top Sectors: {','.join(selected_symbols)} (Regime Long: {long_regime})"
 
+        # [UPDATED] Professional Grade Signal Details
+        
+        # 1. Market Context (Benchmark Health)
+        curr_bench_price = regime.get("current_price", 0.0)
+        curr_bench_sma = regime.get("sma_val", 0.0)
+        bench_dist_pct = ((curr_bench_price - curr_bench_sma) / curr_bench_sma * 100) if curr_bench_sma else 0.0
+        
+        market_context = {
+            "regime_state": "Risk On" if long_regime else "Defensive/Cash",
+            "benchmark_symbol": self.benchmark_symbol,
+            "benchmark_price": curr_bench_price,
+            "benchmark_sma": round(curr_bench_sma, 2),
+            "benchmark_vs_sma_pct": round(bench_dist_pct, 2)
+        }
+
+        # 2. Universe Breadth (Market Internals)
+        # Calculates how healthy the broad market is by looking at sector participation
+        sectors_up = int((df['momentum'] > 0).sum())
+        breadth_pct = round((sectors_up / len(df)) * 100, 1) if not df.empty else 0.0
+        median_rsi = round(df['rsi'].median(), 1)
+        
+        universe_stats = {
+            "total_candidates": len(df),
+            "positive_momentum_count": sectors_up,
+            "market_breadth_pct": breadth_pct, # >50% is generally healthy
+            "median_sector_rsi": median_rsi
+        }
+
+        # 3. Selected Portfolio Analysis (Deep Dive into constituents)
+        portfolio_composition = {}
+        for sym in selected_symbols:
+            weight = round(allocations.get(sym, 0.0), 3)
+            
+            if sym == self.safe_haven_symbol:
+                portfolio_composition[sym] = {
+                    "role": "Safe Haven",
+                    "weight": weight,
+                    "reason": "Market Regime Filter or No Valid Sectors"
+                }
+            elif sym in df.index:
+                row = df.loc[sym]
+                portfolio_composition[sym] = {
+                    "role": "Alpha Component",
+                    "weight": weight,
+                    "momentum_raw": round(row['momentum'], 4), # Raw returns
+                    "rsi": round(row['rsi'], 1),
+                    "volatility_ann": round(row['volatility'], 4),
+                    "vol_trend_ratio": round(row['volume_trend'], 2),
+                    "composite_z_score": round(row['composite_score'], 2), # Relative rank strength
+                    "z_momentum": round(z_mom.get(sym, 0), 2),
+                    "z_rsi": round(z_rsi.get(sym, 0), 2)
+                }
+
         details = {
-            "regime": "Long" if long_regime else "Short",
-            f"{self.benchmark_symbol}_sma": regime.get("sma_val"),
-            "allocations": allocations,
-            "all_scores": df['composite_score'].to_dict()
+            "context": market_context,
+            "breadth": universe_stats,
+            "holdings": portfolio_composition,
+            # Full Ranking Table for debugging/logging (Top 5 only to keep payload small)
+            "top_candidates": df[['momentum', 'rsi', 'composite_score']]
+                                .sort_values(by='composite_score', ascending=False)
+                                .head(5)
+                                .to_dict(orient='index')
         }
 
         return SignalModel(
@@ -282,7 +339,7 @@ class SectorRotationStrategy(TradingStrategy):
             strategy=self.get_name(),
             signal="rebalance",
             date=date,
-            confidence=1.0,
+            confidence=1.0, 
             reason=reason,
             details=details,
         )

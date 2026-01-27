@@ -229,7 +229,13 @@ class MomentumTrendStrategy(TradingStrategy):
         is_adx_strong = trend_config.signal
 
         recent_window = max(1, min(self.vol_zscore_window, len(vols)))
-        vol_ok, _ = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
+        
+        # [UPDATED] Capture Z-Score
+        _vol_res = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
+        if isinstance(_vol_res, tuple):
+             vol_ok, vol_z = _vol_res
+        else:
+             vol_ok, vol_z = _vol_res, 0.0
 
         # Daily Trend Alignment
         trend_day_up = (curr_ema_fast > curr_ema_slow) if (curr_ema_fast and curr_ema_slow) else False
@@ -251,14 +257,57 @@ class MomentumTrendStrategy(TradingStrategy):
         # Short: Negative Mom + Daily Down + Price < Slow EMA + HT Down
         short_cond = (mom_score < 0) and trend_day_down and price_below_slow and trend_ht_down
 
-        details = {
-            "mom_score": round(mom_score, 4),
+        # [UPDATED] Comprehensive Technical Details
+        avg_vol = sum(vols[-recent_window:]) / recent_window if recent_window > 0 else 0.0
+        rel_vol = (vols[-1] / avg_vol) if avg_vol > 0 else 0.0
+        
+        open_price = float(getattr(candles[-1], "open", 0.0))
+        bar_change_pct = (curr_close - open_price) / open_price * 100 if open_price != 0 else 0.0
+        atr_pct = (current_atr_val / curr_close * 100) if curr_close > 0 else 0.0
+        
+        ema_spread_pct = ((curr_ema_fast - curr_ema_slow) / curr_ema_slow * 100) if (curr_ema_slow and curr_ema_slow != 0.0) else 0.0
+        
+        ht_ema_spread_pct = 0.0
+        if ht_ema_ok and ht_slow != 0:
+            ht_ema_spread_pct = (ht_fast - ht_slow) / ht_slow * 100
+
+        details: Dict[str, Any] = {
+            # OHLCV Context
+            "open": open_price,
+            "high": highs[-1],
+            "low": lows[-1],
+            "close": curr_close,
+            "bar_change_pct": round(bar_change_pct, 2),
+            "volume": vols[-1],
+            "avg_volume": round(avg_vol, 0),
+            "rel_volume": round(rel_vol, 2),
+            "vol_zscore": round(vol_z, 2),
+            
+            # Momentum Factors
+            "mom_score_risk_adj": round(mom_score, 4),
+            "adx": round(current_adx_val, 1),
+            "is_adx_strong": is_adx_strong,
+            
+            # Daily Trend Structure
             "ema_fast": curr_ema_fast,
             "ema_slow": curr_ema_slow,
-            "ht_fast": ht_fast,
-            "ht_slow": ht_slow,
-            "adx": current_adx_val,
-            "atr": current_atr_val
+            "ema_spread_pct": round(ema_spread_pct, 2),
+            "daily_trend_up": trend_day_up,
+            
+            # Higher Timeframe (Weekly) Structure
+            "ht_fast": round(ht_fast, 3) if ht_fast else None,
+            "ht_slow": round(ht_slow, 3) if ht_slow else None,
+            "ht_ema_spread_pct": round(ht_ema_spread_pct, 2),
+            "ht_trend_up": trend_ht_up,
+
+            # Volatility
+            "atr": round(current_atr_val, 4),
+            "atr_pct": round(atr_pct, 2),
+            
+            # Logic Gates
+            "long_cond": long_cond,
+            "short_cond": short_cond,
+            "vol_confirmed": vol_ok
         }
 
         # 5. Scoring
