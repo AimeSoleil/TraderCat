@@ -265,6 +265,9 @@ class DivergenceStrategy(TradingStrategy):
                 # Price Action Confirmation
                 price_confirmed = self._check_price_confirmation(candles[-1], side)
 
+                # Volatility Gatekeeper
+                is_vol_healthy = raw_trend.volatility.get('signal', False)
+
                 factors = [
                     Factor(FactorName.DIVERGENCE, f"{name} Triggered", self.weights["divergence"], True),
                     Factor(FactorName.TREND_STRENGTH, "Trend Context", self.weights["trend_context"], is_trend_ok),
