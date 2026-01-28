@@ -302,14 +302,14 @@ class CandlestickReversalStrategy(TradingStrategy):
 
         details: Dict[str, Any] = {
             # 基础 OHLCV 与 价格行为
-            "open": opens[-1],
-            "high": highs[-1],
-            "low": lows[-1],
-            "close": closes[-1],
-            "bar_change_pct": round(bar_change_pct, 2),
-            "volume": vols[-1],
+            "open": round(opens[-1], 2),
+            "high": round(highs[-1], 2),
+            "low": round(lows[-1], 2),
+            "close": round(closes[-1], 2),
+            "volume": round(vols[-1], 0),
             "avg_volume": round(avg_vol, 0),
             "rel_volume": round(rel_vol, 2),
+            "bar_change_pct": round(bar_change_pct, 2),
             "vol_zscore": round(volume_z, 2) if volume_z is not None else None,
 
             # 趋势指标
@@ -362,53 +362,96 @@ class CandlestickReversalStrategy(TradingStrategy):
 
 def make_candlestick_reversal_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Returns a dictionary of all available presets for Candlestick Reversal Strategy.
+    Returns presets for Candlestick Reversal Strategy optimized for OPTIONS TRADING.
+    Focus: Avoiding 'Theta Traps' and identifying 'IV Expansion' zones.
     """
     return {
-        "swing": {
-            # ---------------- SWING TRADING (Optimized) ----------------
-            # Strategy: "Buy the Dip" in an Uptrend / "Sell the Rally" in a Downtrend.
+        "gamma_dip": {
+            # ---------------- AGGRESSIVE DIP SNIPER (Gamma Play) ----------------
+            # Ideal Strategy: Weekly OTM Calls/Puts (Sniper Logic)
+            # Goal: Catch the immediate "V-Shape" bounce off EMA 8/21.
+            # Context: Stock scans > Top Risers. Fast corrections in strong trends.
             
-            "ema_fast": 9,
-            "ema_slow": 21,
+            "ema_fast": 8,
+            "ema_slow": 21,         # Quick trend context (Turbo Trend)
+            
             "atr_period": 14,
-            "rsi_period": 14,       
+            "rsi_period": 14,       # Standard RSI
             "adx_period": 14,       
             "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-            "vol_zscore_window": 20,
-            "vol_zscore_threshold": 1.0,
-            "score_threshold": 0.65,
             
-            # [NEW] Tuned Weights
+            "vol_zscore_window": 10,       # Short window for volume context
+            "vol_zscore_threshold": 1.5,   # Moderate volume ok; price action matters more here.
+            
+            "score_threshold": 0.60,       # Lower threshold to execute faster.
+            
+            # --- Weights (Action Focused) ---
             "weights": {
-                "candle": 0.35,
-                "trend_dir": 0.20,     # Must follow trend
-                "volume": 0.15,
-                "momentum": 0.15,
-                "trend_strength": 0.10,
-                "confirm": 0.05
+                "candle": 0.40,         # The Hammer/Engulfing itself is the trigger.
+                "trend_dir": 0.15,      # As long as short-term trend holds.
+                "volume": 0.20,         # Buying climax volume needed.
+                "momentum": 0.15,       # Quick momentum hook.
+                "trend_strength": 0.0,  # Don't care about ADX too much for scalps.
+                "confirm": 0.10         # Confirmation candle.
             }
         },
 
-        "position": {
-            # ---------------- POSITION TRADING ----------------
-            "ema_fast": 50,
-            "ema_slow": 200,
+        "trend_swing": {
+            # ---------------- STANDARD TREND SWING (Delta Play) ----------------
+            # Ideal Strategy: Buying ITM Calls (Delta 70) / Debit Spreads (30-45 DTE).
+            # Goal: "Buy the Dip" in a verified institutional trend.
+            # Context: "Perfect" setups where price touches EMA 50/34.
+            
+            "ema_fast": 20,
+            "ema_slow": 50,         # Institutional "Golden Zone"
+            
             "atr_period": 14,
             "rsi_period": 14,
             "adx_period": 14,
             "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-            "vol_zscore_window": 50,
-            "vol_zscore_threshold": 2.0, 
-            "score_threshold": 0.75,
             
-            # [NEW] Tuned Weights for Position
+            "vol_zscore_window": 20,
+            "vol_zscore_threshold": 1.2,   # Just "not dying" volume is fine.
+            
+            "score_threshold": 0.70,       # Higher standard required for swing positions.
+            
+            # --- Weights (Trend Fidelity) ---
             "weights": {
-                "candle": 0.30,
-                "trend_dir": 0.30,     # Trend is everything in position trading
+                "candle": 0.25,
+                "trend_dir": 0.35,      # Trend Integrity is PARAMOUNT.
+                "trend_strength": 0.20, # ADX > 25 is crucial (avoid buying dips in chops).
                 "volume": 0.10,
                 "momentum": 0.10,
-                "trend_strength": 0.15,
+                "confirm": 0.00         # We trust the trend line more than the next candle.
+            }
+        },
+
+        "reversal_climax": {
+            # ---------------- CLIMAX REVERSAL (Vega/Contrarian Play) ----------------
+            # Ideal Strategy: Long Puts or Bear Call Spreads (Reversing a run)
+            # Goal: Shorting a "Blow-off Top" or Buying a "Capitulation Bottom".
+            # Logic: Looking for exhaustion against the major trend.
+            
+            "ema_fast": 50,
+            "ema_slow": 200,        # Major extension check
+            
+            "atr_period": 14,
+            "rsi_period": 14,
+            "adx_period": 14,
+            "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+            
+            "vol_zscore_window": 50,
+            "vol_zscore_threshold": 2.5,   # MUST have Climax Volume to stop the train.
+            
+            "score_threshold": 0.80,       # Extremely strict. Fighting trend is dangerous.
+            
+            # --- Weights (Exhaustion Focused) ---
+            "weights": {
+                "candle": 0.30,         # Need a Shooting Star / Tombstone Doji.
+                "volume": 0.35,         # Volume blow-off is the main signal.
+                "momentum": 0.25,       # Divergence (implied) or extreme RSI is key.
+                "trend_dir": 0.00,      # We are explicitly betting AGAINST the trend direction.
+                "trend_strength": 0.05, # Exhausted ADX helps.
                 "confirm": 0.05
             }
         }

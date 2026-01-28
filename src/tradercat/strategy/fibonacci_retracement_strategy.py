@@ -338,12 +338,12 @@ class FibonacciRetracementStrategy(TradingStrategy):
 
         details: Dict[str, Any] = {
             # 基础 OHLCV 上下文
-            "open": opens[-1],
-            "high": highs[-1],
-            "low": lows[-1],
-            "close": curr_close,
+            "open": round(opens[-1], 2),
+            "high": round(highs[-1], 2),
+            "low": round(lows[-1], 2),
+            "close": round(curr_close, 2),
             "bar_change_pct": round(bar_change_pct, 2),
-            "volume": vols[-1],
+            "volume": round(vols[-1], 0),
             "avg_volume": round(avg_vol, 0),
             "rel_volume": round(rel_vol, 2),
             "vol_zscore": round(vol_z if vol_z is not None else 0.0, 2),
@@ -440,57 +440,66 @@ class FibonacciRetracementStrategy(TradingStrategy):
 
 def make_fibonacci_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Returns a dictionary of all available presets for Fibonacci Retracement Strategy.
+    Returns presets for Fibonacci Retracement Strategy (OPTIONS OPTIMIZED).
+    Focus: Precision entries at key structural levels to maximize R:R for options.
     """
     return {
-        "swing": {
-            # ---------------- SWING TRADING (Optimized) ----------------
+        "trend_pullback": {
+            # ---------------- TREND PULLBACK (Delta / Swing Options) ----------------
+            # Ideal Strategy: ITM Calls (Delta 0.70) or Bull Call Spreads.
+            # Goal: Buying the "First Pullback" in a new trend.
+            # Zone: Shallow retracement (0.382 - 0.50).
+            
             "lookback_swings": 40,               
             "swing_window": 5,                   
-            "fib_zone": (0.382, 0.618),          
-            "ema_fast": 9,                       
-            "ema_slow": 34, # Slightly slower to catch medium trends                      
+            "fib_zone": (0.382, 0.55),           # Shallow zone. Strong trends don't dip deep.
+            "ema_fast": 13,                       
+            "ema_slow": 34,                      # Fast alignment check.
             "atr_period": 14,                    
             "rsi_period": 14,                    
             "macd_params": {"fast": 12, "slow": 26, "signal": 9}, 
             "adx_period": 14,                    
             "vol_zscore_window": 20,             
-            "vol_zscore_threshold": 1.0,  # [UPDATED] Lowered to 1.0 for better sensitivity       
+            "vol_zscore_threshold": 0.8,         # Pullbacks normally have LOWER volume. We don't need a surge yet.
             "score_threshold": 0.65,
 
-            # [NEW] Tuned Weights
+            # --- Weights (Trend Integrity) ---
             "weights": {
-                "zone_trigger": 0.35,
-                "trend_match": 0.20,
-                "adx_strength": 0.15,
-                "momentum": 0.15,
-                "volume": 0.10,
-                "confluence": 0.05
+                "zone_trigger": 0.30,       # Hit the zone?
+                "trend_match": 0.30,        # Is the trend still up? (Crucial)
+                "adx_strength": 0.20,       # ADX must verify the prior impulse was real.
+                "momentum": 0.15,           # RSI Hook from oversold.
+                "volume": 0.05,             # Volume is less relevant on the dip itself.
+                "confluence": 0.00
             }
         },
     
-        "position": {
-            # ---------------- POSITION TRADING (Deep Value) ----------------
-            "lookback_swings": 252,              
-            "swing_window": 20,
-            "fib_zone": (0.5, 0.786),            
+        "golden_zone": {
+            # ---------------- GOLDEN ZONE (Deep Value / LEAPS) ----------------
+            # Ideal Strategy: LEAPS or Selling Put Spreads (Bullish Bias).
+            # Goal: Catching the major structural low.
+            # Zone: The "Golden Pocket" (0.618 - 0.786).
+            
+            "lookback_swings": 100,              
+            "swing_window": 10,
+            "fib_zone": (0.618, 0.786),          # Deep value zone. "Do or Die" level.
             "ema_fast": 50,
-            "ema_slow": 200,
+            "ema_slow": 200,                     # Major trend context.
             "atr_period": 14,
             "rsi_period": 14,
             "macd_params": {"fast": 12, "slow": 26, "signal": 9},
             "adx_period": 14,
             "vol_zscore_window": 50,
-            "vol_zscore_threshold": 1.5,
-            "score_threshold": 0.75,
+            "vol_zscore_threshold": 1.5,         # Need institutional buying (volume) to confirm the bottom.
+            "score_threshold": 0.75,             # Strict. Buying falling knives is dangerous.
             
-            # [NEW] Tuned Weights
+            # --- Weights (Structure First) ---
             "weights": {
-                "zone_trigger": 0.30,
-                "trend_match": 0.30,   # Macro trend alignment is key
-                "adx_strength": 0.10,
-                "momentum": 0.15,
-                "volume": 0.10,
+                "zone_trigger": 0.40,       # Being IN the zone is the most important factor.
+                "trend_match": 0.20,        # Still aligned with macro trend?
+                "adx_strength": 0.05,       # ADX is likely low/resetting here.
+                "momentum": 0.20,           # Divergence often happens here.
+                "volume": 0.10,             # Capitulation volume?
                 "confluence": 0.05
             }
         }

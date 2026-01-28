@@ -267,11 +267,11 @@ class BollingerBreakoutStrategy(TradingStrategy):
         # 构造详情 - 包含全面的技术指标
         details: Dict[str, Any] = {
             # 基础 OHLCV
-            "open": open_price,
-            "high": high,
-            "low": low,
-            "close": close,
-            "volume": vols[-1],
+            "open": round(open_price, 2),
+            "high": round(high, 2),
+            "low": round(low, 2),
+            "close": round(close, 2),
+            "volume": round(vols[-1], 0),
             "avg_volume": round(avg_vol, 0),
             "rel_volume": round(rel_vol, 2),
             "vol_zscore": round(vol_z, 2),
@@ -397,26 +397,70 @@ class BollingerBreakoutStrategy(TradingStrategy):
 def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
     """
     Returns a dictionary of all available presets for Bollinger Breakout Strategy.
-    Key: Preset Name (e.g., 'swing')
-    Value: Dictionary of constructor arguments.
+    Optimized for OPTIONS TRADING logic (Theta, Delta, Vega sensitivity).
     """
     return {
-        "swing": {
-            # ---------------- SWING TRADING (Optimized) ----------------
-            # Timeframe: Daily charts mostly. Holding: Days to Weeks.
-            # Goal: Catch standard volatility expansions.
+        "gamma": {
+            # ---------------- GAMMA SNIPER (The "Squeeze & Pop") ----------------
+            # Ideal Strategy: Long Calls/Puts or Straddles (7-21 DTE)
+            # Goal: Catch the immediate explosive move from a "TIGHT" coil.
+            # Failure Mode: False breakout (Theta burn). Needs strict Stops.
             
-            # --- Core BB Settings ---
             "bb_period": 20,
-            "bb_std": 2.0,                  # Standard 2 sigmas covers 95% of PA.
+            "bb_std": 2.0,
+
+            # --- Squeeze Logic (STRICT) ---
+            "trailing_bw_window": 60,       # Look back 3 months
+            "bw_percentile_threshold": 10.0,# Top 10% tightest consolidation only. Coiled spring.
+
+            # --- Trend Filter (LOOSE) ---
+            # We don't care about long term trend as much as immediate momentum impulse
+            "ema_fast": 8,
+            "ema_slow": 21,
+
+            # --- Indicators ---
+            "atr_period": 14,
+            "adx_period": 14,
+            "rsi_period": 14,
+            "prior_swing_bars": 3,          # Quick pivot check
+
+            # --- Volume Confirmation (CRITICAL) ---
+            "vol_zscore_window": 20,
+            "vol_zscore_threshold": 2.5,    # Needs MASSIVE participation to expand IV.
+
+            # --- Scoring ---
+            "score_threshold": 0.70,        # High conviction only.
+
+            # --- Weights (Gamma Focused) ---
+            "weights": {
+                "breakout": 0.30,
+                "squeeze": 0.35,  # Squeeze quality is paramount for Gamma trades
+                "trend": 0.10,    # Less concern for macro trend
+                "volume": 0.25,   # Volume creates the sustaining fuel
+                "alignment": 0.00
+            },
+
+            # --- Filters ---
+            "min_atr_percent": 1.5,         # Must be volatile. <1.5% moves won't pay for the premium fast enough.
+            "breakout_margin_atr": 0.15,    # Get in early once margin breached.
+        },
+
+        "swing": {
+            # ---------------- DEBIT SPREAD SWING (The "Standard") ----------------
+            # Ideal Strategy: Vertical Spreads (21-45 DTE)
+            # Goal: Ride a sustainable multi-day/week move.
+            # Logic: Balance between trend confirmation and entry price.
+            
+            "bb_period": 20,
+            "bb_std": 2.0,
 
             # --- Squeeze Logic ---
-            "trailing_bw_window": 120,      # Look back 6 months to define "tight".
-            "bw_percentile_threshold": 15.0,# Bottom 15% width is a valid squeeze.
+            "trailing_bw_window": 120,
+            "bw_percentile_threshold": 25.0,# Accept looser squeezes if trend is strong.
 
             # --- Trend Filter ---
             "ema_fast": 9,
-            "ema_slow": 21,                 # Modern "Trader's Zone" EMAs.
+            "ema_slow": 21,                 # Standard alignment required.
 
             # --- Indicators ---
             "atr_period": 14,
@@ -426,64 +470,65 @@ def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
 
             # --- Volume Confirmation ---
             "vol_zscore_window": 20,
-            "vol_zscore_threshold": 2.0,    # Require distinct volume spike (2 std devs).
+            "vol_zscore_threshold": 1.8,    # Standard institutional accumulation.
 
             # --- Scoring ---
-            "score_threshold": 0.65,        # Balanced conviction.
+            "score_threshold": 0.65,
 
-            # --- Weights (Tunable) ---
+            # --- Weights (Balanced) ---
             "weights": {
-                "breakout": 0.35, # Trigger is king
-                "squeeze": 0.20,
-                "trend": 0.15,
-                "volume": 0.20,   # Volume is crucial for 3-5 day moves
-                "alignment": 0.10
+                "breakout": 0.30,
+                "squeeze": 0.15,
+                "trend": 0.25,    # Trend strength matters more for swings
+                "volume": 0.15,
+                "alignment": 0.15
             },
 
             # --- Filters ---
-            "min_atr_percent": 1.0,         # Filter out dead stocks (<1% daily move).
-            "breakout_margin_atr": 0.2,     # Valid break must be 0.2 ATR above the band.
+            "min_atr_percent": 1.2,         # <1.2% ATR stocks are dead money for options swings.
+            "breakout_margin_atr": 0.25,    # Require clearer confirmation to avoid "wicks".
         },
         
-        "position": {
-            # ---------------- POSITION TRADING (Trend Following) ----------------
-            # Timeframe: Weekly/Daily. Holding: Weeks to Months.
-            # Goal: Capture major structural breakouts, ignoring noise.
+        "leaps": {
+            # ---------------- LEAPS POSITION (The "Macro Trend") ----------------
+            # Ideal Strategy: LEAPS (>180 DTE) or PMCC
+            # Goal: Institutional trend following.
+            # Logic: Avoid false signals by using slower, wider bands.
             
-            "bb_period": 50,                # Slower aggregation (Institutions use 50/200).
-            "bb_std": 2.5,                  # Wider bands (99% coverage). Breakout here is RARE and POWERFUL.
+            "bb_period": 50,                # Institutional timeframe.
+            "bb_std": 2.2,                  # Reduce false positives (Widowmaker filter).
             
             # --- Squeeze Logic ---
-            "trailing_bw_window": 200,      # High context (approx 1 year).
-            "bw_percentile_threshold": 20.0,
+            "trailing_bw_window": 200,      # Yearly context.
+            "bw_percentile_threshold": 30.0,
 
             # --- Trend Filter ---
-            "ema_fast": 20,                 # Monthly trend.
-            "ema_slow": 50,                 # Quarterly trend.
+            "ema_fast": 20,
+            "ema_slow": 50,                 # Golden Cross zone.
 
             # --- Indicators ---
-            "atr_period": 20,               # Smoother ATR.
+            "atr_period": 20,
             "adx_period": 14,
-            "rsi_period": 21,               # Slower RSI to avoid false oversold signals.
+            "rsi_period": 21,
             "prior_swing_bars": 10,
 
             # --- Volume Confirmation ---
-            "vol_zscore_window": 60,        # 3-month volume baseline.
-            "vol_zscore_threshold": 1.5,    # Less explosive, just needs to be healthy.
+            "vol_zscore_window": 60,        # Quarterly volume baseline.
+            "vol_zscore_threshold": 1.2,    # Just steady buying, no need for explosion.
 
             # --- Scoring ---
-            "score_threshold": 0.75,        # High conviction required for long holds.
+            "score_threshold": 0.75,
 
-            # --- Weights (Tunable) ---
+            # --- Weights (Trend Focused) ---
             "weights": {
-                "breakout": 0.25, # Entry precise timing matters less
-                "squeeze": 0.15,
-                "trend": 0.25,    # Momentum context is key
+                "breakout": 0.20,
+                "squeeze": 0.10,
+                "trend": 0.30,    # ADX/Trend is King for LEAPS
                 "volume": 0.10,
-                "alignment": 0.25 # Macro trend alignment is vital
+                "alignment": 0.30 # Major EMA Alignment is mandatory
             },
 
             # --- Filters ---
-            "min_atr_percent": 0.5
+            "min_atr_percent": 1.0          # Even for LEAPS, avoid zombies.
         }
     }
