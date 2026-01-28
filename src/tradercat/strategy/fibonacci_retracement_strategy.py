@@ -277,9 +277,6 @@ class FibonacciRetracementStrategy(TradingStrategy):
                 signal_triggered = True
                 trigger_reason = "Fib Short: Bounce/Breakout Confirmed"
 
-        if not signal_triggered:
-            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="No trigger in zone")
-
         # Scoring Factors
         # [UPDATED] Trend Strength Check
         # Fibonacci pullbacks naturally cause ADX to dip. 
@@ -391,6 +388,9 @@ class FibonacciRetracementStrategy(TradingStrategy):
         impulse_range = abs(impulse_end_val - impulse_start_val)
         if impulse_range < 2 * current_atr_val:
             return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Impulse too weak", details=details)
+
+        if not signal_triggered:
+            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="No trigger in zone", details=details)
 
         if result.signal != 'hold':
             planner = ExitPlanner(highs=highs, lows=lows, atr=current_atr_val, close_price=curr_close)
