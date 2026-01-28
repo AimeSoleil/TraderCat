@@ -174,7 +174,10 @@ class ChartPatternStrategy(TradingStrategy):
             if result := detector.detect(chart_data):
                 patterns.append(result)
 
-        best_p = patterns[-1] or PatternResult("", "hold", 0.0, 0.0, 0.0)
+        if patterns:
+            best_p = patterns[-1]
+        else:
+            best_p = PatternResult("", "hold", 0.0, 0.0, 0.0)
         
         # [CRITICAL LOGIC] Adapt Context based on Pattern Type
         # Continuations (Flags, Triangles) -> Require Trend Strength
