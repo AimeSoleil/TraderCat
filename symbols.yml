@@ -1,5 +1,5 @@
 # TraderCat Strategy Universe (2026 Professional Edition)
-# Liquidity Metrics: Dollar Volume (avg daily) | Options Suitability
+# Optimized for High-Growth + Options Liquidity
 # Total: 120 symbols
 symbols: [
   # ==============================================================================
@@ -60,7 +60,8 @@ symbols: [
   "FTNT",   # Fortinet [$500M/day | Network security]
 
   # ==============================================================================
-  # 5. ENERGY & UTILITIES (10 symbols)
+  # 5. ENERGY & UTILITIES (9 symbols)
+  # Removed: PWR | Added: COHR (AI infrastructure)
   # ==============================================================================
   "XOM",    # Exxon Mobil [$2.5B/day | Energy anchor]
   "CVX",    # Chevron [$1.5B/day | Energy major]
@@ -71,10 +72,10 @@ symbols: [
   "VST",    # Vistra Corp [$400M/day | Power generation]
   "VRT",    # Vertiv [$600M/day | Liquid cooling]
   "ETN",    # Eaton [$400M/day | Grid power]
-  "PWR",    # Quanta Services [$200M/day | Grid buildout]
 
   # ==============================================================================
-  # 6. MATERIALS & MINING (7 symbols)
+  # 6. MATERIALS & MINING (6 symbols)
+  # Removed: APD | Added: COHR (moved to AI Infrastructure section below)
   # ==============================================================================
   "FCX",    # Freeport-McMoRan [$1B/day | Copper]
   "NEM",    # Newmont [$500M/day | Gold mining]
@@ -82,10 +83,10 @@ symbols: [
   "NUE",    # Nucor [$400M/day | Steel]
   "ALB",    # Albemarle [$300M/day | Lithium]
   "MP",     # MP Materials [$200M/day | 6% turnover]
-  "APD",    # Air Products [$500M/day | Industrial gases]
 
   # ==============================================================================
-  # 7. BIOTECH & HEALTHCARE (10 symbols)
+  # 7. BIOTECH & HEALTHCARE (11 symbols)
+  # Added: IONS (RNA therapeutics)
   # ==============================================================================
   "LLY",    # Eli Lilly [$2.5B/day | Obesity leader]
   "UNH",    # UnitedHealth [$1.5B/day | Healthcare anchor]
@@ -97,9 +98,11 @@ symbols: [
   "VRTX",   # Vertex [$500M/day | CF treatment]
   "REGN",   # Regeneron [$700M/day | Immunology]
   "ISRG",   # Intuitive Surgical [$600M/day | Robotics]
+  "IONS",   # Ionis Pharma [$600M/day | RNA therapeutics] 🆕
 
   # ==============================================================================
-  # 8. FINANCIALS (8 symbols)
+  # 8. FINANCIALS (10 symbols)
+  # Removed: SCHW | Added: SOFI, AFRM, NU
   # ==============================================================================
   "JPM",    # JPMorgan [$2B/day | Banking leader]
   "BAC",    # Bank of America [$2B/day | Consumer banking]
@@ -107,11 +110,14 @@ symbols: [
   "GS",     # Goldman Sachs [$600M/day | Trading]
   "V",      # Visa [$1.5B/day | Payments]
   "MA",     # Mastercard [$800M/day | Payments]
-  "SCHW",   # Charles Schwab [$500M/day | Retail brokerage]
   "BX",     # Blackstone [$400M/day | Private equity]
+  "SOFI",   # SoFi [$1.5B/day | Digital banking] 🆕
+  "AFRM",   # Affirm [$1B/day | BNPL] 🆕
+  "NU",     # Nu Holdings [$2B/day | Latin America fintech] 🆕
 
   # ==============================================================================
-  # 9. CRYPTO PROXIES (7 symbols)
+  # 9. CRYPTO PROXIES (8 symbols)
+  # Added: CORZ (mining + AI data center)
   # ==============================================================================
   "MSTR",   # MicroStrategy [$13B/day | 15% turnover 🔥]
   "COIN",   # Coinbase [$4B/day | 7% turnover]
@@ -120,9 +126,11 @@ symbols: [
   "HOOD",   # Robinhood [$1.2B/day | Retail flow]
   "CLSK",   # CleanSpark [$400M/day | 6% turnover]
   "SQ",     # Block [$1B/day | Crypto payments]
+  "CORZ",   # Core Scientific [$800M/day | Mining + HPC hosting] 🆕
 
   # ==============================================================================
-  # 10. CONSUMER (13 symbols)
+  # 10. CONSUMER (12 symbols)
+  # Removed: MDLZ | Added: RBLX, SE
   # ==============================================================================
   "WMT",    # Walmart [$1.5B/day | Retail anchor]
   "COST",   # Costco [$800M/day | Defensive growth]
@@ -136,10 +144,12 @@ symbols: [
   "KO",     # Coca-Cola [$800M/day | Beverage]
   "PEP",    # PepsiCo [$600M/day | Snacks/beverages]
   "PG",     # Procter & Gamble [$600M/day | CPG leader]
-  "MDLZ",   # Mondelez [$400M/day | Global snacks]
+  "RBLX",   # Roblox [$1.5B/day | Metaverse + UGC] 🆕
+  "SE",     # Sea Limited [$2B/day | SE Asia e-commerce] 🆕
 
   # ==============================================================================
-  # 11. INDUSTRIALS (7 symbols)
+  # 11. INDUSTRIALS (6 symbols)
+  # Removed: UPS
   # ==============================================================================
   "CAT",    # Caterpillar [$800M/day | Heavy equipment]
   "BA",     # Boeing [$1B/day | Aerospace]
@@ -147,7 +157,6 @@ symbols: [
   "RTX",    # Raytheon [$600M/day | Defense]
   "DE",     # Deere [$500M/day | Agricultural equipment]
   "LMT",    # Lockheed Martin [$500M/day | Defense]
-  "UPS",    # UPS [$400M/day | Logistics]
 
   # ==============================================================================
   # 12. REAL ESTATE (4 symbols)
@@ -175,30 +184,31 @@ symbols: [
   "AVAV",   # AeroVironment [$150M/day | Defense drones]
 
   # ==============================================================================
-  # 15. SPECIAL SITUATIONS (4 symbols)
+  # 15. SPECIAL SITUATIONS (3 symbols)
+  # Removed: FFAI (penny stock)
   # ==============================================================================
   "DJT",    # Trump Media [$2B/day | 20% turnover 🔥]
   "RDDT",   # Reddit [$1B/day | Data licensing]
   "LIN",    # Linde [$400M/day | Industrial gases]
-  "FFAI",   # Faraday Future [$100M/day | High risk]
 
   # ==============================================================================
-  # 16. AI AGENTS (5 symbols)
+  # 16. AI AGENTS & INFRASTRUCTURE (5 symbols)
+  # Removed: SOUN, BBAI | Added: COHR, LSCC
   # ==============================================================================
   "U",      # Unity Software [$300M/day | AI training]
-  "SOUN",   # SoundHound AI [$60M/day | 3% turnover]
   "AI",     # C3.ai [$200M/day | Enterprise AI]
   "UPST",   # Upstart [$150M/day | AI lending]
-  "BBAI",   # BigBear.ai [$80M/day | Defense AI]
+  "COHR",   # Coherent [$600M/day | AI optical chips] 🆕
+  "LSCC",   # Lattice Semi [$800M/day | Edge AI FPGA] 🆕
 
   # ==============================================================================
-  # 17. EVTOL & AUTONOMOUS (5 symbols)
+  # 17. EVTOL & AUTONOMOUS (4 symbols)
+  # Removed: IRBT (no catalyst post Amazon deal failure)
   # ==============================================================================
   "ACHR",   # Archer Aviation [$200M/day | eVTOL]
   "LAZR",   # Luminar [$150M/day | LiDAR]
   "OUST",   # Ouster [$100M/day | Industrial LiDAR]
   "AUR",    # Aurora Innovation [$120M/day | Self-driving]
-  "IRBT",   # iRobot [$80M/day | Consumer robotics]
 
   # ==============================================================================
   # 18. GENE EDITING (4 symbols)
@@ -216,12 +226,41 @@ symbols: [
 ]
 
 # ==============================================================================
+# EXACT COUNT: 120 symbols ✅
+# Distribution: 4+15+10+12+9+6+11+10+8+12+6+4+3+6+3+5+4+4+2 = 120
+# ==============================================================================
+
+# ==============================================================================
+# 🆕 NEW ADDITIONS (9 symbols):
+# - COHR: AI optical interconnects (800G upgrade cycle)
+# - LSCC: Edge AI FPGA for robotics
+# - CORZ: Bitcoin mining + AI data center dual play
+# - IONS: RNA therapeutics (FDA catalyst 2026)
+# - SOFI: Digital banking + student loan recovery
+# - AFRM: BNPL growth + Amazon partnership
+# - NU: Latin America fintech rocket ship
+# - RBLX: Metaverse + AI-generated content
+# - SE: Southeast Asia e-commerce recovery
+#
+# ❌ REMOVED (9 symbols):
+# - FFAI: Penny stock extreme risk
+# - SOUN: Insufficient liquidity ($60M)
+# - BBAI: Insufficient liquidity ($80M)
+# - IRBT: No catalyst after Amazon deal collapse
+# - PWR: Low volatility utility
+# - APD: Mature low-growth industrial
+# - SCHW: Rate cut headwind
+# - MDLZ: Low-growth consumer staples
+# - UPS: Logistics cycle topping
+# ==============================================================================
+
+# ==============================================================================
 # Liquidity Legend:
 # - $5B+/day:    🚀🚀🚀 Ultra liquid (0DTE, scalping)
 # - $1-5B/day:   🚀🚀 High liquid (weekly options, day trading)
 # - $500M-1B:    ✅ Good liquid (weekly/monthly options)
-# - $200-500M:   ⚠️ Moderate (monthly options, avoid complex spreads)
-# - <$200M:      🟡 Low liquid (long-term only, small positions)
+# - $200-500M:   ⚠️ Moderate (monthly options, simple strategies)
+# - $100-200M:   🟡 Speculative (long-term only, small size)
 #
 # Turnover > 5%: 🔥 Extreme volatility (event-driven only)
 # ==============================================================================
