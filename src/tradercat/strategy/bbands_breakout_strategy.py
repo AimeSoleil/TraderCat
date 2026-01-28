@@ -175,9 +175,7 @@ class BollingerBreakoutStrategy(TradingStrategy):
 
         # 1. 波动率检查 (Dead Stock Filter)
         atr_pct = (current_atr / close) * 100.0
-        if atr_pct < self.min_atr_percent:
-            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=dates[-1], reason=f"Low Volatility ({atr_pct:.2f}%)", confidence=0.0)
-        
+
         # 2. Squeeze 计算 (Using Base Class _percentile_rank)
         bw_pct = self._percentile_rank(bw_list, curr_bw)
         in_squeeze = (bw_pct <= self.bw_percentile_threshold)
@@ -310,6 +308,9 @@ class BollingerBreakoutStrategy(TradingStrategy):
             "trend_context_ok": is_trend_context_good
         }
 
+        if atr_pct < self.min_atr_percent:
+            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=dates[-1], reason=f"Low Volatility ({atr_pct:.2f}%)", confidence=0.0, details=details)
+        
         # --- SCORING ENGINE ---
         is_long = long_break_trigger
         is_short = short_break_trigger

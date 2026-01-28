@@ -174,10 +174,7 @@ class ChartPatternStrategy(TradingStrategy):
             if result := detector.detect(chart_data):
                 patterns.append(result)
 
-        if not patterns:
-            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0)
-            
-        best_p = patterns[-1]
+        best_p = patterns[-1] or PatternResult("", "hold", 0.0, 0.0, 0.0)
         
         # [CRITICAL LOGIC] Adapt Context based on Pattern Type
         # Continuations (Flags, Triangles) -> Require Trend Strength
@@ -293,6 +290,9 @@ class ChartPatternStrategy(TradingStrategy):
             "factors": score_res.reasons,
             "score": round(score_res.score, 3)
         }
+
+        if not patterns:
+            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, details=details)
         
         # Only generating exit plan if signal is valid
         if score_res.signal != "hold":

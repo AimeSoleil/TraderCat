@@ -332,7 +332,7 @@ class DivergenceStrategy(TradingStrategy):
 
         if not best_result or best_result[0].signal == 'hold':
             # Optionally return details even on Hold for debugging
-            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=dates[-1], confidence=0.0, reason="No valid divergence")
+            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=dates[-1], confidence=0.0, reason="No valid divergence", details=details)
 
         res, d_name = best_result
         
