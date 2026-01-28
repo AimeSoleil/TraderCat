@@ -652,6 +652,7 @@ Example:
 **Notes:**
 - In "Entry Reason" column, cite **specific numbers** from Details (e.g., "ADX 32.5", not just "Strong Trend")
 - All stop losses are based on ATR from Details, not arbitrary percentages
+- When the system outputs a Put/Call Spread recommendation, it must include the Expiration/DTE just like a single-leg option.
 
 ---
 

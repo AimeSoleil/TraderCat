@@ -219,22 +219,6 @@ class FibonacciRetracementStrategy(TradingStrategy):
             impulse_start_val = last_high[1]
             impulse_end_val = last_low[1]
 
-        # [CRITICAL FIX 1] Major Trend Forced Filter
-        # If price is above EMA Slow (e.g. 200), we act as if it's a Bull Market.
-        # Ignore Short signals derived from minor pullbacks.
-        is_bull_context = curr_close > ema_slow_val
-        
-        if is_bull_context and impulse_type == 'short':
-            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Counter-trend Short Impulse ignored")
-        
-        if not is_bull_context and impulse_type == 'long':
-            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Counter-trend Long Impulse ignored")
-
-        # Impulse Strength Validation
-        impulse_range = abs(impulse_end_val - impulse_start_val)
-        if impulse_range < 2 * current_atr_val:
-            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Impulse too weak")
-
         # Calculate Fibs & Zone
         fib_levels = self._calc_fib_levels(impulse_end_val, impulse_start_val, impulse_type)
         zone_high, zone_low = self._select_fib_zone(
@@ -392,6 +376,21 @@ class FibonacciRetracementStrategy(TradingStrategy):
             "volume_confirmed": vol_ok,
             "score": round(result.score, 3)
         }
+
+        # If price is above EMA Slow (e.g. 200), we act as if it's a Bull Market.
+        # Ignore Short signals derived from minor pullbacks.
+        is_bull_context = curr_close > ema_slow_val
+        
+        if is_bull_context and impulse_type == 'short':
+            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Counter-trend Short Impulse ignored", details=details)
+        
+        if not is_bull_context and impulse_type == 'long':
+            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Counter-trend Long Impulse ignored", details=details)
+
+        # Impulse Strength Validation
+        impulse_range = abs(impulse_end_val - impulse_start_val)
+        if impulse_range < 2 * current_atr_val:
+            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Impulse too weak", details=details)
 
         if result.signal != 'hold':
             planner = ExitPlanner(highs=highs, lows=lows, atr=current_atr_val, close_price=curr_close)

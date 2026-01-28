@@ -29,6 +29,7 @@ symbols: [
   "TSM",    # Taiwan Semi [$2B/day | IV 38% | Foundry]
   "ARM",    # Arm Holdings [$800M/day | IV 58% | Architecture]
   "ASML",   # ASML [$1.2B/day | IV 40% | EUV monopoly]
+  "INTC",   # Intel [$4B/day | IV 50% | AI chips turnaround]
 
   # ==============================================================================
   # 3. SEMICONDUCTORS (9 symbols)

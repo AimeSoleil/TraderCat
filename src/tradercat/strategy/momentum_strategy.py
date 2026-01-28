@@ -233,9 +233,9 @@ class MomentumTrendStrategy(TradingStrategy):
         # [UPDATED] Capture Z-Score
         _vol_res = self._check_volume_zscore(vols, recent_window, self.vol_zscore_threshold)
         if isinstance(_vol_res, tuple):
-             vol_ok, vol_z = _vol_res
+            vol_ok, vol_z = _vol_res
         else:
-             vol_ok, vol_z = _vol_res, 0.0
+            vol_ok, vol_z = _vol_res, 0.0
 
         # Daily Trend Alignment
         trend_day_up = (curr_ema_fast > curr_ema_slow) if (curr_ema_fast and curr_ema_slow) else False
