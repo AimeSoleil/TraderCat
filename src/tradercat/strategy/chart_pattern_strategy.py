@@ -263,11 +263,11 @@ class ChartPatternStrategy(TradingStrategy):
 
         details: Dict[str, Any] = {
             # OHLCV & Volume Context
-            "open": float(candles[-1].open),
-            "high": highs[-1],
-            "low": lows[-1],
-            "close": close,
-            "volume": vols[-1],
+            "open": round(float(candles[-1].open), 2),
+            "high": round(highs[-1], 2),
+            "low": round(lows[-1], 2),
+            "close": round(close, 2),
+            "volume": round(vols[-1], 0),
             "avg_volume": round(avg_vol, 0),
             "rel_volume": round(rel_vol, 2),
             "vol_zscore": round(vol_z_val, 2),
@@ -295,7 +295,7 @@ class ChartPatternStrategy(TradingStrategy):
         }
 
         if not patterns:
-            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, details=details)
+            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="No patterns detected", details=details)
         
         # Only generating exit plan if signal is valid
         if score_res.signal != "hold":
@@ -323,52 +323,67 @@ class ChartPatternStrategy(TradingStrategy):
 
 def make_chart_pattern_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Returns preset configurations for ChartPatternStrategy.
+    Returns preset configurations for ChartPatternStrategy (OPTIONS OPTIMIZED).
+    Focus: Explosive breakouts (Vega Expansion) & Trend Continuation (Delta).
     """
     return {
-        # Swing Trading:
-        # Designed to capture medium-term moves (days to weeks).
-        # Focus: Explosiveness (Pattern + Volume)
-        "swing": {
-            "pivot_left_bars": 5,
-            "pivot_right_bars": 5,
-            "price_similarity_threshold": 0.03,
-            "slope_tolerance": 0.1,
-            "require_volume_breakout": True,
-            "score_threshold": 0.65, 
-            "ema_trend_period": 200,
-            "atr_period": 14,
-            "adx_period": 14,
-            "volatility_lookback_window": 20, # Standard monthly check
-            "weights": {
-                "pattern_quality": 0.30,  # 1. The Setup (Clear Pattern)
-                "volume_confirm": 0.30,   # 2. The Trigger (Must have energy)
-                "trend_alignment": 0.15,  # 3. Context (Nice to have, but counter-trend swings exist)
-                "trend_strength": 0.15,   # 4. Momentum (ADX)
-                "volatility_ok": 0.10     # 5. Environment (Not dead)
-            }
-        },
-        
-        # Position Trading:
-        # Designed for macro trend changes or long-term continuation.
-        # Focus: Structure & Location (Trend Alignment + Strength)
-        "position": {
+        "macro_breakout": {
+            # ---------------- MACRO STRUCTURE BREAKOUT (LEAPS / 60+ DTE) ----------------
+            # Ideal Strategy: Buying LEAPS or Bull Call Spreads (Long Duration)
+            # Goal: Catching major trend shifts (Checking Weekly/Monthly pivots).
+            # Logic: "The Bigger the Base, the Higher in Space."
+            
             "pivot_left_bars": 10,
-            "pivot_right_bars": 10,
-            "price_similarity_threshold": 0.05,
+            "pivot_right_bars": 10,         # Needs significant structure (months).
+            "price_similarity_threshold": 0.05, # Allow some noise in macro patterns.
             "slope_tolerance": 0.05,
-            "require_volume_breakout": True,
-            "score_threshold": 0.70, 
-            "ema_trend_period": 200,
-            "adx_period": 14,
+            
+            "require_volume_breakout": True, # Institutional sponsorship MANDATORY for macro moves.
+            
+            "score_threshold": 0.75,        # High conviction only. Capital tie-up is high.
+            
+            "ema_trend_period": 200,        # The ultimate Bull/Bear line.
             "atr_period": 14,
-            "volatility_lookback_window": 50, # Longer window for macro vol
+            "adx_period": 14,
+            "volatility_lookback_window": 50, # Quarterly volatility check.
+            
+            # --- Weights (Structure Is King) ---
             "weights": {
-                "pattern_quality": 0.20,  # 1. The Setup (Structure only)
-                "volume_confirm": 0.20,   # 2. Confirmation
-                "trend_alignment": 0.30,  # 3. Context IS KING (Never trade Position against EMA200)
-                "trend_strength": 0.20,   # 4. Momentum (Need strong ADX to sustain months)
-                "volatility_ok": 0.10     # 5. Environment
+                "pattern_quality": 0.25,    # Is it actually a Head & Shoulders?
+                "volume_confirm": 0.20,     # Did institutions buy the breakout?
+                "trend_alignment": 0.35,    # Don't fight the 200 EMA on macro trades.
+                "trend_strength": 0.15,     # ADX matters less at the *start* of a new trend.
+                "volatility_ok": 0.05
             }
         },
+
+        "momentum_pattern": {
+            # ---------------- MOMENTUM CONTINUATION (Swing / 21-45 DTE) ----------------
+            # Ideal Strategy: Long Calls/Puts (Directional Gamma)
+            # Goal: Trading Flags, Pennants, and Ascending Triangles mid-trend.
+            # Logic: Trend is established; we are just buying the pause/breakout.
+            
+            "pivot_left_bars": 3,
+            "pivot_right_bars": 3,          # Fast, tight structures (Flags).
+            "price_similarity_threshold": 0.02, # Must be TIGHT consolidation.
+            "slope_tolerance": 0.15,        # Allow steeper flags.
+            
+            "require_volume_breakout": True,
+            
+            "score_threshold": 0.65,
+            
+            "ema_trend_period": 50,         # Align with medium-term trend.
+            "atr_period": 14,
+            "adx_period": 14,
+            "volatility_lookback_window": 20,
+            
+            # --- Weights (Explosion Is King) ---
+            "weights": {
+                "pattern_quality": 0.20,    # A flag is a flag.
+                "volume_confirm": 0.30,     # Breakout VOLUME is the signal.
+                "trend_alignment": 0.10,    # Less weight on EMA 200, more on flow.
+                "trend_strength": 0.30,     # ADX MUST be high (>25) to buy flags.
+                "volatility_ok": 0.10       # Avoid dead stocks.
+            }
+        }
     }

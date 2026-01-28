@@ -310,12 +310,12 @@ class DivergenceStrategy(TradingStrategy):
         # Base Details (Always present even if hold, though usually we only return on signal)
         details: Dict[str, Any] = {
             # OHLCV Context
-            "open": float(candles[-1].open),
-            "high": highs[-1],
-            "low": lows[-1],
-            "close": close,
+            "open": round(float(candles[-1].open), 2),
+            "high": round(highs[-1], 2),
+            "low": round(lows[-1], 2),
+            "close": round(close, 2),
             "bar_change_pct": round(bar_change_pct, 2),
-            "volume": vols[-1],
+            "volume": round(vols[-1], 0),
             "avg_volume": round(avg_vol, 0),
             "rel_volume": round(rel_vol, 2),
             "vol_zscore": round(vol_z, 2),
@@ -360,46 +360,62 @@ class DivergenceStrategy(TradingStrategy):
         )
 
 def make_divergence_presets() -> Dict[str, Dict[str, Any]]:
+    """
+    Returns preset configurations for DivergenceStrategy (OPTIONS OPTIMIZED).
+    Focus: Separating "Trend Continuation" (Hidden Div) from "Trend Reversal" (Regular Div).
+    """
     return {
-        "swing": {
-            # ---------------- SWING TRADING ----------------
-            "swing_window": 5,
+        "trend_continuation": {
+            # ---------------- HIDDEN DIVERGENCE (Trend Continuation) ----------------
+            # Ideal Strategy: Long Calls / Puts (Delta Play)
+            # Goal: Buying the dip in an uptrend (Hidden Bullish) or shorting the rally in a downtrend.
+            # Logic: Price made a "worse" pullback, but RSI stayed strong. Trend is resuming.
+            # Best for: Weekly/Monthly Options execution.
+            
+            "swing_window": 3,              # Fast pivots (reactive).
+            "lookback_swings": 40,          # Focus on recent trend structure.
+            "rsi_period": 14,
+            "macd_params": {"fast": 12, "slow": 26, "signal": 9},
+            "atr_period": 14,
+            "adx_period": 14,
+            "vol_zscore_window": 20,
+            
+            "score_threshold": 0.65,        # Lower threshold to catch the move early.
+            
+            # --- Weights (Trend Is King) ---
+            "weights": {
+                "divergence": 0.30,         # The hidden div signal.
+                "trend_context": 0.35,      # CRITICAL: ADX Must be strong (>25). We are trend followers here.
+                "momentum": 0.15,           # RSI Hook is nice.
+                "volume": 0.20,             # Volume coming back into the trend is key.
+                "confluence": 0.00
+            }
+        },
+    
+        "reversal_sniper": {
+            # ---------------- REGULAR DIVERGENCE (Reversal / Fade) ----------------
+            # Ideal Strategy: Credit Spreads (Theta/Vega Play) or Debit Spreads.
+            # Goal: Fading a dying trend (Regular Bearish/Bullish).
+            # Logic: Price made a higher high, but momentum died.
+            # Risk: "Irrational Exuberance". Needs strict confirmation.
+            
+            "swing_window": 5,              # Slower pivots to confirm the top.
             "lookback_swings": 60,
             "rsi_period": 14,
             "macd_params": {"fast": 12, "slow": 26, "signal": 9},
             "atr_period": 14,
             "adx_period": 14,
             "vol_zscore_window": 20,
-            "score_threshold": 0.70,
             
-            # [NEW] Tuned Weights
-            "weights": {
-                "divergence": 0.40,
-                "trend_context": 0.20,
-                "momentum": 0.15,
-                "volume": 0.15,
-                "confluence": 0.10
-            }
-        },
-    
-        "position": {
-            # ---------------- POSITION TRADING ----------------
-            "swing_window": 8,                 # Significant pivots only
-            "lookback_swings": 120,            # Deep history
-            "rsi_period": 14,
-            "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-            "atr_period": 14,
-            "adx_period": 14,
-            "vol_zscore_window": 50,
-            "score_threshold": 0.75,           # Higher conviction needed
+            "score_threshold": 0.75,        # Very high conviction required to pick a top/bottom.
             
-            # [NEW] Tuned Weights
+            # --- Weights (Exhaustion Is King) ---
             "weights": {
-                "divergence": 0.35,
-                "trend_context": 0.25,         # Macro trend failure is key
-                "momentum": 0.20,
-                "volume": 0.10,
-                "confluence": 0.10
+                "divergence": 0.40,         # The divergence structure must be CLEAN.
+                "trend_context": 0.10,      # We expect ADX to be falling/rolling over.
+                "momentum": 0.25,           # MACD Histogram flip is a great confirmation.
+                "volume": 0.10,             # Volume often dries up on the final push (divergence).
+                "confluence": 0.15          # Needs a reversal candle (Pinbar/Engulfing).
             }
         }
     }

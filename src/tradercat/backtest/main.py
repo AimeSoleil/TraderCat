@@ -51,13 +51,13 @@ class BacktestConfig:
     # Format: { "StrategyName": ["preset1", "preset2"] }
     active_strategies: Dict[str, List[str]] = field(default_factory=lambda: {
         # --- Single Asset Strategies ---
-        # "BBBreakout": ["swing"],
-        # "BBReversal": ["swing"],
-        # "Divergence": ["swing"],
-        # "ReversalCandle": ["swing"],
-        # "Fibonacci": ["swing"],
-        "ChartPattern": ["swing"],
-        # "Momentum": ["swing"],
+        # "BBBreakout": ["gamma", "swing", "leaps"],
+        # "BBReversal": ["fade", "bounce", "scalp"],
+        # "ReversalCandle": ["gamma_dip", "trend_swing", "reversal_climax"]
+        "ChartPattern": ["macro_breakout", "momentum_pattern"],
+        # "Divergence": ["trend_continuation", "reversal_sniper"],
+        # "Fibonacci": ["trend_pullback", "golden_zone"],
+        # "Momentum": ["swing_momentum", "core_trend"],
         
         # --- Portfolio Strategies ---
         # "SectorRotation": ["swing", "position"], 
@@ -92,10 +92,10 @@ def setup_registry() -> StrategyRegistry:
     # Register Single Asset Strategies
     registry.register("BBBreakout", BollingerBreakoutStrategy, make_bbands_breakout_presets, "single")
     registry.register("BBReversal", BBandsReversalStrategy, make_bbands_reversal_presets, "single")
-    registry.register("Divergence", DivergenceStrategy, make_divergence_presets, "single")
     registry.register("ReversalCandle", CandlestickReversalStrategy, make_candlestick_reversal_presets, "single")
-    registry.register("Fibonacci", FibonacciRetracementStrategy, make_fibonacci_presets, "single")
     registry.register("ChartPattern", ChartPatternStrategy, make_chart_pattern_presets, "single")
+    registry.register("Divergence", DivergenceStrategy, make_divergence_presets, "single")
+    registry.register("Fibonacci", FibonacciRetracementStrategy, make_fibonacci_presets, "single")
     registry.register("Momentum", MomentumTrendStrategy, make_momentum_presets, "single")
     
     # Register Portfolio Strategies

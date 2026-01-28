@@ -273,14 +273,14 @@ class MomentumTrendStrategy(TradingStrategy):
 
         details: Dict[str, Any] = {
             # OHLCV Context
-            "open": open_price,
-            "high": highs[-1],
-            "low": lows[-1],
-            "close": curr_close,
-            "bar_change_pct": round(bar_change_pct, 2),
-            "volume": vols[-1],
+            "open": round(open_price, 2),
+            "high": round(highs[-1], 2),
+            "low": round(lows[-1], 2),
+            "close": round(curr_close, 2),
+            "volume": round(vols[-1], 0),
             "avg_volume": round(avg_vol, 0),
             "rel_volume": round(rel_vol, 2),
+            "bar_change_pct": round(bar_change_pct, 2),
             "vol_zscore": round(vol_z, 2),
             
             # Momentum Factors
@@ -385,50 +385,61 @@ class MomentumTrendStrategy(TradingStrategy):
 
 def make_momentum_presets() -> Dict[str, Dict[str, Any]]:
     """
-    Returns a dictionary of all available presets for Momentum Trend Strategy.
+    Returns presets for Momentum Trend Strategy (OPTIONS OPTIMIZED).
+    Focus: Avoiding 'Choppy Momentum' and 'Low Volatility Traps'.
     """
     return {
-        "swing": {
-            "L": 63,                           
-            "ema_fast": 20,                     
-            "ema_slow": 50,                    
+        "swing_momentum": {
+            # ---------------- SWING MOMENTUM (High Octane) ----------------
+            # Ideal Strategy: Buying Debit Spreads or Long Calls (21-45 DTE).
+            # Goal: Catching the strongest quartile of stocks in an uptrend.
+            # Logic: High Risk-Adjusted Momentum + Daily EMA Alignment.
+            
+            "L": 63,                            # Quarter Lookback
+            "ema_fast": 10,                     # Faster trigger for swing
+            "ema_slow": 30,                    
             "ht_ema_fast": 13,                  
             "ht_ema_slow": 26,                 
             "adx_period": 14,                  
             "atr_period": 14,                  
             "vol_zscore_window": 20,           
-            "vol_zscore_threshold": 1.0,       
+            "vol_zscore_threshold": 1.5,       # Require volume support for High Octane trades.
             "score_threshold": 0.70,
             
-            # [NEW] Tuned Weights
+            # --- Weights (Velocity Is King) ---
             "weights": {
-                "momentum": 0.35,
-                "trend_strength": 0.15,
-                "daily_trend": 0.20,
-                "ht_trend": 0.20,
+                "momentum": 0.40,           # Raw Risk-Adj Momentum is the primary driver.
+                "trend_strength": 0.20,     # ADX needs to be high (>25).
+                "daily_trend": 0.20,        # Must be aligned daily.
+                "ht_trend": 0.10,           # Weekly matters less for a 2-week swing.
                 "volume": 0.05,
                 "confluence": 0.05
             }
         },
 
-        "position": {
-            "L": 126,                          
+        "core_trend": {
+            # ---------------- CORE TREND (LEAPS / 60+ DTE) ----------------
+            # Ideal Strategy: LEAPS, PMCC (Poor Man's Covered Call), or Wide Spreads.
+            # Goal: Portfolio anchoring positions.
+            # Logic: Weekly EMA Alignment is non-negotiable.
+            
+            "L": 126,                           # Half-Year Lookback
             "ema_fast": 50,                    
-            "ema_slow": 200,                   
+            "ema_slow": 200,                    # The Golden Cross check
             "ht_ema_fast": 21,                 
-            "ht_ema_slow": 52,                 
+            "ht_ema_slow": 50,                  # Strong Weekly Trend confirmation
             "adx_period": 14,
             "atr_period": 14,
-            "vol_zscore_window": 40,           
-            "vol_zscore_threshold": 1.0,       
-            "score_threshold": 0.80,
+            "vol_zscore_window": 60,           
+            "vol_zscore_threshold": 1.0,        # Just need steady institutional flow.
+            "score_threshold": 0.80,            # Very strict quality control for long-term holds.
             
-            # [NEW] Tuned Weights
+            # --- Weights (Structure Is King) ---
             "weights": {
-                "momentum": 0.40,      
-                "trend_strength": 0.10,
-                "daily_trend": 0.15,
-                "ht_trend": 0.25,      
+                "momentum": 0.25,           # Momentum score is less important than...
+                "trend_strength": 0.15,
+                "daily_trend": 0.10,
+                "ht_trend": 0.40,           # ...WEEKLY TREND STRUCTURE. This is critical for LEAPS.
                 "volume": 0.05,
                 "confluence": 0.05
             }

@@ -1,4 +1,4 @@
-from typing import List, Literal, Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 
 from tradercat.strategy.candle_pattern.pattern_detector import PatternResult
 from tradercat.strategy.candle_pattern.pattern_detector_orch import PatternDetectorsOrchestrator
@@ -280,11 +280,11 @@ class BBandsReversalStrategy(TradingStrategy):
 
         details: Dict[str, Any] = {
             # 基础价格与成交量
-            "open": open_curr,
-            "high": high_curr,
-            "low": low_curr,
-            "close": close,
-            "volume": vols[-1],
+            "open": round(open_curr, 2),
+            "high": round(high_curr, 2),
+            "low": round(low_curr, 2),
+            "close": round(close, 2),
+            "volume": round(vols[-1], 0),
             "avg_volume": round(avg_vol, 0),
             "rel_volume": round(rel_vol, 2),
             "vol_zscore": round(volume_z, 3) if volume_z is not None else 0,
@@ -396,54 +396,96 @@ class BBandsReversalStrategy(TradingStrategy):
         )
 
 def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:
+    """
+    Returns presets for Bollinger Reversal Strategy optimized for OPTIONS TRADING.
+    Focus: Mean Reversion, IV Crush opportunities (Credit Spreads), and Oversold Bounces.
+    """
     return {
-        "swing": {
-            # ---------------- SWING TRADING (Optimized) ----------------
-            "bb_period": 20,
-            "bb_std": 2.0,
-            "touch_atr_multiplier": 0.5,    
-            "adx_period": 14,
-            "adx_threshold": 30.0,      
-            "max_time_bars": 3,
-            "vol_zscore_window": 20,
-            "vol_zscore_threshold": 1.5,
-            "rsi_period": 14,
-            "atr_period": 14,
-            "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-            "score_threshold": 0.60,
+        "fade": {
+            # ---------------- THE "FADE" (Credit Spread / IV Crush) ----------------
+            # Ideal Strategy: Short Vertical Spreads (Credit Call/Put Spreads)
+            # Goal: Sell the "Blow-off Top" or "Capitulation Bottom".
+            # Why: High Volatility (IV) at extremes makes options expensive to buy, so we SELL them.
             
-            # [NEW] Tuned Weights
+            "bb_period": 20,
+            "bb_std": 2.5,                  # Extreme bands only (2.5 SD). Don't fade weak moves.
+            "touch_atr_multiplier": 0.2,    # Price must deeply penetrate or barely reject the extreme band.
+            
+            "adx_period": 14,
+            "adx_threshold": 40.0,          # We fade exhaustion from STRONG moves (Parabolic setup).
+                                            
+            "max_time_bars": 2,             # Immediate rejection required.
+            "vol_zscore_window": 20,
+            "vol_zscore_threshold": 3.0,    # Climax Volume is mandatory for a Blow-off Top/Bottom.
+            
+            "rsi_period": 14,               # Will use Overbought/Oversold logic internally.
+            
+            "score_threshold": 0.75,        # Very high conviction only.
+
+            # --- Weights (Contrarian Focused) ---
             "weights": {
-                "candle": 0.35,    # Pattern is king for reversal
-                "trend": 0.25,     # Must be ranging
-                "volume": 0.20,
-                "momentum": 0.10,
-                "bonus": 0.10
+                "candle": 0.40,    # "Shooting Star" or "Hammer" is the trigger.
+                "trend": 0.10,     # We are fighting the trend, so this weight is lower.
+                "volume": 0.35,    # Volume climax is the #1 indicator of exhaustion.
+                "momentum": 0.15,  # RSI Divergence helps.
+                "bonus": 0.00
             }
         },
 
-        "position": {
-            # ---------------- POSITION TRADING (Strong Levels) ----------------
-            "bb_period": 50,
-            "bb_std": 2.5,
-            "touch_atr_multiplier": 1.0, # looser touch tolerance on weekly charts
-            "adx_period": 14,
-            "adx_threshold": 25.0,
-            "max_time_bars": 5,
-            "vol_zscore_window": 50,
-            "vol_zscore_threshold": 1.5,
-            "rsi_period": 14,
-            "atr_period": 14,
-            "macd_params": {"fast": 12, "slow": 26, "signal": 9},
-            "score_threshold": 0.70,
+        "bounce": {
+            # ---------------- THE "BOUNCE" (Dip Buy in Uptrend) ----------------
+            # Ideal Strategy: Long Calls (Delta 0.70)
+            # Goal: Buy the dip to the lower band in a secular uptrend.
+            # Why: Trend is your friend; we are just timing the re-entry.
             
-            # [NEW] Tuned Weights
+            "bb_period": 20,
+            "bb_std": 2.0,                  # Standard deviation for normal dips.
+            "touch_atr_multiplier": 0.5,    
+            
+            "adx_period": 14,
+            "adx_threshold": 20.0,          # Trend must exist (ADX > 20).
+            
+            "max_time_bars": 3,
+            "vol_zscore_window": 20,
+            "vol_zscore_threshold": 1.2,    # Moderate volume on the dip indicates weak selling (good).
+            
+            "score_threshold": 0.65,
+            
+            # --- Weights (Trend Continuation) ---
+            "weights": {
+                "candle": 0.25,
+                "trend": 0.35,     # The underlying trend protects us.
+                "volume": 0.15,
+                "momentum": 0.25,  # RSI hook from <40 back up is key.
+                "bonus": 0.00
+            }
+        },
+
+        "scalp": {
+            # ---------------- MEAN REVERSION SCALP (Range Bound) ----------------
+            # Ideal Strategy: Iron Condors or Calendar Spreads
+            # Goal: Profiting from chopping markets.
+            
+            "bb_period": 20,
+            "bb_std": 2.0,
+            "touch_atr_multiplier": 0.5,
+            
+            "adx_period": 14,
+            "adx_threshold": 15.0,          # STRICTLY for weak trends (ADX < 15).
+            
+            "max_time_bars": 3,
+            "vol_zscore_window": 20,
+            "vol_zscore_threshold": 1.0,    # Low volume verification.
+            
+            "score_threshold": 0.60,
+            
+            # --- Weights (Range Focused) ---
             "weights": {
                 "candle": 0.30,
-                "trend": 0.30,     # Market structure matters more
-                "volume": 0.15,
-                "momentum": 0.15,
-                "bonus": 0.10
+                "trend": 0.40,     # "Is Ranging" is the most important factor.
+                "volume": 0.10,
+                "momentum": 0.10,
+                "bonus": 0.10      # Mid-band cross often happens here.
             }
         }
     }

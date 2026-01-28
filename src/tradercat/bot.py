@@ -41,17 +41,17 @@ class StrategyFactory:
     Easier to manage configurations and presets here.
     """
     @staticmethod
-    def get_single_asset_strategies(data_provider: OpenBBProvider, preset: StrategyPreset = "swing") -> List:
+    def get_single_asset_strategies(data_provider: OpenBBProvider) -> List:
         # Explicitly name 'data_provider' to avoid collision with positional args
         # if the strategy class definition changed.
         return [
-            BollingerBreakoutStrategy(data_provider=data_provider, **make_bbands_breakout_presets()[preset]),
-            BBandsReversalStrategy(data_provider=data_provider, **make_bbands_reversal_presets()[preset]),
-            DivergenceStrategy(data_provider=data_provider, **make_divergence_presets()[preset]),
-            CandlestickReversalStrategy(data_provider=data_provider, **make_candlestick_reversal_presets()[preset]),
-            FibonacciRetracementStrategy(data_provider=data_provider, **make_fibonacci_presets()[preset]),
-            ChartPatternStrategy(data_provider=data_provider, **make_chart_pattern_presets()[preset]),
-            MomentumTrendStrategy(data_provider=data_provider, **make_momentum_presets()[preset]),
+            BollingerBreakoutStrategy(data_provider=data_provider, **make_bbands_breakout_presets()["gamma"]),
+            BBandsReversalStrategy(data_provider=data_provider, **make_bbands_reversal_presets()["fade"]),
+            DivergenceStrategy(data_provider=data_provider, **make_divergence_presets()["trend_continuation"]),
+            CandlestickReversalStrategy(data_provider=data_provider, **make_candlestick_reversal_presets()["gamma_dip"]),
+            FibonacciRetracementStrategy(data_provider=data_provider, **make_fibonacci_presets()["trend_pullback"]),
+            ChartPatternStrategy(data_provider=data_provider, **make_chart_pattern_presets()["momentum_pattern"]),
+            MomentumTrendStrategy(data_provider=data_provider, **make_momentum_presets()["swing_momentum"]),
         ]
 
     @staticmethod
