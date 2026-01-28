@@ -360,87 +360,77 @@ Proceed with individual analysis but note in report: `"⚠️ Unable to assess m
 
 You must parse the `Details` column for every row. Evaluate based on this hierarchy:
 
-### 1. Primary Verification (The "Details" Column)
+### 1. Primary Verification (The "Deep Audit")
 
-**Ignore the 'Confidence' score initially. Look at raw metrics inside 'Details':**
+**Ignore the 'Signal' and 'Confidence' score initially. Look at raw metrics inside 'Details':**
 
-#### A. For Trend-Following Signals (Momentum/Breakout)
+#### A. For Trend-Following Signals (Breakouts / Momentum)
 
-**Critical Filters (Must Pass ALL):**
+**Critical Logic Gates (Must Pass ALL):**
 
-1. **ADX Strength Check:**
-   - `adx` ≥ 25: **Strong Trend** (Green Light)
-   - `adx` 20-25: **Moderate Trend** (Yellow Light - require `vol_zscore` > 1.5 for confirmation)
-   - `adx` < 20: **Weak Trend** (Red Light - REJECT unless `vol_zscore` > 2.5 AND `ema_spread_pct` widening)
+1.  **Trend Integrity (The "Anti-Chop" Filter):**
+    *   `adx` ≥ 25: **Strong Trend** (Green Light).
+    *   `adx` 20-25: **Developing Trend** (Yellow Light: Requires `ema_spread_pct` > 1.0% to confirm direction).
+    *   `adx` < 20: **Choppy/Weak** (Red Light: REJECT unless `squeeze` was true AND `vol_zscore` > 3.0, indicating a violent new regime change).
 
-2. **Volume Confirmation:**
-   - `vol_zscore` > 2.0 OR `rel_volume` > 1.5: **Strong Institutional Interest** (Green Light)
-   - `vol_zscore` 1.0-2.0: **Moderate** (Yellow Light - acceptable if ADX strong)
-   - `vol_zscore` < 1.0: **Declining Volume** (Red Light - REJECT for breakouts, this is a trap)
+2.  **Effort vs. Result (Volume Validation):**
+    *   **The Breakout:** `vol_zscore` > 2.0 AND `bar_change_pct` magnitude > 1.0% (Big volume + Big move = Valid).
+    *   **The Trap (Churn):** `vol_zscore` > 3.0 BUT `bar_change_pct` magnitude < 0.5% (Huge volume + Small move = Distribution/Resistance. **REJECT**).
+    *   **The Ghost Move:** `vol_zscore` < 0.8 (Low volume breakout = Fakeout. **REJECT**).
 
-3. **EMA Structure Check:**
-   - `ema_spread_pct` widening (positive and increasing): **Healthy Trend**
-   - `ema_spread_pct` contracting (approaching 0): **Exhaustion Warning** (require other strong confirmations)
-   - Fast EMA direction must match Signal direction (e.g., if Signal = "long", then `ema_fast` > `ema_slow`)
+3.  **Momentum Health (RSI Check):**
+    *   **Longs:** `rsi` between 45 and 75. (Avoid buying if RSI > 80 unless `vol_zscore` is extreme > 4.0 "Climax").
+    *   **Shorts:** `rsi` between 25 and 55.
+    *   **Alignment:** `rsi` > 50 must align with fast EMA > slow EMA.
 
-4. **Bollinger-Specific (if available):**
-   - For breakouts: `pct_b` > 1.0 (above upper band) or < 0.0 (below lower band)
-   - Prior `squeeze` = true is a bonus (volatility expansion setup)
+4.  **Bollinger Logic (The Head-Fake Check):**
+    *   IF `squeeze` = true: Check `bandwidth`. If expanding rapidly while price hugs the upper band (`pct_b` > 0.95), valid breakout.
+    *   If `pct_b` > 1.0 but `candle_conviction` < 0.5 (long wick): **Rejection likely**, not a breakout.
 
-#### B. For Reversal Signals (RSI/Bollinger/Divergence/Candlestick)
+#### B. For Reversal Signals (Mean Reversion / Dips)
 
-**Critical Filters:**
+**Critical Logic Gates (Must Pass ALL):**
 
-1. **Extremes Validation:**
-   - **For BUY signals:** `rsi` < 30 OR `pct_b` < 0.2 (price near lower band)
-   - **For SELL signals:** `rsi` > 70 OR `pct_b` > 0.8 (price near upper band)
-   - **Conflict Check:** If Signal = "long" but `rsi` > 75 → REJECT (this is chasing tops, not reversal)
+1.  **The "Widowmaker" Filter (Crucial):**
+    *   **NEVER** buy an oversold dip (`rsi` < 30) if `adx` > 35. This is a crash, not a reversal. The trend is too strong.
+    *   **VALID REVERSAL:** `rsi` < 30 (Long) or > 70 (Short) **AND** `adx` < 30 (Weakening trend) OR `bandwidth` is extreme (> 90th percentile).
 
-2. **Pattern Confirmation:**
-   - Check if `pattern` or `rejection_pattern` field exists (e.g., "hammer", "shooting_star")
-   - If missing but `rsi` at extremes AND `vol_zscore` > 1.0 → Can proceed (price action implied)
+2.  **Pattern Confirmation:**
+    *   A reversal signal on a "Doji" or "Spinning Top" is weak.
+    *   A reversal signal on a "Hammer", "Engulfing", or "Pinbar" at the Bands (`pct_b` < 0 or > 1) is **Strong**.
 
-3. **Volatility Context:**
-   - `bandwidth` narrowing (< 20th percentile historically) OR `squeeze` = true: **Favorable** (compression before reversal)
-   - `bandwidth` extremely wide: **Blow-off Top Risk** (require tighter stops, reduce position size)
+3.  **Divergence Check (If Strategy = Divergence):**
+    *   Price made a Lower Low, but `rsi` made a Higher Low? (Bullish Class A).
+    *   If `vol_zscore` on the reversal candle is < 1.0, the reversal lacks institutional backing. **REJECT**.
 
-4. **Mean Reversion Target:**
-   - Calculate distance from `bbm` (Bollinger Middle) or `ema_slow`
-   - **Minimum 2:1 Reward/Risk ratio required** (e.g., if stop is 2 ATR away, target must be 4 ATR)
+4.  **Profit Room (R:R Check):**
+    *   Distance from Current Price to `ema_slow` or `bbm` (Standard Deviation Mean) must be > 2.0 x `atr`.
+    *   If Mean is too close, the "Juice isn't worth the Squeeze." **REJECT**.
 
 #### C. Universal Options Viability Checks (ALL Signals)
 
 **These apply regardless of strategy type:**
 
-1. **Volatility Requirement:**
-   - `atr_pct` ≥ 1.5%: **Ideal for options** (sufficient movement to overcome theta)
-   - `atr_pct` 0.8-1.5%: **Marginal** (consider spreads instead of naked calls/puts)
-   - `atr_pct` < 0.8%: **REJECT** (price is stagnant, theta decay will kill the trade)
+1.  **Volatility Requirement (Theta vs. Gamma):**
+    *   `atr_pct` ≥ 1.5%: **Ideal** for single-leg options (Long Call/Put).
+    *   `atr_pct` 0.8-1.5%: **Marginal**. Use Vertical Spreads (Debit) to reduce theta burn.
+    *   `atr_pct` < 0.8%: **Dead Money**. **REJECT** (Theta will erode premium faster than Delta gains).
 
-2. **Liquidity Check:**
-   - `volume` ≥ 50% of `avg_volume`: **Pass**
-   - `volume` 30-50% of `avg_volume`: **Yellow Flag** (note in report: "Low liquidity session")
-   - `volume` < 30% of `avg_volume`: **REJECT** (too illiquid for reliable fills)
-
-3. **Candle Quality (if available):**
-   - `candle_conviction` > 0.7 OR `bar_change_pct` magnitude > 1.5%: Strong directional bias
-   - Weak candles (small body, long wicks on both sides): Reduce confidence
+2.  **Liquidity & Slippage:**
+    *   `rel_volume` should be > 0.8 (don't trade dead stocks).
+    *   Total `volume` must support reasonable options open interest (inferred).
 
 ---
 
-### 2. Secondary Confirmation (The "Bonus Points")
+### 2. Secondary Confirmation (The "Confluence" Bonus)
 
-**Only if the technicals in Step 1 pass**, then consider these standard CSV columns:
+**Only if the technicals in Step 1 pass**, assess confluence:
 
-- **Strategy Consensus:** Do multiple strategies flag the same symbol on same date?
-  - 2+ strategies agreeing: +15% confidence boost
-  - 3+ strategies: +25% boost (rare, very strong signal)
-
-- **Confidence Score:** Use as **tie-breaker only** between two technically valid setups
-  - Example: Both AAPL and MSFT pass all filters, AAPL confidence 0.85, MSFT 0.78 → Choose AAPL
-
-- **Signal Direction:** Only to determine if we need Calls or Puts
-  - Do NOT use this to override technical data (e.g., if Details show weak trend but Signal says "long", you still REJECT)
+- **Timeframe Alignment:** Does `daily_trend_up` match `ht_trend_up` (Weekly)?
+  - Yes: Full position size.
+  - No: Reduce size by 50% (Counter-trend trade).
+  
+- **Strategy Stack:** Are "BollingerBreakout" and "MomentumTrend" flagging the same ticker? (High Probability).
 
 ---
 
@@ -448,11 +438,10 @@ You must parse the `Details` column for every row. Evaluate based on this hierar
 
 **Discard any signal if the `Details` show:**
 
-- **Technical Conflict:** Signal = "long" but `rsi` > 80 (chasing parabolic move)
-- **No Volatility:** `atr_pct` < 0.5% (price is dead, options are not viable)
-- **Liquidity Crisis:** `volume` < 30% of `avg_volume` (cannot get fills)
-- **Trend Exhaustion:** Signal = "long", `adx` > 40, but `ema_spread_pct` contracting and `rsi` > 75 (late-stage trend)
-- **Missing Critical Data:** Universal fields (`adx`, `atr_pct`) are null/missing
+- **The "Falling Knife":** Signal = "Long", `rsi` < 25, `adx` > 40 (Trend is crashing, do not catch).
+- **The "FOMO" Top:** Signal = "Long", `rsi` > 80, `vol_zscore` < 1.0 (Price drifted up, no volume, due for correction).
+- **The "Vol Trap":** `vol_zscore` > 3.0 but price moved < 0.2% (Hidden institutional selling/absorption).
+- **The "Deadbeat":** `atr_pct` < 0.6% or `adx` < 15 without a squeeze.
 
 **When you REJECT a high-confidence signal**, document it in your report under "False Positive Warnings" section.
 
@@ -478,55 +467,75 @@ You must parse the `Details` column for every row. Evaluate based on this hierar
 
 ## 🛒 Phase 2: Options Selection Criteria
 
-Once a symbol **passes the Technical Audit**, map it to an options strategy:
+Once a symbol **passes the Technical Audit**, map it to an options strategy based on its **Volatility Profile & Setup Type**:
 
-### A. High Confidence Trend (Strong ADX, Volume, EMA alignment)
+### A. High Confidence Trend (Breakout / Momentum)
 
-**Instrument:** Directional Calls/Puts
+**Core Metrics:** `rsi` 50-70, `adx` > 25, `bandwidth` expanding, `vol_zscore` > 2.0
 
-**Strike Selection:**
-- **Delta 0.60-0.70** (ITM/ATM) to maximize directional exposure
-- Example: If AAPL trading at $150 and signal is "long", buy $145 or $150 strike Call
+1.  **Low/Medium Volatility Environment (`atr_pct` < 2.5%):**
+    *   **Instrument:** Long Call (Bull) or Long Put (Bear).
+    *   **Strike:** **Delta 0.65 - 0.75** (Deep ITM). High Delta mimics stock movement and reduces Theta decay exposure.
+    *   **Expiry:** **45-60 DTE**. Buy more time than you need to escape the steepest part of the "Theta Curve".
+    *   **Exit Target:** Close when Delta hits ~0.90 or technical target reached.
 
-**Expiry:**
-- **30-45 DTE** (Days To Expiration) for swing trades (normal breakouts)
-- **7-14 DTE** for explosive breakouts (`vol_zscore` > 3.0, `adx` > 35)
+2.  **High Volatility Environment (`atr_pct` > 2.5% or Earnings approaching):**
+    *   **Instrument:** Vertical **Debit Spread** (Bull Call Spread / Bear Put Spread).
+    *   **Why:** High IV makes options expensive. Spreads offset the cost and cap Vega risk.
+    *   **Structure:** Buy ATM / Sell OTM (e.g., Buy 50 Delta / Sell 25 Delta).
+    *   **Expiry:** **21-30 DTE**. Ride the specific momentum burst, then exit.
 
-**Position Sizing:**
-- Allocate **15-25%** of portfolio per high-conviction setup
-- If `atr_pct` > 2.5% (very volatile): Reduce to 10-15%
+### B. Reversal / Mean Reversion (The "Rubber Band" Trade)
+
+**Core Metrics:** `rsi` extreme (<30 or >70), `pct_b` > 1.0 or < 0.0, `candle_conviction` high.
+
+1.  **The "Fade" (Mean Reversion against a spike/crash):**
+    *   **Scenario:** Price spiked outside bands (`pct_b` > 1.1), high volume climax, "Shooting Star" candle.
+    *   **Instrument:** **Credit Spread** (Bear Call Spread / Bull Put Spread).
+    *   **Why:** You want to profit from **IV Crush** (Vega dropping) and Time Decay (Theta) as the move stalls.
+    *   **Strike:** Sell the Short leg just outside the rejection wick (Resistance/Support).
+    *   **Expiry:** **14-21 DTE**. Short duration to capture rapid decay.
+
+2.  **The "Bounce" (Oversold Dip in Strong Trend):**
+    *   **Scenario:** Uptrend (`adx` > 25), RSI dipped to 40-45 at EMA support.
+    *   **Instrument:** Long Call (Standard).
+    *   **Why:** Trend continuation is expected; don't cap upside with a spread unless IV is excessively high.
+
+### C. The "Squeeze" (Low Volatility Expansion)
+
+**Core Metrics:** `squeeze` = true, `bandwidth` at multi-month lows, `vol_zscore` beginning to spike.
+
+1.  **Directional Bias Confirmed (`ema_spread_pct` > 0.5%):**
+    *   **Instrument:** **Long Directional Option**.
+    *   **Strike:** ATM (Delta 0.50). Maximum Gamma exposure for the explosive move.
+    *   **Expiry:** **60+ DTE**. Squeezes can take time to ignite; don't get killed by Theta while waiting for the expansion.
+
+2.  **Directional Bias Unclear (Neutral Squeeze):**
+    *   **Instrument:** **Long Straddle** or **Strangle**.
+    *   **Condition:** Only if `atr_pct` is exceptionally low (< 1.0%) making the straddle cheap.
+
+### D. Position Sizing & Risk Rules
+
+*   **Standard Allocation:** **2-3%** of Total Account Equity per trade maximum.
+*   **Stop Loss Discipline:**
+    *   **Trend Trigger:** `close` crosses below `ema_fast` (or `ema_slow` depending on timeframe).
+    *   **Reversal Trigger:** Price closes beyond the "Rejection Wick" high/low.
+*   **The "Half-Life" Rule:** If an option loses **50% of its value**, cut it immediately. No excuses. Options go to zero; stocks mostly don't.
 
 ---
 
-### B. Reversal/Mean Reversion (RSI extreme, Bollinger touch)
+## 📝 Phase 3: Output Requirements & Reporting Standards
 
-**Instrument:** 
-- **Debit Spreads** (to cap risk if reversal fails)
-- **Credit Spreads** if implied volatility (IV) is high (e.g., `bandwidth` > 80th percentile)
+**Constraint:** You must ignore CSV rows that fail your Technical Audit. Produce a report **ONLY** for confirmed "Green Light" opportunities.
 
-**Target:**
-- Mean reversion to `bbm` (Bollinger Middle Band) or `ema_slow`
-- Example: If price at $145 (`bbl`), target is $150 (`bbm`), stop at $143
-
-**Expiry:**
-- **14-30 DTE** (reversals need time to develop)
-
-**Position Sizing:**
-- Allocate **10-20%** per setup (reversals are less reliable than trends)
-
----
-
-### C. Low Volatility Environment (`atr_pct` < 1.2%)
-
-**Instrument:** Calendar Spreads or Iron Condors
-
-**Rationale:** Naked options will suffer from theta decay in stagnant markets
-
----
-
-## 📝 Phase 3: Output Requirements
-
-**You must ignore CSV rows that fail your Technical Audit.** Produce a report only for **Top Opportunities**.
+### 🌐 Language & Style Protocol
+1.  **Logic & Reasoning:** If the user query is in Chinese (or `language_preference="zh"`), generate the **Analysis**, **Reasoning**, and **Advice** in Chinese.
+2.  **Strict English Terms:** The following MUST remain in English:
+    *   Tickers (`AAPL`, `NVDA`)
+    *   Technical Indicators (`RSI`, `ADX`, `MacD`, `Bollinger Bands`)
+    *   Strategy Names (`BollingerBreakout`, `MomentumTrend`)
+    *   Order Types (`Buy Open`, `Sell to Close`, `Debit Spread`)
+    *   Option Terms (`Call`, `Put`, `Strike`, `Delta`, `Theta`, `DTE`, `IV`)
 
 ---
 
@@ -534,125 +543,76 @@ Once a symbol **passes the Technical Audit**, map it to an options strategy:
 
 Structure your response as follows:
 
-#### 1. Market Regime Check
+#### 1. 🚦 Market Regime Check (Macro Context)
 
-Example:
-```
-📊 Market Regime Assessment (Based on SPY):
-- Current State: Risk-On (ADX 28.5, Price 3.2% above SMA 200)
-- Volatility: Moderate (ATR% 1.4%)
-- Breadth: Healthy (68% of sectors showing positive momentum)
-- Recommendation: Favor directional trend plays, limit contrarian bets to 30% of portfolio
-```
+*   **Assessment:** [Risk-On / Risk-Off / Neutral-Chop]
+*   **Benchmark (SPY/QQQ):** [Price] vs [200 SMA] | ADX: [Value]
+*   **Volatility Regime:** [High/Low] (ATR%: [Value])
+*   **Deployment Strategy:** [e.g., "Aggressive Directional (Long Gamma)" or "Conservative Spreads (Short Vega)"]
 
-If no SPY data:
-```
-⚠️ Market Regime: Unknown (No benchmark data provided in CSV)
-```
+*(If no SPY data is present, explicitly state: "⚠️ Market Regime Unknown - Reducing Position Sizes by 50% for Safety")*
 
 ---
 
-#### 2. Top "Green Light" Trades
+#### 2. 🎯 Top "High-Prob" Setups (Detailed View)
 
-**Only include trades where Details perfectly align with Signal.**
+For each approved trade:
 
-For each trade, structure as:
+**1. Symbol: [Ticker] | Strategy: [Strategy Name]**
 
-**Symbol:** [Ticker]
+*   **The Audit (The "Why"):**
+    > Technical Confirmation:
+    > *   **Trend:** ADX [Value] ([Assessment])
+    > *   **Volume:** Z-Score [Value] ([Assessment])
+    > *   **Momentum:** RSI [Value] ([Assessment])
+    > *   **Volatility:** ATR% [Value] (Options Viability: [Yes/No])
 
-**The Audit:**
-> "Signal says [Long/Short] with confidence [0.XX]. Technicals CONFIRM:
-> - ADX is [value] (Strong/Weak Trend)
-> - Vol Z-Score is [value] (Institutional Interest: Yes/No)
-> - RSI is [value] (Momentum: Bullish/Bearish/Neutral)
-> - EMA Spread: [widening/contracting] ([value]%)
-> - ATR%: [value]% (Options Viable: Yes/No)"
+*   **The Setup (Key Levels):**
+    > *   **Entry Zone:** $[Price] (Current) - $[Price] (Limit)
+    > *   **Tech Stop Loss:** $[Price] (Underlying Close < [Level])
+    > *   **Take Profit:** $[Price] (Reward:Risk = [X]:1)
+    > *   **Catalyst:** [One sentence reason from Details]
 
-**The Setup:**
-> - Entry Zone: $[price] - $[price]
-> - Stop Loss: $[price] (based on [X] ATR from Details)
-> - Target: $[price] (Reward/Risk: [X]:1)
-> - Catalyst: [Brief reason from Details]
-
-**Options Play:**
-> - Instrument: [CALL/PUT] [Strike] exp [Date]
-> - Delta: ~[0.XX]
-> - Max Risk: $[amount]
-> - Allocation: [%] of portfolio ($[amount] of $2,000)
+*   **The Option Execution:**
+    > *   **Contract:** [Ticker] [Exp Date] [Strike] [Type] (e.g. AAPL 28FEB 150 CALL)
+    > *   **Strategy Structure:** [Long Call / Vertical Debit Spread / Credit Spread]
+    > *   **Greeks Focus:** Delta ~[Value] | Theta Risk: [Low/High]
+    > *   **Max Allocation:** $[Amount] ([%] of Portfolio)
+    > *   **Premium Stop:** Close if option loses >50% value involved.
 
 ---
 
-**Example:**
+### Output Format 2: The Trader's Execution Table
 
-**Symbol:** AAPL
+**Top Recommendations (Prioritized by Signal Quality):**
 
-**The Audit:**
-> Signal says Long with confidence 0.87. Technicals CONFIRM:
-> - ADX is 32.5 (Strong Trend ✓)
-> - Vol Z-Score is 2.8 (Heavy institutional buying ✓)
-> - RSI is 58.3 (Healthy momentum, not overbought ✓)
-> - EMA Spread: Widening from 1.2% to 1.9% (Accelerating trend ✓)
-> - ATR%: 1.65% (Sufficient volatility for options ✓)
+| Ticker | strategy | Action | Contract (Exp/Strike) | Signal Basis (Techs) | IV Regime | Tech Stop (Stock) | Target (Stock) | Alloc ($) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **AAPL** | **Long Call** | **BUY** | FEB28 150 CALL | Breakout + Vol Z 2.8 | Low (Buy Vol) | $147.80 | $156.50 | $400 |
+| **TSLA** | **Credit Sprd** | **SELL** | MAR15 200/190 PUT | Rejection + RSI > 80 | High (Sell Vol) | $205.00 | $185.00 | $300 |
 
-**The Setup:**
-> - Entry Zone: $150.00 - $151.50
-> - Stop Loss: $147.80 (1.5 ATR below entry, from Details: ATR = $2.15)
-> - Target: $156.50 (Fibonacci extension / prior resistance)
-> - Reward/Risk: 3.1:1
-> - Catalyst: Breakout above Bollinger Upper Band with volume spike
-
-**Options Play:**
-> - Instrument: CALL $150 strike exp Feb 28 (32 DTE)
-> - Delta: ~0.65
-> - Max Risk: $400 (premium)
-> - Allocation: 20% ($400 of $2,000 portfolio)
+**Table Legend:**
+*   **Strategy:** Structure defined in Phase 2 (Long Call, Debit Spd, Credit Spd).
+*   **Action:** BUY (Long Premium) or SELL (Short Premium/Credit).
+*   **Contract:** Format as `[Date] [Strike] [Type]`.
+*   **IV Regime:** derived from `atr_pct` or `bandwidth` (Low = Buy Options, High = Sell Spreads).
+*   **Alloc:** Recommended position (Max $2000 total).
 
 ---
 
-#### 3. "False Positive" Warnings
+### Output Format 3: 🚫 The "Trap" List (Filtered Grade B/C Signals)
 
-**Identify high-confidence signals from CSV that you are REJECTING.**
+**Do not show mediocre trades. Only show rejected HIGH CONFIDENCE signals to warn the user.**
 
-Example:
-```
-🚫 Rejected Signals (False Positives):
-
-1. TSLA - Signal: Long (Confidence 0.91)
-   ❌ Reason: Despite high confidence, Details show:
-      - ADX only 11.2 (No trend, fakeout risk)
-      - Vol Z-Score declining from 2.1 to 0.8 (Momentum dying)
-      - RSI 76.5 (Chasing extended move)
-   → Verdict: Classic late-stage FOMO signal. AVOID.
-
-2. NVDA - Signal: Short (Confidence 0.84)
-   ❌ Reason: 
-      - ATR% only 0.6% (Dead volatility, theta will kill the trade)
-      - Volume 40% below average (Low liquidity)
-   → Verdict: Cannot execute puts in stagnant market. SKIP.
-```
+*   **[Ticker] ([Strategy]): REJECTED**
+    *   *Signal Confidence:* [0.XX]
+    *   *Fatal Flaw:* [e.g. "RSI Divergence negative", "Volume Z-Score < 0.5 (No Institutional backing)", "ATR% < 0.8% (Implied Volatility too low for premium)"]
 
 ---
 
-### Output Format 2: The Execution Table
-
-**Top 10 Recommendations** (assuming $2,000 total allocation):
-
-| Symbol | Current Price | Action | Contract | Entry Reason (From Details) | Expected Move | Stop Loss | Target | Risk ($) | Reward ($) | R:R | Alloc ($) |
-|--------|---------------|--------|----------|------------------------------|---------------|-----------|--------|----------|------------|-----|-----------|
-| AAPL | $151.50 | BUY CALL | $150, 32D | ADX 32.5, Vol Z 2.8, EMA↑1.9% | $2.15 (1.65%) | $147.80 | $156.50 | $400 | $1,240 | 3.1:1 | $400 |
-| MSFT | $420.30 | BUY CALL | $415, 28D | ADX 29.1, Vol Z 2.3, Squeeze→Expansion | $8.50 (2.02%) | $410.00 | $435.00 | $350 | $1,150 | 3.3:1 | $350 |
-| META | $585.00 | BUY PUT | $590, 21D | RSI 78.2, pct_b 0.94, Rejection candle | $12.00 (2.05%) | $600.00 | $560.00 | $300 | $750 | 2.5:1 | $300 |
-
-**Column Definitions:**
-- **Expected Move:** ATR × √(DTE/365) [rough estimate]
-- **Stop Loss:** Derived from Details (`close ± 1.5×ATR`)
-- **R:R:** Reward-to-Risk ratio (must be ≥ 2:1 to include in table)
-- **Alloc:** Dollar amount allocated (total must not exceed $2,000)
-
-**Notes:**
-- In "Entry Reason" column, cite **specific numbers** from Details (e.g., "ADX 32.5", not just "Strong Trend")
-- All stop losses are based on ATR from Details, not arbitrary percentages
-- When the system outputs a Put/Call Spread recommendation, it must include the Expiration/DTE just like a single-leg option.
+## 🛡️ Risk Management Final Check
+*   **Total Exposure:** Ensure sum of Allocs < Total Capital ($2,000).
+*   **Correlation Check:** Do not recommend >3 Long Calls in the same sector (e.g. NVDA, AMD, TSM). If found, pick the **Single Best** and discard others.
 
 ---
 
@@ -660,14 +620,12 @@ Example:
 
 Before finalizing your report, verify:
 
-- [ ] Every recommendation cites ≥3 specific numbers from `Details` (e.g., "ADX 28.5, Vol Z-Score 2.3, EMA Spread 1.75%")
-- [ ] Every rejected high-confidence signal has documented reason (e.g., "Rejected TSLA despite 0.92 confidence because ADX was only 12")
-- [ ] No naked options recommended for stocks with `atr_pct` < 1.0%
-- [ ] Stop losses are based on ATR from Details, not arbitrary percentages
-- [ ] Total allocation does not exceed $2,000
-- [ ] Reward:Risk ratio for every trade is ≥ 2:1
-- [ ] If SPY/QQQ data was present, market regime assessment is included
-- [ ] All missing/invalid data rows are documented (not silently skipped)
+- [ ] **Data Integrity:** Every recommendation cites ≥3 specific numbers from `Details` (e.g., "ADX 28.5, Vol Z-Score 2.3, EMA Spread 1.75%").
+- [ ] **Risk Control:** Stop losses are based on ATR (Technical) AND Premium Loss (Options).
+- [ ] **Strategty Mapping:** Ensure High IV stocks use Spreads, Low IV stocks use Single Legs (from Phase 2).
+- [ ] **Option Viability:** No naked options recommended for low-IV stocks (`atr_pct` < 1.0%).
+- [ ] **Portfolio Rules:** Total allocation ≤ $2,000. No more than 3 correlated tickers from the same sector.
+- [ ] **Negative Filtering:** All rejected high-confidence signals are documented in the "Trap List".
 
 ---
 
