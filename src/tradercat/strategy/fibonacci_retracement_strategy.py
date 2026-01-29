@@ -342,18 +342,18 @@ class FibonacciRetracementStrategy(TradingStrategy):
             "high": round(highs[-1], 2),
             "low": round(lows[-1], 2),
             "close": round(curr_close, 2),
-            "bar_change_pct": round(bar_change_pct, 2),
             "volume": round(vols[-1], 0),
             "avg_volume": round(avg_vol, 0),
             "rel_volume": round(rel_vol, 2),
             "vol_zscore": round(vol_z if vol_z is not None else 0.0, 2),
+            "bar_change_pct": round(bar_change_pct, 2),
 
             # 斐波那契结构数据
             "impulse_direction": impulse_type,
             "impulse_start": impulse_start_val,
             "impulse_end": impulse_end_val,
-            "fib_zone_low": round(zone_low, 4),
-            "fib_zone_high": round(zone_high, 4),
+            "fib_zone_low": round(zone_low, 2),
+            "fib_zone_high": round(zone_high, 2),
             
             # 趋势指标
             "ema_fast": ema_fast_val,
@@ -363,15 +363,9 @@ class FibonacciRetracementStrategy(TradingStrategy):
 
             # 动量与波动率
             "rsi": round(curr_rsi, 1),
-            "macd_hist": round(current_macd_hist, 4),
-            "atr": round(current_atr_val, 4),
-            "atr_pct": round(atr_pct, 2),
-            
-            # 策略状态
-            "trigger_reason": trigger_reason,
-            "momentum_confirmed": mom_ok,
-            "volume_confirmed": vol_ok,
-            "score": round(result.score, 3)
+            "macd_hist": round(current_macd_hist, 2),
+            "atr": round(current_atr_val, 2),
+            "atr_pct": round(atr_pct, 2)
         }
 
         # If price is above EMA Slow (e.g. 200), we act as if it's a Bull Market.
@@ -421,9 +415,9 @@ class FibonacciRetracementStrategy(TradingStrategy):
                     plan['fib_stop_loss_at'] = fib_stop
                 else:
                     plan['fib_stop_loss_at'] = fib_stop
-                
+                plan['fib_stop_loss_at'] = round(plan['fib_stop_loss_at'], 2)
                 # We can store it in details for debugging
-                details['fib_stop'] = fib_stop
+                details['fib_stop'] = round(fib_stop, 2)
 
             details["plan"] = plan
 

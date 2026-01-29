@@ -280,11 +280,11 @@ class MomentumTrendStrategy(TradingStrategy):
             "volume": round(vols[-1], 0),
             "avg_volume": round(avg_vol, 0),
             "rel_volume": round(rel_vol, 2),
-            "bar_change_pct": round(bar_change_pct, 2),
             "vol_zscore": round(vol_z, 2),
+            "bar_change_pct": round(bar_change_pct, 2),
             
             # Momentum Factors
-            "mom_score_risk_adj": round(mom_score, 4),
+            "mom_score_risk_adj": round(mom_score, 2),
             "adx": round(current_adx_val, 1),
             "is_adx_strong": is_adx_strong,
             
@@ -301,27 +301,22 @@ class MomentumTrendStrategy(TradingStrategy):
             "ht_trend_up": trend_ht_up,
 
             # Volatility
-            "atr": round(current_atr_val, 4),
-            "atr_pct": round(atr_pct, 2),
-            
-            # Logic Gates
-            "long_cond": long_cond,
-            "short_cond": short_cond,
-            "vol_confirmed": vol_ok
+            "atr": round(current_atr_val, 2),
+            "atr_pct": round(atr_pct, 2)
         }
 
         # 5. Scoring
         factors = [
             Factor(
                 FactorName.MOMENTUM_CONFIRM, 
-                f"Risk-Adj Momentum ({mom_score:.2f})", 
+                f"Momentum ({mom_score:.2f})", 
                 self.weights["momentum"], 
                 long_cond or short_cond
             ),
             # [FIXED REFERENCE] Use isolated ADX signal
             Factor(
                 FactorName.TREND_STRENGTH, 
-                "ADX Strength (Health)", 
+                "ADX Strength", 
                 self.weights["trend_strength"], 
                 is_adx_strong
             ),

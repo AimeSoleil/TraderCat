@@ -277,17 +277,17 @@ class BollingerBreakoutStrategy(TradingStrategy):
             "vol_zscore": round(vol_z, 2),
             
             # 布林带深度数据
-            "bbu": bbu,
-            "bbl": bbl,
-            "bbm": bbm,
-            "bandwidth": curr_bw,
-            "bw_pct": round(bw_pct, 1),
-            "pct_b": round(pct_b, 2),     # Key for breakout triggers
+            "bbu": round(bbu or 0.0, 2),
+            "bbl": round(bbl or 0.0, 2),
+            "bbm": round(bbm or 0.0, 2),
+            "bandwidth": round(curr_bw or 0.0, 2),
+            "bw_pct": round(bw_pct or 0.0, 1),
+            "pct_b": round(pct_b or 0.0, 2),     # Key for breakout triggers
             "squeeze": in_squeeze,
             
             # 趋势与均线分析
-            "ema_fast": ema_f,
-            "ema_slow": ema_s,
+            "ema_fast": round(ema_f or 0.0, 2),
+            "ema_slow": round(ema_s or 0.0, 2),
             "ema_spread_pct": round(ema_spread_pct, 2),
             "ema_extension_pct": round(ema_extension_pct, 2),
             
@@ -378,7 +378,7 @@ class BollingerBreakoutStrategy(TradingStrategy):
             
             # Dynamic Stop Loss based on Band
             if bbm:
-                plan['trailing_stop_ref'] = bbm
+                plan['trailing_stop_ref'] = round(bbm or 0.0, 2)
                 plan['stop_loss_type'] = 'mean_reversion_band'
             
             details["plan"] = plan

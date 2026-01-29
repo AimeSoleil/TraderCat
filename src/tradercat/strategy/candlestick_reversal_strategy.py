@@ -329,7 +329,6 @@ class CandlestickReversalStrategy(TradingStrategy):
 
             # 策略逻辑状态
             "pattern": pattern,
-            "score": round(result.score, 3),
             "reversal_confirmed": reversal_confirmed,
         }
             
@@ -344,9 +343,9 @@ class CandlestickReversalStrategy(TradingStrategy):
             sl_mult = 1.0 if current_adx_val < 25 else 1.5
             
             if result.signal == 'long':
-                plan['stop_loss'] = close - (sl_mult * current_atr_val)
+                plan['stop_loss'] = round(close - (sl_mult * current_atr_val), 2)
             elif result.signal == 'short':
-                plan['stop_loss'] = close + (sl_mult * current_atr_val)
+                plan['stop_loss'] = round(close + (sl_mult * current_atr_val), 2)
                 
             details.update({"plan": plan})
 

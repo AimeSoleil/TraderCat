@@ -290,9 +290,9 @@ class BBandsReversalStrategy(TradingStrategy):
             "vol_zscore": round(volume_z, 3) if volume_z is not None else 0,
             
             # 布林带详情
-            "bbu": u_curr,
-            "bbl": l_curr,
-            "bbm": m_curr,
+            "bbu": round(u_curr, 2),
+            "bbl": round(l_curr, 2),
+            "bbm": round(m_curr, 2),
             "bandwidth": round(bw, 2),
             "pct_b": round(pct_b, 2),
             
