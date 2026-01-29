@@ -1,0 +1,155 @@
+# TraderCat "Alpha Seekers" Universe
+# Strategy: High Risk:Reward / Asymmetric Upside / Future Sector Leaders
+# Count: Exactly 101 Symbols
+# Note: SPY/QQQ retained as benchmarks; all other duplicates with symbols.yml removed.
+
+symbols: [
+  # ==============================================================================
+  # 1. CORE ANCHORS (The Market) - 2 Symbols
+  # ==============================================================================
+  "SPY",    # S&P 500 [Baseline Reference]
+  "QQQ",    # Nasdaq 100 [Tech Growth Reference]
+
+  # ==============================================================================
+  # 2. NEXT-GEN AI HARDWARE & INFRA (Beyond NVDA) - 10 Symbols
+  # ==============================================================================
+  "WOLF",   # Wolfspeed [SiC Power Semi / EV Chips]
+  "VRT",    # Vertiv [Data Center Liquid Cooling Leader]
+  "PSTG",   # Pure Storage [AI Data Storage Solutions]
+  "CLS",    # Celestica [AI Server ODM]
+  "GLW",    # Corning [Optical Fiber for AI Data Centers]
+  "ANET",   # Arista Networks [High-Speed Ethernet]
+  "COHR",   # Coherent [Optical Transceivers]
+  "LSCC",   # Lattice [Edge AI FPGAs]
+  "GCT",    # GigaCloud [B2B Marketplace Infrastructure]
+  "ACLS",   # Axcelis [Ion Implantation / Semi Cap Equip]
+
+  # ==============================================================================
+  # 3. CYBERSECURITY 2.0 (AI Defense) - 8 Symbols
+  # ==============================================================================
+  "S",      # SentinelOne [Autonomous AI Endpoint Security]
+  "ZYXI",   # Zynex [Medical Tech Security Monitoring]
+  "CYBR",   # CyberArk [Identity Security]
+  "TENB",   # Tenable [Exposure Management]
+  "VRNS",   # Varonis [Data Security Platform]
+  "FSLY",   # Fastly [Edge Cloud / Competitor to NET]
+  "OKTA",   # Okta [Identity Management Turnaround]
+  "QLYS",   # Qualys [Compliance & Security Cloud]
+
+  # ==============================================================================
+  # 4. SAAS & ENTERPRISE AI (Application Layer) - 12 Symbols
+  # ==============================================================================
+  "GTLB",   # GitLab [AI DevSecOps Platform]
+  "MNDY",   # Monday.com [Work OS / No-Code Leader]
+  "PATH",   # UiPath [Robotic Process Automation + Agents]
+  "CFLT",   # Confluent [Real-time Data Streaming / Kafka]
+  "IOT",    # Samsara [Industrial IoT Cloud]
+  "PCOR",   # Procore [Construction Tech Monopoly]
+  "TOST",   # Toast [Restaurant Tech Ecosystem]
+  "DUOL",   # Duolingo [EdTech AI Leader]
+  "HCP",    # HashiCorp [Multi-Cloud Infrastructure Automation]
+  "ESTC",   # Elastic [Search AI / Vector DB]
+  "DT",     # Dynatrace [Software Intelligence]
+  "BILL",   # Bill Holdings [SMB Finance Automation]
+
+  # ==============================================================================
+  # 5. FINTECH & DEFI (Future Finance) - 10 Symbols
+  # ==============================================================================
+  "NU",     # Nu Holdings [LatAm Digital Banking Giant]
+  "GLBE",   # Global-e Online [Cross-Border E-com]
+  "UPST",   # Upstart [AI Lending Marketplace]
+  "LC",     # LendingClub [Digital Marketplace Bank]
+  "LMND",   # Lemonade [AI Insurance Disrupter]
+  "MQ",     # Marqeta [Modern Card Issuing]
+  "DLO",    # DLocal [Emerging Markets Payments]
+  "FOUR",   # Shift4 [Integrated Payments]
+  "RIOT",   # Riot Platforms [Bitcoin Mining Infrastructure]
+  "CLSK",   # CleanSpark [Efficient Bitcoin Mining]
+  
+  # ==============================================================================
+  # 6. BIOTECH INNOVATION (Gene Editing & AI Drug Discovery) - 10 Symbols
+  # ==============================================================================
+  "CRSP",   # CRISPR Therapeutics [Gene Editing Leader]
+  "NTLA",   # Intellia [In Vivo Gene Editing]
+  "BEAM",   # Beam Therapeutics [Base Editing]
+  "RXRX",   # Recursion [AI Drug Discovery]
+  "SDGR",   # Schrodinger [Physics-Based Drug Discovery]
+  "DNA",    # Ginkgo Bioworks [Cell Programming Platform]
+  "TXG",    # 10x Genomics [Single Cell Analysis]
+  "PACB",   # PacBio [Long-Read Sequencing]
+  "IONS",   # Ionis [RNA-targeted Therapeutics]
+  "ITCI",   # Intra-Cellular [CNS/Neuropsychiatry]
+
+  # ==============================================================================
+  # 7. SPACE ECONOMY & QUANTUM (Deep Tech) - 8 Symbols
+  # ==============================================================================
+  "RDW",    # Redwire [Space Infrastructure / Solar Arrays]
+  "GSAT",   # Globalstar [Satellite Services / Apple Partner]
+  "LUNR",   # Intuitive Machines [Lunar Economy/NASA]
+  "SPIR",   # Spire Global [Satellite Data/Radio Occultation]
+  "PL",     # Planet Labs [Earth Imaging]
+  "QBTS",   # D-Wave Quantum [Annealing Quantum Comp]
+  "RGTI",   # Rigetti [Hybrid Quantum-Classical]
+  "QUBT",   # Quantum Computing Inc [Photonics]
+
+  # ==============================================================================
+  # 8. CLEAN ENERGY & ELECTRIFICATION (The Grid) - 10 Symbols
+  # ==============================================================================
+  "ENPH",   # Enphase [Microinverters/Home Energy]
+  "FSLR",   # First Solar [Utility Scale US Solar]
+  "SHLS",   # Shoals [Solar EBOS Solutions]
+  "NXT",    # Nextracker [Solar Tracking Systems]
+  "FLNC",   # Fluence [Grid Scale Energy Storage]
+  "ENVX",   # Enovix [3D Silicon Lithium Batteries]
+  "QS",     # QuantumScape [Solid State Battery]
+  "STEM",   # Stem Inc [AI Energy Storage Software]
+  "LAC",    # Lithium Americas [Critical Minerals]
+  "MP",     # MP Materials [Rare Earths Western Supply]
+
+  # ==============================================================================
+  # 9. CONSUMER & E-COMMERCE 2.0 (New Brands) - 10 Symbols
+  # ==============================================================================
+  "ONON",   # On Holding [Performance Footwear Growth]
+  "CELH",   # Celsius [Energy Drink Disrupter]
+  "ELF",    # e.l.f. Beauty [Gen Z Cosmetic Favorite]
+  "CAVA",   # Cava Group [Mediteranean Fast Casual]
+  "WING",   # Wingstop [High Growth Franchise]
+  "CPNG",   # Coupang [Amazon of South Korea]
+  "SE",     # Sea Limited [Gaming + Shopee Ecom]
+  "MELI",   # MercadoLibre [Amazon + PayPal of LatAm] 
+  "GRAB",   # Grab Holdings [SE Asia Super App]
+  "PINS",   # Pinterest [Social Commerce / Visual Search]
+
+  # ==============================================================================
+  # 10. ROBOTICS & AUTONOMY (Physical AI) - 8 Symbols
+  # ==============================================================================
+  "LI",     # Li Auto [Profitable EV/Hybrid Growth]
+  "SYM",    # Symbotic [Warehouse Automation w/ Walmart]
+  "JOBY",   # Joby Aviation [eVTOL Leader]
+  "ACHR",   # Archer Aviation [eVTOL Fast Follower]
+  "LAZR",   # Luminar [Lidar Technology]
+  "MBLY",   # Mobileye [ADAS / Autonomous Driving]
+  "RIVN",   # Rivian [Tech-First EV Truck]
+  "AUR",    # Aurora [Autonomous Trucking]
+
+  # ==============================================================================
+  # 11. GAMING & METAVERSE (Digital Experience) - 6 Symbols
+  # ==============================================================================
+  "RBLX",   # Roblox [Immersive 3D Platform]
+  "HIMS",   # Hims & Hers [Telehealth / Consumer Growth]
+  "IAS",    # Integral Ad Science [Ad Verification] 
+  "TTWO",   # Take-Two [GTA6 Catalyst]
+  "EA",     # Electronic Arts [Sports Franchise Moat]
+  "DKNG",   # DraftKings [Digital Sports Betting Leader]
+
+  # ==============================================================================
+  # 12. SPECIAL SITUATIONS (Volatility/Turnaround) - 6 Symbols
+  # ==============================================================================
+  "RDDT",   # Reddit [Data Licensing/AI Training]
+  "DJT",    # Trump Media [Pure Meme/Volatility Play]
+  "CVNA",   # Carvana [Deep Value Turnaround]
+  "BBAI",   # BigBear.ai [Defense AI Speculation]
+  "SOUN",   # SoundHound [Voice AI]
+  "AI",     # C3.ai [AI Pure Play Volatility]
+  "FFAI"    # Farady Future AI [Autonomous Tech Speculation] Personal Favorite
+]

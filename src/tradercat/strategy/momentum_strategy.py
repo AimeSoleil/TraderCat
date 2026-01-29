@@ -289,8 +289,8 @@ class MomentumTrendStrategy(TradingStrategy):
             "is_adx_strong": is_adx_strong,
             
             # Daily Trend Structure
-            "ema_fast": curr_ema_fast,
-            "ema_slow": curr_ema_slow,
+            "ema_fast": round(curr_ema_fast, 2),
+            "ema_slow": round(curr_ema_slow, 2),
             "ema_spread_pct": round(ema_spread_pct, 2),
             "daily_trend_up": trend_day_up,
             

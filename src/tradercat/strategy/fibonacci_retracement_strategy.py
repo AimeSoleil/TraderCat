@@ -350,14 +350,14 @@ class FibonacciRetracementStrategy(TradingStrategy):
 
             # 斐波那契结构数据
             "impulse_direction": impulse_type,
-            "impulse_start": impulse_start_val,
-            "impulse_end": impulse_end_val,
+            "impulse_start": round(impulse_start_val, 2),
+            "impulse_end": round(impulse_end_val, 2),
             "fib_zone_low": round(zone_low, 2),
             "fib_zone_high": round(zone_high, 2),
             
             # 趋势指标
-            "ema_fast": ema_fast_val,
-            "ema_slow": ema_slow_val,
+            "ema_fast": round(ema_fast_val, 2),
+            "ema_slow": round(ema_slow_val, 2),
             "adx": round(current_adx_val, 1),
             "trend_match": trend_match,
 
