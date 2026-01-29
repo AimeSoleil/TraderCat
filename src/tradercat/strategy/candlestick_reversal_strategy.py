@@ -313,8 +313,8 @@ class CandlestickReversalStrategy(TradingStrategy):
             "vol_zscore": round(volume_z, 2) if volume_z is not None else None,
 
             # 趋势指标
-            "ema_fast": current_ema_fast_val,
-            "ema_slow": current_ema_slow_val,
+            "ema_fast": round(current_ema_fast_val, 2),
+            "ema_slow": round(current_ema_slow_val, 2),
             "adx": round(current_adx_val, 1),
             "trend_direction_ok": trend_direction_ok,
             
@@ -325,11 +325,7 @@ class CandlestickReversalStrategy(TradingStrategy):
             
             # 波动率
             "atr": round(current_atr_val, 4),
-            "atr_pct": round(atr_pct, 2),
-
-            # 策略逻辑状态
-            "pattern": pattern,
-            "reversal_confirmed": reversal_confirmed,
+            "atr_pct": round(atr_pct, 2)
         }
             
         if result.signal != 'hold':

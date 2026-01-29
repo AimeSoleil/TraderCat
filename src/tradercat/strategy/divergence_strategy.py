@@ -314,19 +314,19 @@ class DivergenceStrategy(TradingStrategy):
             "high": round(highs[-1], 2),
             "low": round(lows[-1], 2),
             "close": round(close, 2),
-            "bar_change_pct": round(bar_change_pct, 2),
             "volume": round(vols[-1], 0),
             "avg_volume": round(avg_vol, 0),
             "rel_volume": round(rel_vol, 2),
             "vol_zscore": round(vol_z, 2),
+            "bar_change_pct": round(bar_change_pct, 2),
             
             # Trend & Momentum
             "adx": round(current_adx, 1),
             "rsi": round(current_rsi, 1),
-            "macd_hist": round(current_macd_hist, 4),
+            "macd_hist": round(current_macd_hist, 2),
             
             # Volatility
-            "atr": round(curr_atr, 4),
+            "atr": round(curr_atr, 2),
             "atr_pct": round(atr_pct, 2),
         }
 

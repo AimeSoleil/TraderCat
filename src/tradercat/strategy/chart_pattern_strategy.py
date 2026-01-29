@@ -287,11 +287,7 @@ class ChartPatternStrategy(TradingStrategy):
             # Volatility Environment
             "atr": round(curr_atr, 4),
             "atr_pct": round(atr_pct, 2),
-            "vol_breakout_confirmed": vol_breakout,
-            
-            # Factor Breakdown
-            "factors": score_res.reasons,
-            "score": round(score_res.score, 3)
+            "vol_breakout_confirmed": vol_breakout
         }
 
         if not patterns:

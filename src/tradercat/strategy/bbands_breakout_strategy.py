@@ -301,11 +301,6 @@ class BollingerBreakoutStrategy(TradingStrategy):
             "atr_pct": round(atr_pct, 2),
             "candle_conviction": round(candle_conviction, 2),
             "candle_range_atr": round(bar_range / current_atr, 2) if current_atr > 0 else 0.0,
-            
-            # 逻辑状态
-            "valid_candle": valid_candle_shape,
-            "vol_confirmed": vol_ok,
-            "trend_context_ok": is_trend_context_good
         }
 
         if atr_pct < self.min_atr_percent:

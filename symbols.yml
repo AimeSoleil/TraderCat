@@ -1,294 +1,145 @@
-# TraderCat Strategy Universe (2026 Professional Edition)
-# Optimized for OPTIONS TRADING - Exactly 100 symbols
-# Focus: High IV + Event Catalysts + Frontier Tech
+# TraderCat Strategy Universe (40-Year Veteran Edition)
+# Optimized for ALGORITHMIC EXECUTION
+# Count: Exactly 100 Symbols
 
 symbols: [
   # ==============================================================================
-  # 1. CORE BENCHMARKS (3 symbols)
-  # Removed: VTI (低期权量)
+  # TIER 1: MACRO & MARKET BENCHMARKS (Core Portfolio) - 6 Symbols
   # ==============================================================================
-  "SPY",    # S&P 500 [$50B/day | 0DTE king | IV Rank 45%]
-  "QQQ",    # Nasdaq 100 [$25B/day | Tech proxy | IV Rank 50%]
-  "VIX",    # Volatility Index [Futures | Vol trading]
+  "SPY",    # S&P 500 ETF [The Sun of the Solar System]
+  "QQQ",    # Nasdaq 100 ETF [Tech Beta]
+  "IWM",    # Russell 2000 ETF [Small Cap/Rates Proxy]
+  "TLT",    # 20+ Year Treasury [Rate Volatility/Hedge]
+  "GLD",    # Gold Trust [Inflation/Fear Hedge]
+  "SLV",    # Silver Trust [Industrial Metal/bVol]
 
   # ==============================================================================
-  # 2. MEGA CAP TECH (14 symbols)
-  # Removed: INTC (低 IV，turnaround 失败)
+  # TIER 2: MAGNIFICENT 7 & MEGA TECH (Institutional Flow) - 8 Symbols
   # ==============================================================================
-  "NVDA",   # NVIDIA [$76B/day | IV 55% | AI leader]
-  "TSLA",   # Tesla [$25B/day | IV 70% 🔥 | EV + energy]
-  "AAPL",   # Apple [$12B/day | IV 35% | 0DTE ready]
-  "AMZN",   # Amazon [$8B/day | IV 42% | Cloud + retail]
-  "MSFT",   # Microsoft [$7B/day | IV 38% | AI platform]
-  "META",   # Meta [$5B/day | IV 48% | Open AI]
-  "GOOG",   # Alphabet [$5B/day | IV 40% | Search AI]
-  "AMD",    # AMD [$6B/day | IV 60% | NVDA proxy]
-  "PLTR",   # Palantir [$2.3B/day | IV 65% | Defense AI]
-  "AVGO",   # Broadcom [$4B/day | IV 45% | AI chips]
-  "ORCL",   # Oracle [$2B/day | IV 42% | Cloud DB]
-  "TSM",    # Taiwan Semi [$2B/day | IV 38% | Foundry]
-  "ARM",    # Arm Holdings [$800M/day | IV 58% | Architecture]
-  "ASML",   # ASML [$1.2B/day | IV 40% | EUV monopoly]
-  "INTC",   # Intel [$4B/day | IV 50% | AI chips turnaround]
+  "NVDA",   # AI King [Highest Options Volume]
+  "TSLA",   # Retail Favorite [EV Market Leader]
+  "AAPL",   # Apple [Cash Rich/Safe Haven Tech]
+  "MSFT",   # Microsoft [Cloud/AI Anchor]
+  "AMZN",   # Amazon [Consumer/AWS]
+  "GOOGL",  # Alphabet [Deep Value Tech]
+  "META",   # Meta Platforms [Ads/GenAI]
+  "AMD",    # Advanced Micro [The "Other" AI Chip]
 
   # ==============================================================================
-  # 3. SEMICONDUCTORS (9 symbols)
-  # Removed: KLAC, ALAB (低期权流动性)
+  # TIER 3: SEMICONDUCTORS (High Beta Sector) - 10 Symbols
   # ==============================================================================
-  "MU",     # Micron [$2B/day | IV 52% | HBM memory]
-  "AMAT",   # Applied Materials [$1.5B/day | IV 48% | Equipment]
-  "SMCI",   # Super Micro [$800M/day | IV 85% 🔥 | AI servers]
-  "QCOM",   # Qualcomm [$2B/day | IV 45% | Mobile AI]
-  "MRVL",   # Marvell [$1.5B/day | IV 50% | Optical chips]
-  "LRCX",   # Lam Research [$800M/day | IV 46% | Equipment]
-  "ANET",   # Arista [$600M/day | IV 42% | AI networking]
-  "DELL",   # Dell Tech [$1B/day | IV 40% | Servers]
-  "ON",     # ON Semi [$600M/day | IV 48% | Power + auto chips]
+  "AVGO",   # Broadcom [AI Infrastructure/Custom Silicon]
+  "MU",     # Micron [Memory/Cyclical]
+  "QCOM",   # Qualcomm [Edge AI/Mobile]
+  "TSM",    # Taiwan Semi [Global Foundry Monopoly]
+  "ARM",    # Arm Holdings [Chip Architecture]
+  "SMCI",   # Super Micro [AI Server Liquid Cooling]
+  "AMAT",   # Applied Materials [Semi Equip]
+  "LRCX",   # Lam Research [Etch/Deposition Equip]
+  "INTC",   # Intel [Turnaround/US Foundry Play]
+  "MRVL",   # Marvell [Optical/Networking]
 
   # ==============================================================================
-  # 4. SOFTWARE & CLOUD (12 symbols)
-  # Added: GTLB (DevOps AI), S (Cloud storage), U (3D engine)
+  # TIER 4: SOFTWARE & SAAS (Growth/Momentum) - 12 Symbols
   # ==============================================================================
-  "CRWD",   # CrowdStrike [$1.5B/day | IV 58% | Security]
-  "PANW",   # Palo Alto [$1B/day | IV 52% | Platform security]
-  "SNOW",   # Snowflake [$800M/day | IV 62% | Data cloud]
-  "NET",    # Cloudflare [$600M/day | IV 55% | Edge compute]
-  "APP",    # AppLovin [$1.2B/day | IV 60% | AdTech]
-  "CRM",    # Salesforce [$2B/day | IV 42% | SaaS anchor]
-  "NOW",    # ServiceNow [$1.5B/day | IV 45% | Workflow AI]
-  "ADBE",   # Adobe [$1B/day | IV 40% | Creative AI]
-  "DDOG",   # Datadog [$500M/day | IV 52% | Observability]
-  "INTU",   # Intuit [$1B/day | IV 38% | FinTech AI]
-  "GTLB",   # GitLab [$350M/day | IV 58% | DevOps AI] 🆕
-  "S",      # SentinelOne [$300M/day | IV 68% | Cloud storage] 🆕
-  "U",      # Unity [$400M/day | IV 72% | 3D engine + AI] 🆕
+  "PLTR",   # Palantir [AI Data Operating System]
+  "CRM",    # Salesforce [SaaS Anchor]
+  "SNOW",   # Snowflake [Data Cloud]
+  "CRWD",   # CrowdStrike [Endpoint Security]
+  "PANW",   # Palo Alto Networks [Network Security]
+  "NOW",    # ServiceNow [Enterprise Workflow]
+  "ADBE",   # Adobe [Creative Cloud/AI]
+  "ORCL",   # Oracle [Cloud Infrastructure/Database]
+  "NET",    # Cloudflare [Edge Security]
+  "DDOG",   # Datadog [Cloud Observability]
+  "TTD",    # The Trade Desk [Digital Ad Spend]
+  "APP",    # AppLovin [AdTech Algorithm]
 
   # ==============================================================================
-  # 5. ENERGY & UTILITIES (6 symbols)
-  # Removed: SLB, VST, ETN (低 IV，不适合期权)
+  # TIER 5: FINTECH, CRYPTO & PAYMENTS (High IV Sector) - 12 Symbols
   # ==============================================================================
-  "XOM",    # Exxon Mobil [$2.5B/day | IV 32% | Energy anchor]
-  "CVX",    # Chevron [$1.5B/day | IV 30% | Integrated major]
-  "COP",    # ConocoPhillips [$1B/day | IV 35% | E&P pure play]
-  "NEE",    # NextEra Energy [$600M/day | IV 28% | Renewables]
-  "CEG",    # Constellation [$500M/day | IV 42% | Nuclear power]
-  "VRT",    # Vertiv [$600M/day | IV 52% | Liquid cooling for AI]
+  "MSTR",   # MicroStrategy [Bitcoin Treasury Play]
+  "COIN",   # Coinbase [Crypto Exchange Infrastructure]
+  "HOOD",   # Robinhood [Retail Trading Rates]
+  "SQ",     # Block [Cash App/SMB Ecosystem]
+  "PYPL",   # PayPal [Payments Valuation Play]
+  "SOFI",   # SoFi [Digital Banking Challenger]
+  "AFRM",   # Affirm [Buy Now Pay Later]
+  "V",      # Visa [Global Payment Rails]
+  "MA",     # Mastercard [Global Payment Rails]
+  "JPM",    # JPMorgan [Fortress Balance Sheet]
+  "GS",     # Goldman Sachs [Capital Markets]
+  "MARA",   # Marathon Digital [Bitcoin Mining Leader]
 
   # ==============================================================================
-  # 6. MATERIALS & MINING (3 symbols)
-  # Removed: NUE, ALB (低 IV 钢铁/锂矿)
+  # TIER 6: CONSUMER DISCRETIONARY (Earnings Movers) - 12 Symbols
   # ==============================================================================
-  "FCX",    # Freeport-McMoRan [$1B/day | IV 42% | Copper for AI]
-  "NEM",    # Newmont [$500M/day | IV 38% | Gold mining]
-  "CCJ",    # Cameco [$600M/day | IV 48% | Uranium for nuclear]
+  "NFLX",   # Netflix [Streaming Dominance]
+  "DIS",    # Disney [Content/Parks Turnaround]
+  "UBER",   # Uber [Mobility Network Effect]
+  "ABNB",   # Airbnb [Travel Platform]
+  "BKNG",   # Booking Holdings [Online Travel OTA]
+  "CMG",    # Chipotle [Restaurant Margins]
+  "SBUX",   # Starbucks [Brand Turnaround]
+  "NKE",    # Nike [Consumer Cyclical]
+  "LULU",   # Lululemon [Athleisure]
+  "HD",     # Home Depot [Housing/Rate Sensitive]
+  "WMT",    # Walmart [Consumer Staple/Defensive]
+  "COST",   # Costco [Membership Recurring Rev]
 
   # ==============================================================================
-  # 7. BIOTECH & HEALTHCARE (13 symbols)
-  # Removed: JNJ (低 IV 防御股)
-  # Added: RXRX (AI 制药), DNA (合成生物), BEAM, NTLA, GNOM
+  # TIER 7: BIOTECH & PHARMA (Binary Events) - 6 Symbols
   # ==============================================================================
-  "LLY",    # Eli Lilly [$2.5B/day | IV 45% | Obesity + Alzheimer's]
-  "UNH",    # UnitedHealth [$1.5B/day | IV 32% | Healthcare anchor]
-  "NVO",    # Novo Nordisk [$800M/day | IV 42% | Obesity duopoly]
-  "VKTX",   # Viking Therapeutics [$300M/day | IV 95% 🔥 | Obesity Ph2]
-  "HIMS",   # Hims & Hers [$400M/day | IV 78% | Telemedicine]
-  "DXCM",   # Dexcom [$600M/day | IV 48% | CGM devices]
-  "VRTX",   # Vertex [$500M/day | IV 42% | CF + gene editing]
-  "REGN",   # Regeneron [$700M/day | IV 40% | Immunology]
-  "ISRG",   # Intuitive Surgical [$600M/day | IV 38% | Robotic surgery]
-  "RXRX",   # Recursion Pharma [$200M/day | IV 65% | AI drug discovery] 🆕
-  "DNA",    # Ginkgo Bioworks [$200M/day | IV 75% | Synthetic biology] 🆕
-  "BEAM",   # Beam Therapeutics [$220M/day | IV 68% | Base editing] 🆕
-  "NTLA",   # Intellia [$280M/day | IV 72% | In vivo CRISPR] 🆕
+  "LLY",    # Eli Lilly [Obesity/GLP-1 Leader]
+  "NVO",    # Novo Nordisk [Obesity/Diabetes]
+  "VRTX",   # Vertex [CF Monopoly/Pain Mgmt]
+  "REGN",   # Regeneron [Eylea/Dupixent]
+  "AMGN",   # Amgen [Dow BioPharma]
+  "VKTX",   # Viking Therapeutics [Obesity M&A Target]
 
   # ==============================================================================
-  # 8. FINANCIALS (9 symbols)
-  # Added: SOFI, AFRM, NU (高 IV fintech)
+  # TIER 8: INDUSTRIAL, ENERGY & DEFENSE (Macro Plays) - 10 Symbols
   # ==============================================================================
-  "JPM",    # JPMorgan [$2B/day | IV 35% | Banking leader]
-  "BAC",    # Bank of America [$2B/day | IV 38% | Consumer banking]
-  "GS",     # Goldman Sachs [$600M/day | IV 42% | Trading + IB]
-  "V",      # Visa [$1.5B/day | IV 32% | Payments network]
-  "MA",     # Mastercard [$800M/day | IV 30% | Global payments]
-  "PYPL",   # PayPal [$1B/day | IV 48% | Digital payments]
-  "SOFI",   # SoFi [$1.5B/day | IV 65% | Digital banking] 
-  "AFRM",   # Affirm [$1B/day | IV 72% | BNPL + Amazon]
-  "NU",     # Nu Holdings [$2B/day | IV 58% | LatAm fintech]
+  "XOM",    # Exxon Mobil [Energy Supermajor]
+  "CVX",    # Chevron [Energy Yield]
+  "SLB",    # Schlumberger [Oilfield Services]
+  "OXY",    # Occidental [Carbon Capture/Permian]
+  "CAT",    # Caterpillar [Global Infrastructure]
+  "DE",     # Deere [Ag Tech/Automation]
+  "GE",     # GE Aerospace [Jet Engine Cycle]
+  "BA",     # Boeing [Aerospace Duopoly]
+  "RTX",    # Raytheon [Defense Systems]
+  "VST",    # Vistra [AI Power Demand/Nuclear]
 
   # ==============================================================================
-  # 9. CRYPTO PROXIES (6 symbols)
-  # Removed: CLSK, CORZ (流动性差/新上市)
+  # TIER 9: INTERNATIONAL & STABLE TECH (Diversification) - 12 Symbols
   # ==============================================================================
-  "MSTR",   # MicroStrategy [$13B/day | IV 120% 🔥🔥 | Pure BTC]
-  "COIN",   # Coinbase [$4B/day | IV 95% | Crypto exchange]
-  "MARA",   # Marathon Digital [$1.5B/day | IV 110% | Mining + HPC]
-  "RIOT",   # Riot Platforms [$800M/day | IV 105% | Mining ops]
-  "HOOD",   # Robinhood [$1.2B/day | IV 68% | Retail crypto flow]
-  "SQ",     # Block [$1B/day | IV 58% | Bitcoin + payments]
+  "ASTS",   # AST SpaceMobile [Satellite Direct-to-Cell]
+  "RKLB",   # Rocket Lab [Space Launch/Systems]
+  "IONQ",   # IonQ [Quantum Computing]
+  "BABA",   # Alibaba [China Tech Valuation]
+  "PDD",    # PDD Holdings [Temu Global Growth]
+  "ZS",     # Zscaler [Zero Trust Security]
+  "MDB",    # MongoDB [NoSQL Database]
+  "SPOT",   # Spotify [Audio/Podcasting]
+  "U",      # Unity [3D Engine/Digital Twins]
+  "IBM",    # IBM [Consulting/AI Stability]
+  "CSCO",   # Cisco [Networking Hardware Cash Cow]
+  "ALAB",   # Astera Labs [AI Connectivity]
 
   # ==============================================================================
-  # 10. CONSUMER (9 symbols)
-  # Removed: LULU (与 NKE 重叠)
+  # TIER 10: DEFENSIVE QUALITY (Safety/Low Vol/Theta) - 12 Symbols
   # ==============================================================================
-  "WMT",    # Walmart [$1.5B/day | IV 28% | Retail anchor]
-  "COST",   # Costco [$800M/day | IV 25% | Membership model]
-  "UBER",   # Uber [$2B/day | IV 55% | Mobility + delivery]
-  "NFLX",   # Netflix [$1.5B/day | IV 52% | Streaming + ads]
-  "DIS",    # Disney [$1.2B/day | IV 45% | Media + parks]
-  "NKE",    # Nike [$1B/day | IV 42% | Athletic wear + DTC]
-  "MCD",    # McDonald's [$500M/day | IV 32% | QSR anchor]
-  "ABNB",   # Airbnb [$1B/day | IV 58% | Travel platform]
-  "KO",     # Coca-Cola [$800M/day | IV 22% | Beverage anchor]
-
-  # ==============================================================================
-  # 11. CONSUMER TECH (2 symbols)
-  # ==============================================================================
-  "RBLX",   # Roblox [$1.5B/day | IV 68% | Metaverse + UGC]
-  "SE",     # Sea Limited [$2B/day | IV 72% | SE Asia e-commerce]
-
-  # ==============================================================================
-  # 12. INDUSTRIALS (3 symbols)
-  # Removed: GE, DE, LMT (低 IV 不适合期权)
-  # ==============================================================================
-  "CAT",    # Caterpillar [$800M/day | IV 38% | Construction equipment]
-  "BA",     # Boeing [$1B/day | IV 52% | Aerospace + defense]
-  "RTX",    # Raytheon [$600M/day | IV 32% | Defense systems]
-
-  # ==============================================================================
-  # 13. REAL ESTATE (1 symbol)
-  # Removed: PLD, AMT (REITs 低 IV)
-  # Kept: EQIX (AI 数据中心高增长)
-  # ==============================================================================
-  "EQIX",   # Equinix [$600M/day | IV 38% | Data center REITs + AI]
-
-  # ==============================================================================
-  # 14. COMMUNICATION (2 symbols)
-  # Removed: T (低 IV 股息股)
-  # ==============================================================================
-  "VZ",     # Verizon [$800M/day | IV 28% | Wireless network]
-  "TMUS",   # T-Mobile [$600M/day | IV 35% | 5G + postpaid growth]
-
-  # ==============================================================================
-  # 15. SPACE & QUANTUM (6 symbols) 🚀
-  # Added: ASTS, LUNR, RKLB, SPIR, SDGR (前沿科技新星)
-  # ==============================================================================
-  "IONQ",   # IonQ [$280M/day | IV 88% | Trapped ion quantum]
-  "JOBY",   # Joby Aviation [$300M/day | IV 82% | eVTOL + FAA cert]
-  "ASTS",   # AST SpaceMobile [$300M/day | IV 90% | Satellite broadband] 🆕
-  "LUNR",   # Intuitive Machines [$180M/day | IV 95% | NASA moon landing] 🆕
-  "RKLB",   # Rocket Lab [$250M/day | IV 78% | Space launch + Neutron] 🆕
-  "SPIR",   # Spire Global [$120M/day | IV 80% | Satellite data + AI] 🆕
-
-  # ==============================================================================
-  # 16. SPECIAL SITUATIONS (3 symbols)
-  # ==============================================================================
-  "DJT",    # Trump Media [$2B/day | IV 150% 🔥🔥🔥 | Event-driven]
-  "RDDT",   # Reddit [$1B/day | IV 75% | Data licensing + AI]
-  "BBAI",   # BigBear.ai [$180M/day | IV 70% | Defense AI contracts] 🆕
-
-  # ==============================================================================
-  # 17. AI INFRASTRUCTURE (4 symbols)
-  # Added: PATH (AI Agents)
-  # ==============================================================================
-  "COHR",   # Coherent [$600M/day | IV 52% | Optical chips for AI]
-  "LSCC",   # Lattice Semi [$800M/day | IV 48% | Edge AI FPGA]
-  "MNDY",   # Monday.com [$500M/day | IV 58% | Work OS + AI agents]
-  "PATH",   # UiPath [$280M/day | IV 60% | RPA + AI agents] 🆕
-
-  # ==============================================================================
-  # 18. GENE EDITING (3 symbols)
-  # Already added: BEAM, NTLA in healthcare section
-  # ==============================================================================
-  "CRSP",   # CRISPR Therapeutics [$300M/day | IV 68% | Gene editing]
-  "EXAS",   # Exact Sciences [$400M/day | IV 52% | Cancer screening]
-  "ILMN",   # Illumina [$500M/day | IV 48% | DNA sequencing]
-
-  # ==============================================================================
-  # 19. ENERGY STORAGE & EV (5 symbols) 🔋
-  # Added: ENVX, QS, WKHS, LAZR (前沿技术)
-  # ==============================================================================
-  "ENPH",   # Enphase Energy [$600M/day | IV 62% | Solar + storage]
-  "SEDG",   # SolarEdge [$300M/day | IV 68% | Solar inverters]
-  "ENVX",   # Enovix [$200M/day | IV 78% | Solid-state battery] 🆕
-  "QS",     # QuantumScape [$300M/day | IV 82% | Solid-state battery] 🆕
-  "LAZR",   # Luminar [$180M/day | IV 75% | Automotive LiDAR] 🆕
-
-  # ==============================================================================
-  # 20. AI VOICE & DEFENSE (2 symbols) 🎤
-  # Added: SOUN (AI voice tech)
-  # ==============================================================================
-  "SOUN",   # SoundHound AI [$250M/day | IV 85% | Voice AI platform] 🆕
-  "PG",     # Procter & Gamble [$600M/day | IV 22% | CPG defensive]
+  "UNH",    # UnitedHealth [Managed Care/Insurance]
+  "JNJ",    # Johnson & Johnson [AAA Rated Healthcare]
+  "PG",     # Procter & Gamble [Consumer Staples]
+  "KO",     # Coca-Cola [Dividend King]
+  "PEP",    # PepsiCo [Snacks & Beverage]
+  "MRK",    # Merck [Keytruda Patent Cliff]
+  "ABBV",   # AbbVie [Immunology/Yield]
+  "MCD",    # McDonald's [Franchise Model]
+  "BRK.B",  # Berkshire Hathaway [Financial Fortress]
+  "WM",     # Waste Management [Trash is Cash]
+  "NEE",    # NextEra Energy [Renewables Utility]
+  "LIN",    # Linde [Industrial Gases]
 ]
-
-# ==============================================================================
-# 🎯 OPTIONS TRADING OPTIMIZATION METRICS
-# ==============================================================================
-# Implied Volatility Profile (优化重点):
-# - IV > 60%: 32 symbols (32%) 🔥 [High premium collection]
-# - IV 40-60%: 45 symbols (45%) ✅ [Balanced strategies]
-# - IV < 40%: 23 symbols (23%) ⚖️ [Defensive hedges]
-# - Average IV Rank: 52% (vs 38% before) +37% improvement
-#
-# Options Market Quality:
-# - Weekly options: 100% coverage
-# - 0DTE capable: 22 symbols (SPY, QQQ, NVDA, TSLA, AAPL, AMZN, etc.)
-# - Avg bid-ask spread: 0.09% (excellent)
-# - Avg options OI: 8,500 contracts (vs 5,200 before)
-# - Penny-wide spreads: 18 symbols
-#
-# Event Catalyst Density:
-# - FDA milestones: 8 symbols (LLY, VKTX, BEAM, NTLA, RXRX, etc.)
-# - Product launches: 12 symbols (JOBY, ASTS, LUNR, ENVX, QS, etc.)
-# - Earnings volatility: 45 symbols with avg post-earnings move >8%
-# - Macro events: 6 symbols (MSTR, COIN, MARA, DJT, etc.)
-#
-# Liquidity & Turnover:
-# - Average daily volume: $1.9B
-# - High turnover (>5%/day): 18 symbols
-# - Minimum liquidity: $120M/day (SPIR)
-# - Ultra liquid (>$2B/day): 20 symbols
-# ==============================================================================
-
-# ==============================================================================
-# 💡 OPTIONS STRATEGIES RECOMMENDATIONS BY VOLATILITY TIER
-# ==============================================================================
-# TIER 1: Ultra High IV (>80%) - 10 symbols
-# Symbols: MSTR, COIN, MARA, RIOT, DJT, VKTX, ASTS, LUNR, SOUN, ENVX
-# Strategies:
-# - Iron Condors (collect massive premium)
-# - Short Strangles (weekly, manage at 50% profit)
-# - Calendar Spreads (exploit IV crush)
-# - Ratio Spreads (capitalize on extreme skew)
-# Avg Win Rate: 68% | Avg Return: 8-12%/week
-#
-# TIER 2: High IV (60-80%) - 22 symbols
-# Symbols: SMCI, TSLA, SNOW, APP, U, GTLB, S, HIMS, DNA, BEAM, NTLA, 
-#          RXRX, AFRM, NU, RBLX, SE, JOBY, RKLB, QS, LAZR, BBAI, RDDT
-# Strategies:
-# - Credit Spreads (70-80% POP)
-# - Iron Butterflies (neutral plays)
-# - Straddles/Strangles (earnings plays)
-# - Poor Man's Covered Calls (diagonal)
-# Avg Win Rate: 72% | Avg Return: 5-8%/week
-#
-# TIER 3: Medium IV (40-60%) - 45 symbols
-# Symbols: NVDA, AMD, MU, PLTR, CRWD, PANW, NET, DDOG, LLY, NVO, 
-#          UBER, NFLX, DIS, CEG, VRT, FCX, etc.
-# Strategies:
-# - Bull/Bear Put Spreads (directional)
-# - Vertical Spreads (defined risk)
-# - Covered Calls/Cash-Secured Puts
-# - Jade Lizards (high probability)
-# Avg Win Rate: 75% | Avg Return: 3-5%/week
-#
-# TIER 4: Low IV (<40%) - 23 symbols
-# Symbols: SPY, QQQ, AAPL, MSFT, META, GOOG, JPM, V, MA, WMT, COST, 
-#          XOM, CVX, KO, PG, VZ, etc.
-# Strategies:
-# - 0DTE (SPY/QQQ daily)
-# - Wheel Strategy (collect dividend + premium)
-# - LEAPS Diagonal (synthetic stock)
-# - Protective Puts (portfolio hedge)
-# Avg Win Rate: 78% | Avg Return: 2-4%/week
-# ==============================================================================

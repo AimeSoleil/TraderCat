@@ -303,15 +303,7 @@ class BBandsReversalStrategy(TradingStrategy):
             
             # 波动率
             "atr": round(current_atr_val, 4),
-            "atr_pct": round((current_atr_val / close * 100), 2) if close > 0 else 0,
-            
-            # 策略状态
-            "rejection_pattern": rejection_res.name,
-            "is_ranging": is_ranging,
-            "momentum_ok": momentum_ok,
-            "near_upper": near_upper,
-            "near_lower": near_lower,
-            "mid_cross": middle_line_reversal
+            "atr_pct": round((current_atr_val / close * 100), 2) if close > 0 else 0
         }
 
         # --- SCORING ENGINE ---
