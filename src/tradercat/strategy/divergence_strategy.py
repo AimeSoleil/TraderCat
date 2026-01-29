@@ -339,9 +339,6 @@ class DivergenceStrategy(TradingStrategy):
         # Merge setup specific details
         if best_div_details:
             details.update(best_div_details)
-        
-        details["score"] = round(res.score, 3)
-        details["reasons"] = res.reasons
 
         if res.signal != 'hold':
             planner = ExitPlanner(highs=highs, lows=lows, atr=curr_atr, close_price=close)
