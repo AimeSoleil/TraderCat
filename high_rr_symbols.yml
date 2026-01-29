@@ -9,6 +9,10 @@ symbols: [
   # ==============================================================================
   "SPY",    # S&P 500 [Baseline Reference]
   "QQQ",    # Nasdaq 100 [Tech Growth Reference]
+  "IWM",    # Russell 2000 ETF [Small Cap/Rates Proxy]
+  "TLT",    # 20+ Year Treasury [Rate Volatility/Hedge]
+  "GLD",    # Gold Trust [Inflation/Fear Hedge]
+  "SLV",    # Silver Trust [Industrial Metal/bVol]
 
   # ==============================================================================
   # 2. NEXT-GEN AI HARDWARE & INFRA (Beyond NVDA) - 10 Symbols
