@@ -315,18 +315,21 @@ class DivergenceStrategy(TradingStrategy):
             "low": round(lows[-1], 2),
             "close": round(close, 2),
             "volume": round(vols[-1], 0),
-            "avg_volume": round(avg_vol, 0),
-            "rel_volume": round(rel_vol, 2),
-            "vol_zscore": round(vol_z, 2),
+            f"avg_volume_{self.vol_zscore_window}": round(avg_vol, 0),
+            f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
+            f"vol_zscore_{self.vol_zscore_window}": round(vol_z, 2),
             "bar_change_pct": round(bar_change_pct, 2),
+
+            # Divergence
+            "detected_divergence": best_div_details["div_type"] if best_div_details else "none",
             
             # Trend & Momentum
-            "adx": round(current_adx, 1),
-            "rsi": round(current_rsi, 1),
-            "macd_hist": round(current_macd_hist, 2),
+            f"adx_{self.adx_period}": round(current_adx, 1),
+            f"rsi_{self.rsi_period}": round(current_rsi, 1),
+            f"macd_hist_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}": round(current_macd_hist, 2),
             
             # Volatility
-            "atr": round(curr_atr, 2),
+            f"atr_{self.atr_period}": round(curr_atr, 2),
             "atr_pct": round(atr_pct, 2),
         }
 

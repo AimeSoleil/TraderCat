@@ -47,10 +47,10 @@ class StrategyFactory:
         return [
             BollingerBreakoutStrategy(data_provider=data_provider, **make_bbands_breakout_presets()["gamma"]),
             BBandsReversalStrategy(data_provider=data_provider, **make_bbands_reversal_presets()["fade"]),
-            DivergenceStrategy(data_provider=data_provider, **make_divergence_presets()["trend_continuation"]),
             CandlestickReversalStrategy(data_provider=data_provider, **make_candlestick_reversal_presets()["gamma_dip"]),
-            FibonacciRetracementStrategy(data_provider=data_provider, **make_fibonacci_presets()["trend_pullback"]),
             ChartPatternStrategy(data_provider=data_provider, **make_chart_pattern_presets()["momentum_pattern"]),
+            DivergenceStrategy(data_provider=data_provider, **make_divergence_presets()["trend_continuation"]),
+            FibonacciRetracementStrategy(data_provider=data_provider, **make_fibonacci_presets()["trend_pullback"]),
             MomentumTrendStrategy(data_provider=data_provider, **make_momentum_presets()["swing_momentum"]),
         ]
 

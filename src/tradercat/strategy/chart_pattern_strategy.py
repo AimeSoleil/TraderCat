@@ -45,6 +45,8 @@ class ChartPatternStrategy(TradingStrategy):
         adx_period: int = 14,
         ema_trend_period: int = 200, 
         volatility_lookback_window: int = 20, # <--- [NEW] Configurable
+        vol_zscore_window: int = 20,
+        vol_score_threshold: float = 1.5,
         # Scoring
         score_threshold: float = 0.6,
         weights: Optional[Dict[str, float]] = None,
@@ -56,12 +58,15 @@ class ChartPatternStrategy(TradingStrategy):
         self.adx_period = int(adx_period)
         self.ema_trend_period = int(ema_trend_period)
         self.vol_lookback = int(volatility_lookback_window) # <--- [NEW]
-        self.score_threshold = float(score_threshold)
+        self.vol_zscore_window = int(vol_zscore_window)
+        self.vol_score_threshold = float(vol_score_threshold)
         self.provider = data_provider
 
         self.atr_field = f"ATRr_{self.atr_period}"
         self.adx_field = f"ADX_{self.adx_period}"
         self.ema_trend_field = f"close_EMA_{self.ema_trend_period}"
+
+        self.score_threshold = score_threshold
 
         # Default Weights (Balanced Base)
         default_weights = {
@@ -194,8 +199,7 @@ class ChartPatternStrategy(TradingStrategy):
         # Volume Z-Score Logic: Check for a valid breakout volume
         if self.require_vol:
             # We check a small window around the breakout
-            _, vol_breakout_z = self._check_volume_zscore(vols, 3, 2.0)
-            vol_breakout = (vol_breakout_z is not None and vol_breakout_z > 2.0)
+            vol_breakout, vol_breakout_z = self._check_volume_zscore(vols, self.vol_zscore_window, self.vol_score_threshold)
         else:
             vol_breakout = True # If configured to ignore volume
         
@@ -250,7 +254,7 @@ class ChartPatternStrategy(TradingStrategy):
         # 7. Construct Result
         # Calculate extra technical context for professional analysis
         current_adx = getattr(adx_series[-1], self.adx_field, 0.0) if adx_series else 0.0
-        avg_vol = sum(vols[-20:]) / 20 if len(vols) >= 20 else 0.0 
+        avg_vol = sum(vols[-self.vol_zscore_window:]) / self.vol_zscore_window if len(vols) >= self.vol_zscore_window else 0.0 
         rel_vol = (vols[-1] / avg_vol) if avg_vol > 0 else 0.0
         atr_pct = (curr_atr / close * 100.0) if close > 0 else 0.0
         ema_dist_pct = ((close - curr_ema_trend) / curr_ema_trend * 100.0) if curr_ema_trend > 0 else 0.0
@@ -268,9 +272,9 @@ class ChartPatternStrategy(TradingStrategy):
             "low": round(lows[-1], 2),
             "close": round(close, 2),
             "volume": round(vols[-1], 0),
-            "avg_volume": round(avg_vol, 0),
-            "rel_volume": round(rel_vol, 2),
-            "vol_zscore": round(vol_z_val, 2),
+            f"avg_volume_{self.vol_zscore_window}": round(avg_vol, 0),
+            f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
+            f"vol_zscore_{self.vol_zscore_window}": round(vol_z_val, 2),
 
             # Pattern Geometry & Trade Logic
             "pattern": best_p.name,
@@ -279,15 +283,14 @@ class ChartPatternStrategy(TradingStrategy):
             "reward_risk_ratio": round(rr_ratio, 2),
             
             # Trend Context
-            "adx": round(current_adx, 1),
-            "ema_trend": round(curr_ema_trend, 2),
+            f"adx_{self.adx_period}": round(current_adx, 1),
+            f"ema_trend_{self.ema_trend_period}": round(curr_ema_trend, 2),
             "ema_dist_pct": round(ema_dist_pct, 2),
             "trend_aligned": is_aligned,
             
             # Volatility Environment
-            "atr": round(curr_atr, 4),
+            f"atr_{self.atr_period}": round(curr_atr, 4),
             "atr_pct": round(atr_pct, 2),
-            "vol_breakout_confirmed": vol_breakout
         }
 
         if not patterns:
@@ -342,8 +345,12 @@ def make_chart_pattern_presets() -> Dict[str, Dict[str, Any]]:
             "atr_period": 14,
             "adx_period": 14,
             "volatility_lookback_window": 50, # Quarterly volatility check.
+            "vol_score_threshold": 2.0,     # [CHANGED] Require STRONG institutional confirmation
+            "vol_zscore_window": 60,        # [CHANGED] Use longer window (3 months daily / 12 weeks weekly)
+            # Rationale: Head & Shoulders, Double Bottoms take MONTHS to form.
+            # Breakout volume must be CLEARLY above the base-building phase.
+            # Using 60 bars ensures we're comparing against the ENTIRE consolidation period.
             
-            # --- Weights (Structure Is King) ---
             "weights": {
                 "pattern_quality": 0.25,    # Is it actually a Head & Shoulders?
                 "volume_confirm": 0.20,     # Did institutions buy the breakout?
@@ -372,14 +379,59 @@ def make_chart_pattern_presets() -> Dict[str, Dict[str, Any]]:
             "atr_period": 14,
             "adx_period": 14,
             "volatility_lookback_window": 20,
+            "vol_score_threshold": 1.2,     # [CHANGED] Lower threshold for swing trades
+            "vol_zscore_window": 20,        # [CHANGED] Match volatility_lookback_window
+            # Rationale: Flags/Pennants form in 5-15 bars. We want to detect:
+            # 1. Volume DRYING UP during consolidation (< 0.8 Z-Score)
+            # 2. Volume EXPLOSION on breakout (> 1.2 Z-Score is enough for confirmation)
+            # Using 20-bar window matches the "recent momentum context" perfectly.
+            # This is NOT about institutional accumulation (that's macro).
+            # This is about "retail FOMO + algorithmic breakout buying" kicking in.
             
-            # --- Weights (Explosion Is King) ---
             "weights": {
                 "pattern_quality": 0.20,    # A flag is a flag.
                 "volume_confirm": 0.30,     # Breakout VOLUME is the signal.
                 "trend_alignment": 0.10,    # Less weight on EMA 200, more on flow.
                 "trend_strength": 0.30,     # ADX MUST be high (>25) to buy flags.
                 "volatility_ok": 0.10       # Avoid dead stocks.
+            }
+        },
+        
+        # --- [NEW PRESET] Intraday Scalping (0-7 DTE Options) ---
+        "intraday_breakout": {
+            # ---------------- INTRADAY VOLATILITY EXPLOSION (Scalp / 0-7 DTE) ----------------
+            # Ideal Strategy: 0DTE Calls/Puts, Ratio Spreads
+            # Goal: Catching intraday squeezes, news reactions, or opening range breakouts.
+            # Logic: Speed & Volume are EVERYTHING. Technical patterns are loose.
+            
+            "pivot_left_bars": 2,
+            "pivot_right_bars": 2,          # Micro-pivots (5-15min charts)
+            "price_similarity_threshold": 0.03,
+            "slope_tolerance": 0.20,        # Allow messy structures
+            
+            "require_volume_breakout": True,
+            
+            "score_threshold": 0.55,        # Lower bar (speed matters more than perfection)
+            
+            "ema_trend_period": 20,         # Intraday trend proxy
+            "atr_period": 14,
+            "adx_period": 14,
+            "volatility_lookback_window": 10,
+            
+            # --- [AGGRESSIVE] Volume Parameters for INTRADAY ---
+            "vol_score_threshold": 1.8,     # Must see CLEAR spike (FOMO/News)
+            "vol_zscore_window": 10,        # ONLY compare to last 2 hours (if 5min chart)
+            # Rationale: Intraday volume patterns are VERY different.
+            # Opening 30min has 3x volume of midday.
+            # We need RELATIVE to RECENT context, not daily average.
+            # 1.8 Z-Score on a 10-bar window = "This bar is HOT right now"
+            
+            "weights": {
+                "pattern_quality": 0.10,    # Pattern doesn't matter much intraday
+                "volume_confirm": 0.40,     # Volume is 40% of decision (MOST important)
+                "trend_alignment": 0.05,    # EMA 20 is weak on 5min charts
+                "trend_strength": 0.35,     # ADX spike = momentum explosion
+                "volatility_ok": 0.10
             }
         }
     }

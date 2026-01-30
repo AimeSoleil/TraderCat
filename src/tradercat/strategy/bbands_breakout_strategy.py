@@ -272,32 +272,32 @@ class BollingerBreakoutStrategy(TradingStrategy):
             "low": round(low, 2),
             "close": round(close, 2),
             "volume": round(vols[-1], 0),
-            "avg_volume": round(avg_vol, 0),
+            f"avg_volume_{self.vol_zscore_window}": round(avg_vol, 0),
             "rel_volume": round(rel_vol, 2),
-            "vol_zscore": round(vol_z, 2),
+            f"vol_zscore_{self.vol_zscore_window}": round(vol_z, 2),
             
             # 布林带深度数据
-            "bbu": round(bbu or 0.0, 2),
-            "bbl": round(bbl or 0.0, 2),
-            "bbm": round(bbm or 0.0, 2),
-            "bandwidth": round(curr_bw or 0.0, 2),
-            "bw_pct": round(bw_pct or 0.0, 1),
-            "pct_b": round(pct_b or 0.0, 2),     # Key for breakout triggers
+            f"bbu_{self.bb_period}": round(bbu or 0.0, 2),
+            f"bbl_{self.bb_period}": round(bbl or 0.0, 2),
+            f"bbm_{self.bb_period}": round(bbm or 0.0, 2),
+            f"bandwidth_{self.bb_period}": round(curr_bw or 0.0, 2),
+            f"bw_pct_{self.bb_period}": round(bw_pct or 0.0, 1),
+            f"pct_b_{self.bb_period}": round(pct_b or 0.0, 2),     # Key for breakout triggers
             "squeeze": in_squeeze,
             
             # 趋势与均线分析
-            "ema_fast": round(ema_f or 0.0, 2),
-            "ema_slow": round(ema_s or 0.0, 2),
+            f"ema_fast_{self.ema_fast}": round(ema_f or 0.0, 2),
+            f"ema_slow_{self.ema_slow}": round(ema_s or 0.0, 2),
             "ema_spread_pct": round(ema_spread_pct, 2),
             "ema_extension_pct": round(ema_extension_pct, 2),
             
             # 动量深度数据
-            "adx": round(current_adx, 1),
-            "adx_slope": round(adx_slope, 2),
-            "rsi": round(current_rsi, 1),
+            f"adx_{self.adx_period}": round(current_adx, 1),
+            f"adx_slope_{self.adx_period}": round(adx_slope, 2),
+            f"rsi_{self.rsi_period}": round(current_rsi, 1),
             
             # 波动率与蜡烛形态
-            "atr": round(current_atr, 4),
+            f"atr_{self.atr_period}": round(current_atr, 4),
             "atr_pct": round(atr_pct, 2),
             "candle_conviction": round(candle_conviction, 2),
             "candle_range_atr": round(bar_range / current_atr, 2) if current_atr > 0 else 0.0,
@@ -410,7 +410,7 @@ def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:
 
             # --- Trend Filter (LOOSE) ---
             # We don't care about long term trend as much as immediate momentum impulse
-            "ema_fast": 8,
+            "ema_fast": 9,
             "ema_slow": 21,
 
             # --- Indicators ---
