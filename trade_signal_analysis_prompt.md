@@ -158,21 +158,6 @@ Each strategy adds **additional telemetry** based on its logic. Here's what to e
 - **Squeeze Play:** `squeeze = true` + `bandwidth_20` at multi-week low → Wait for expansion
 - **False Breakout:** `pct_b > 1.0` BUT `vol_zscore < 1.0` + `candle_conviction < 0.3` (Long wick rejection)
 
-**Full Example:**
-
-```json
-{
-  "open": 632.65, "high": 633.67, "low": 618.27, "close": 629.43, "volume": 79650000.0,
-  "avg_volume_20": 53004380.0, "rel_volume_20": 1.5, "vol_zscore_20": 2.05,
-  "bbu_20": 634.32, "bbl_20": 609.98, "bbm_20": 622.15, "bandwidth_20": 3.91,
-  "bw_pct_20": 16.0, "pct_b_20": 0.8, "squeeze": false,
-  "ema_fast_9": 625.92, "ema_slow_21": 622.93, "ema_spread_pct": 0.48, "ema_extension_pct": 1.04,
-  "adx_14": 11.2, "adx_slope_14": -0.16, "rsi_14": 57.0,
-  "atr_14": 8.3432, "atr_pct": 1.33,
-  "candle_conviction": 0.21, "candle_range_atr": 1.85
-}
-```
-
 ---
 
 **2. BollingerReversal Strategy** (`bbands_reversal`):
@@ -198,19 +183,6 @@ Each strategy adds **additional telemetry** based on its logic. Here's what to e
 - **Valid Reversal Short:** `pct_b > 0.9` + `rsi > 70` + `macd_hist` turning negative
 - **Profit Target:** Middle Band (`bbm_20`) is the natural mean reversion target
 - **Pattern Boost:** If `rejection_candle` is "Hammer" or "Engulfing" → Increase confidence
-
-**Full Example:**
-
-```json
-{
-  "open": 632.65, "high": 633.67, "low": 618.27, "close": 629.43, "volume": 79650000.0,
-  "avg_volume_20": 53004380.0, "rel_volume_20": 1.5, "vol_zscore_20": 2.048,
-  "bbu_20": 637.36, "bbl_20": 606.94, "bbm_20": 622.15, "bandwidth_20": 4.89, "pct_b_20": 0.74,
-  "rejection_candle": null, "rejection_bias": null, "midline_reversal": false,
-  "adx_14": 16.0, "rsi_14": 57.6, "macd_hist_12_26_9": 0.986,
-  "atr_14": 8.2649, "atr_pct_14": 1.31
-}
-```
 
 ---
 
@@ -238,19 +210,6 @@ Each strategy adds **additional telemetry** based on its logic. Here's what to e
 - **Trend Alignment Check:** If `trend_direction_ok = false`, reduce position size by 50% (Counter-trend trade)
 - **Volume Confirmation:** `rel_volume_10 > 1.2` required (Pattern needs institutional backing)
 
-**Full Example:**
-
-```json
-{
-  "open": 632.65, "high": 633.67, "low": 618.27, "close": 629.43, "volume": 79650000,
-  "avg_volume_10": 56804230.0, "rel_volume_10": 1.4, "bar_change_pct": -0.51, "vol_zscore_10": 1.38,
-  "detected_pattern": null, "pattern_bias": null,
-  "ema_fast_8": 626.37, "ema_slow_21": 622.95, "adx_14": 16.0, "trend_direction_ok": false,
-  "rsi_14": 57.6, "macd_hist_12_26_9": 0.986,
-  "atr_14": 8.2649, "atr_pct": 1.31
-}
-```
-
 ---
 
 **4. ChartPattern Strategy** (`chart_pattern`):
@@ -276,18 +235,6 @@ Each strategy adds **additional telemetry** based on its logic. Here's what to e
 - **Trend Filter:** If `trend_aligned = false` AND `adx > 20`, reduce size by 50% (Risky counter-trend)
 - **Execution Levels:** Use `stop_price` for technical stop, `target_price` for profit target
 
-**Full Example:**
-
-```json
-{
-  "open": 632.65, "high": 633.67, "low": 618.27, "close": 629.43, "volume": 79650000.0,
-  "avg_volume_20": 53004380.0, "rel_volume_20": 1.5, "vol_zscore_20": 2.05,
-  "pattern": "", "target_price": 0.0, "stop_price": 0.0, "reward_risk_ratio": 1.0,
-  "adx_14": 10.8, "ema_trend_50": 618.37, "ema_dist_pct": 1.79, "trend_aligned": false,
-  "atr_14": 8.3488, "atr_pct": 1.33
-}
-```
-
 ---
 
 **5. Divergence Strategy** (`divergence`):
@@ -305,18 +252,6 @@ Each strategy adds **additional telemetry** based on its logic. Here's what to e
 - **Bullish Divergence (Class A):** Price makes lower low BUT `rsi` makes higher low + `vol_zscore > 1.5` on reversal bar
 - **Bearish Divergence (Class A):** Price makes higher high BUT `rsi` makes lower high + `adx` starts declining
 - **No Volume Confirmation:** If `detected_divergence != "none"` but `vol_zscore < 1.0` → REJECT (Weak signal)
-
-**Full Example:**
-
-```json
-{
-  "open": 632.65, "high": 633.67, "low": 618.27, "close": 629.43, "volume": 79650000.0,
-  "avg_volume_20": 53004380.0, "rel_volume_20": 1.5, "vol_zscore_20": 2.05,
-  "bar_change_pct": -0.51, "detected_divergence": "none",
-  "adx_14": 22.6, "rsi_14": 54.8, "macd_hist_12_26_9": 0.89,
-  "atr_14": 8.43, "atr_pct": 1.34
-}
-```
 
 ---
 
@@ -345,21 +280,6 @@ Each strategy adds **additional telemetry** based on its logic. Here's what to e
 - **Entry Precision:** Wait for price to hold `fib_zone_low` (for longs) with volume confirmation (`vol_zscore > 1.5`)
 - **Target:** Impulse end level (`impulse_end`) is the measured move target
 
-**Full Example:**
-
-```json
-{
-  "open": 632.65, "high": 633.67, "low": 618.27, "close": 629.43, "volume": 79650000.0,
-  "avg_volume_20": 53004380.0, "rel_volume_20": 1.5, "vol_zscore_20": 2.05,
-  "bar_change_pct": -0.51,
-  "impulse_direction": "short", "impulse_start": 630.0, "impulse_end": 607.05,
-  "fib_zone_low": 0.0, "fib_zone_high": 641.48, "in_fib_zone": true,
-  "ema_fast_13": 624.55, "ema_slow_34": 620.3, "adx_14": 22.6, "trend_match": false,
-  "rsi_14": 54.8, "macd_hist_12_26_9": 0.89,
-  "atr_14": 8.43, "atr_pct": 1.34
-}
-```
-
 ---
 
 **7. MomentumTrend Strategy** (`momentum`):
@@ -387,20 +307,6 @@ Each strategy adds **additional telemetry** based on its logic. Here's what to e
 - **Counter-Trend Warning:** If `daily_trend_up ≠ ht_trend_up`, reduce position size by 50%
 - **Momentum Strength:** `is_adx_strong = true` + `ema_spread_pct > 1.0%` = High conviction trend
 - **Momentum Weakness:** `is_adx_strong = false` + `ema_spread_pct < 0.5%` = Choppy (REJECT breakouts)
-
-**Full Example:**
-
-```json
-{
-  "open": 632.65, "high": 633.67, "low": 618.27, "close": 629.43, "volume": 79650000.0,
-  "avg_volume_20": 53004380.0, "rel_volume_20": 1.5, "vol_zscore_20": 2.05,
-  "bar_change_pct": -0.51,
-  "mom_score_risk_adj": -0.54, "adx_14": 10.8, "is_adx_strong": false,
-  "ema_fast_10": 625.52, "ema_slow_30": 621.5, "ema_spread_pct": 0.65, "daily_trend_up": true,
-  "ht_fast_13": 615.396, "ht_slow_26": 601.131, "ht_ema_spread_pct": 2.37, "ht_trend_up": true,
-  "atr_14": 8.35, "atr_pct": 1.33
-}
-```
 
 ---
 
