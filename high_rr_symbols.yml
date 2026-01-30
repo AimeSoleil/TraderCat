@@ -1,19 +1,13 @@
 # TraderCat "Alpha Seekers" Universe
 # Strategy: High Risk:Reward / Asymmetric Upside / Future Sector Leaders
-# Count: Exactly 101 Symbols
 # Note: SPY/QQQ retained as benchmarks; all other duplicates with symbols.yml removed.
 
 symbols: [
   # ==============================================================================
-  # 1. CORE ANCHORS (The Market) - 2 Symbols
+  # 1. CORE ANCHORS (The Market) - 7 Symbols
   # ==============================================================================
   "SPY",    # S&P 500 [Baseline Reference]
   "QQQ",    # Nasdaq 100 [Tech Growth Reference]
-  "DIA",    # Dow Jones ETF [Blue Chip/Value]
-  "IWM",    # Russell 2000 ETF [Small Cap/Rates Proxy]
-  "TLT",    # 20+ Year Treasury [Rate Volatility/Hedge]
-  "GLD",    # Gold Trust [Inflation/Fear Hedge]
-  "SLV",    # Silver Trust [Industrial Metal/bVol]
 
   # ==============================================================================
   # 2. NEXT-GEN AI HARDWARE & INFRA (Beyond NVDA) - 10 Symbols
@@ -42,7 +36,7 @@ symbols: [
   "QLYS",   # Qualys [Compliance & Security Cloud]
 
   # ==============================================================================
-  # 4. SAAS & ENTERPRISE AI (Application Layer) - 12 Symbols
+  # 4. SAAS & ENTERPRISE AI (Application Layer) - 13 Symbols
   # ==============================================================================
   "GTLB",   # GitLab [AI DevSecOps Platform]
   "MNDY",   # Monday.com [Work OS / No-Code Leader]
@@ -52,10 +46,11 @@ symbols: [
   "PCOR",   # Procore [Construction Tech Monopoly]
   "TOST",   # Toast [Restaurant Tech Ecosystem]
   "DUOL",   # Duolingo [EdTech AI Leader]
-  "HCP",    # HashiCorp [Multi-Cloud Infrastructure Automation]
+  "DDOG",   # Datadog [Observability & Security Platform]
   "ESTC",   # Elastic [Search AI / Vector DB]
   "DT",     # Dynatrace [Software Intelligence]
   "BILL",   # Bill Holdings [SMB Finance Automation]
+  "FIG",    # Figma Holdings [Design Collaboration Platform]
 
   # ==============================================================================
   # 5. FINTECH & DEFI (Future Finance) - 10 Symbols
@@ -83,7 +78,7 @@ symbols: [
   "TXG",    # 10x Genomics [Single Cell Analysis]
   "PACB",   # PacBio [Long-Read Sequencing]
   "IONS",   # Ionis [RNA-targeted Therapeutics]
-  "ITCI",   # Intra-Cellular [CNS/Neuropsychiatry]
+  "ALNY",   # Alnylam [RNAi Therapeutics Leader]
 
   # ==============================================================================
   # 7. SPACE ECONOMY & QUANTUM (Deep Tech) - 8 Symbols
@@ -148,7 +143,7 @@ symbols: [
   "DKNG",   # DraftKings [Digital Sports Betting Leader]
 
   # ==============================================================================
-  # 12. SPECIAL SITUATIONS (Volatility/Turnaround) - 6 Symbols
+  # 12. SPECIAL SITUATIONS (Volatility/Turnaround) - 7 Symbols
   # ==============================================================================
   "RDDT",   # Reddit [Data Licensing/AI Training]
   "DJT",    # Trump Media [Pure Meme/Volatility Play]
@@ -156,5 +151,6 @@ symbols: [
   "BBAI",   # BigBear.ai [Defense AI Speculation]
   "SOUN",   # SoundHound [Voice AI]
   "AI",     # C3.ai [AI Pure Play Volatility]
-  "FFAI"    # Farady Future AI [Autonomous Tech Speculation] Personal Favorite
+  "FFAI",    # Farady Future AI [Autonomous Tech Speculation] Personal Favorite
+  "KULR"    # KULR Technology [Thermal Management for EVs and AI
 ]
