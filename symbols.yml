@@ -10,8 +10,6 @@ symbols: [
   "DIA",    # Dow Jones ETF [Blue Chip/Value]
   "IWM",    # Russell 2000 ETF [Small Cap/Rates Proxy]
   "TLT",    # 20+ Year Treasury [Rate Volatility/Hedge]
-  "GLD",    # Gold Trust [Inflation/Fear Hedge]
-  "SLV",    # Silver Trust [Industrial Metal/bVol]
 
   # NEW: Sector ETF Validators (for Phase 0.G Cross-Check)
   "XLK",    # Technology Select Sector [Validates NVDA/AAPL/MSFT/AMD]
@@ -82,14 +80,13 @@ symbols: [
   "MARA",   # Marathon Digital [Bitcoin Mining Leader]
 
   # ==============================================================================
-  # TIER 6: CONSUMER DISCRETIONARY (Earnings Movers) - 12 Symbols
+  # TIER 6: CONSUMER DISCRETIONARY (Earnings Movers) - 11 Symbols
   # ==============================================================================
   "NFLX",   # Netflix [Streaming Dominance]
   "DIS",    # Disney [Content/Parks Turnaround]
   "UBER",   # Uber [Mobility Network Effect]
   "ABNB",   # Airbnb [Travel Platform]
   "BKNG",   # Booking Holdings [Online Travel OTA]
-  "CMG",    # Chipotle [Restaurant Margins]
   "SBUX",   # Starbucks [Brand Turnaround]
   "NKE",    # Nike [Consumer Cyclical]
   "LULU",   # Lululemon [Athleisure]
@@ -138,13 +135,12 @@ symbols: [
   "ALAB",   # Astera Labs [AI Connectivity]
 
   # ==============================================================================
-  # TIER 10: DEFENSIVE QUALITY (Safety/Low Vol/Theta) - 12 Symbols
+  # TIER 10: DEFENSIVE QUALITY (Safety/Low Vol/Theta) - 11 symbols
   # ==============================================================================
   "UNH",    # UnitedHealth [Managed Care/Insurance]
   "JNJ",    # Johnson & Johnson [AAA Rated Healthcare]
   "PG",     # Procter & Gamble [Consumer Staples]
   "KO",     # Coca-Cola [Dividend King]
-  "PEP",    # PepsiCo [Snacks & Beverage]
   "MRK",    # Merck [Keytruda Patent Cliff]
   "ABBV",   # AbbVie [Immunology/Yield]
   "MCD",    # McDonald's [Franchise Model]
