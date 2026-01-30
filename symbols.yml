@@ -1,6 +1,5 @@
 # TraderCat Strategy Universe (40-Year Veteran Edition)
 # Optimized for ALGORITHMIC EXECUTION
-# Count: Exactly 100 Symbols
 
 symbols: [
   # ==============================================================================
@@ -8,6 +7,7 @@ symbols: [
   # ==============================================================================
   "SPY",    # S&P 500 ETF [The Sun of the Solar System]
   "QQQ",    # Nasdaq 100 ETF [Tech Beta]
+  "DIA",    # Dow Jones ETF [Blue Chip/Value]
   "IWM",    # Russell 2000 ETF [Small Cap/Rates Proxy]
   "TLT",    # 20+ Year Treasury [Rate Volatility/Hedge]
   "GLD",    # Gold Trust [Inflation/Fear Hedge]
