@@ -13,6 +13,16 @@ symbols: [
   "GLD",    # Gold Trust [Inflation/Fear Hedge]
   "SLV",    # Silver Trust [Industrial Metal/bVol]
 
+  # NEW: Sector ETF Validators (for Phase 0.G Cross-Check)
+  "XLK",    # Technology Select Sector [Validates NVDA/AAPL/MSFT/AMD]
+  "XLF",    # Financial Select Sector [Validates JPM/GS]
+  "XLY",    # Consumer Discretionary [Validates TSLA/NFLX/AMZN]
+  "XLV",    # Health Care Select Sector [Validates LLY/VRTX]
+  "XLE",    # Energy Select Sector [Validates Energy stocks if added]
+  "XLI",    # Industrial Select Sector [Validates CAT if added]
+  "XLP",    # Consumer Staples [Validates WMT/COST/PG]
+  "VIX",    # CBOE Volatility Index [For Phase 1.E VIX Dependency Check]
+
   # ==============================================================================
   # TIER 2: MAGNIFICENT 7 & MEGA TECH (Institutional Flow) - 8 Symbols
   # ==============================================================================
