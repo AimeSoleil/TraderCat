@@ -278,30 +278,30 @@ class MomentumTrendStrategy(TradingStrategy):
             "low": round(lows[-1], 2),
             "close": round(curr_close, 2),
             "volume": round(vols[-1], 0),
-            "avg_volume": round(avg_vol, 0),
-            "rel_volume": round(rel_vol, 2),
-            "vol_zscore": round(vol_z, 2),
+            f"avg_volume_{self.vol_zscore_window}": round(avg_vol, 0),
+            f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
+            f"vol_zscore_{self.vol_zscore_window}": round(vol_z, 2),
             "bar_change_pct": round(bar_change_pct, 2),
             
             # Momentum Factors
             "mom_score_risk_adj": round(mom_score, 2),
-            "adx": round(current_adx_val, 1),
+            f"adx_{self.adx_period}": round(current_adx_val, 1),
             "is_adx_strong": is_adx_strong,
             
             # Daily Trend Structure
-            "ema_fast": round(curr_ema_fast, 2),
-            "ema_slow": round(curr_ema_slow, 2),
+            f"ema_fast_{self.ema_fast}": round(curr_ema_fast, 2),
+            f"ema_slow_{self.ema_slow}": round(curr_ema_slow, 2),
             "ema_spread_pct": round(ema_spread_pct, 2),
             "daily_trend_up": trend_day_up,
             
             # Higher Timeframe (Weekly) Structure
-            "ht_fast": round(ht_fast, 3) if ht_fast else None,
-            "ht_slow": round(ht_slow, 3) if ht_slow else None,
+            f"ht_fast_{self.ht_ema_fast}": round(ht_fast, 3) if ht_fast else None,
+            f"ht_slow_{self.ht_ema_slow}": round(ht_slow, 3) if ht_slow else None,
             "ht_ema_spread_pct": round(ht_ema_spread_pct, 2),
             "ht_trend_up": trend_ht_up,
 
             # Volatility
-            "atr": round(current_atr_val, 2),
+            f"atr_{self.atr_period}": round(current_atr_val, 2),
             "atr_pct": round(atr_pct, 2)
         }
 

@@ -343,9 +343,9 @@ class FibonacciRetracementStrategy(TradingStrategy):
             "low": round(lows[-1], 2),
             "close": round(curr_close, 2),
             "volume": round(vols[-1], 0),
-            "avg_volume": round(avg_vol, 0),
-            "rel_volume": round(rel_vol, 2),
-            "vol_zscore": round(vol_z if vol_z is not None else 0.0, 2),
+            f"avg_volume_{self.vol_zscore_window}": round(avg_vol, 0),
+            f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
+            f"vol_zscore_{self.vol_zscore_window}": round(vol_z if vol_z is not None else 0.0, 2),
             "bar_change_pct": round(bar_change_pct, 2),
 
             # 斐波那契结构数据
@@ -354,17 +354,18 @@ class FibonacciRetracementStrategy(TradingStrategy):
             "impulse_end": round(impulse_end_val, 2),
             "fib_zone_low": round(zone_low, 2),
             "fib_zone_high": round(zone_high, 2),
+            "in_fib_zone": in_zone,
             
             # 趋势指标
-            "ema_fast": round(ema_fast_val, 2),
-            "ema_slow": round(ema_slow_val, 2),
-            "adx": round(current_adx_val, 1),
+            f"ema_fast_{self.ema_fast}": round(ema_fast_val, 2),
+            f"ema_slow_{self.ema_slow}": round(ema_slow_val, 2),
+            f"adx_{self.adx_period}": round(current_adx_val, 1),
             "trend_match": trend_match,
 
             # 动量与波动率
-            "rsi": round(curr_rsi, 1),
-            "macd_hist": round(current_macd_hist, 2),
-            "atr": round(current_atr_val, 2),
+            f"rsi_{self.rsi_period}": round(curr_rsi, 1),
+            f"macd_hist_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}": round(current_macd_hist, 2),
+            f"atr_{self.atr_period}": round(current_atr_val, 2),
             "atr_pct": round(atr_pct, 2)
         }
 

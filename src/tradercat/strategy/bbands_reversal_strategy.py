@@ -285,25 +285,30 @@ class BBandsReversalStrategy(TradingStrategy):
             "low": round(low_curr, 2),
             "close": round(close, 2),
             "volume": round(vols[-1], 0),
-            "avg_volume": round(avg_vol, 0),
-            "rel_volume": round(rel_vol, 2),
-            "vol_zscore": round(volume_z, 3) if volume_z is not None else 0,
+            f"avg_volume_{self.vol_zscore_window}": round(avg_vol, 0),
+            f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
+            f"vol_zscore_{self.vol_zscore_window}": round(volume_z, 3) if volume_z is not None else 0,
             
             # 布林带详情
-            "bbu": round(u_curr, 2),
-            "bbl": round(l_curr, 2),
-            "bbm": round(m_curr, 2),
-            "bandwidth": round(bw, 2),
-            "pct_b": round(pct_b, 2),
+            f"bbu_{self.bb_period}": round(u_curr, 2),
+            f"bbl_{self.bb_period}": round(l_curr, 2),
+            f"bbm_{self.bb_period}": round(m_curr, 2),
+            f"bandwidth_{self.bb_period}": round(bw, 2),
+            f"pct_b_{self.bb_period}": round(pct_b, 2),
+
+            # 拒绝蜡烛
+            "rejection_candle": rejection_res.name,
+            "rejection_bias": rejection_res.bias,
+            "midline_reversal": middle_line_reversal,
             
             # 趋势与动量指标
-            "adx": round(current_adx_val, 1),
-            "rsi": round(current_rsi, 1),
-            "macd_hist": round(current_macd_hist, 4),
+            f"adx_{self.adx_period}": round(current_adx_val, 1),
+            f"rsi_{self.rsi_period}": round(current_rsi, 1),
+            f"macd_hist_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}": round(current_macd_hist, 4),
             
             # 波动率
-            "atr": round(current_atr_val, 4),
-            "atr_pct": round((current_atr_val / close * 100), 2) if close > 0 else 0
+            f"atr_{self.atr_period}": round(current_atr_val, 4),
+            f"atr_pct_{self.atr_period}": round((current_atr_val / close * 100), 2) if close > 0 else 0
         }
 
         # --- SCORING ENGINE ---

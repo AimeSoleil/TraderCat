@@ -307,24 +307,27 @@ class CandlestickReversalStrategy(TradingStrategy):
             "low": round(lows[-1], 2),
             "close": round(closes[-1], 2),
             "volume": round(vols[-1], 0),
-            "avg_volume": round(avg_vol, 0),
-            "rel_volume": round(rel_vol, 2),
+            f"avg_volume_{self.vol_zscore_window}": round(avg_vol, 0),
+            f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
             "bar_change_pct": round(bar_change_pct, 2),
-            "vol_zscore": round(volume_z, 2) if volume_z is not None else None,
+            f"vol_zscore_{self.vol_zscore_window}": round(volume_z, 2) if volume_z is not None else None,
+
+            # 识别到的形态
+            "detected_pattern": pattern,
+            "pattern_bias": effective_bias,
 
             # 趋势指标
-            "ema_fast": round(current_ema_fast_val, 2),
-            "ema_slow": round(current_ema_slow_val, 2),
-            "adx": round(current_adx_val, 1),
+            f"ema_fast_{self.ema_fast}": round(current_ema_fast_val, 2),
+            f"ema_slow_{self.ema_slow}": round(current_ema_slow_val, 2),
+            f"adx_{self.adx_period}": round(current_adx_val, 1),
             "trend_direction_ok": trend_direction_ok,
             
             # 动量指标
-            "rsi": round(current_rsi_val, 1),
-            "macd_hist": round(current_macd_hist, 4),
-            "momentum_ok": mom_ok,
+            f"rsi_{self.rsi_period}": round(current_rsi_val, 1),
+            f"macd_hist_{self.macd_params['fast']}_{self.macd_params['slow']}_{self.macd_params['signal']}": round(current_macd_hist, 4),
             
             # 波动率
-            "atr": round(current_atr_val, 4),
+            f"atr_{self.atr_period}": round(current_atr_val, 4),
             "atr_pct": round(atr_pct, 2)
         }
             
