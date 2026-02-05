@@ -8,6 +8,9 @@ symbols: [
   # ==============================================================================
   "SPY",    # S&P 500 [Baseline Reference]
   "QQQ",    # Nasdaq 100 [Tech Growth Reference]
+  "DIA",    # Dow Jones ETF [Blue Chip/Value]
+  "IWM",    # Russell 2000 ETF [Small Cap/Rates Proxy]
+  "TLT",    # 20+ Year Treasury [Rate Volatility/Hedge]
 
   # ==============================================================================
   # 2. NEXT-GEN AI HARDWARE & INFRA (Beyond NVDA) - 10 Symbols
@@ -151,6 +154,7 @@ symbols: [
   "BBAI",   # BigBear.ai [Defense AI Speculation]
   "SOUN",   # SoundHound [Voice AI]
   "AI",     # C3.ai [AI Pure Play Volatility]
-  "FFAI",    # Farady Future AI [Autonomous Tech Speculation] Personal Favorite
-  "KULR"    # KULR Technology [Thermal Management for EVs and AI
+  "FFAI",   # Farady Future AI [Autonomous Tech Speculation] Personal Favorite
+  "KULR",   # KULR Technology [Thermal Management for EVs and AI]
+  "GME"     # GameStop [Meme Stock / Retail Investor Sentiment Play]
 ]
