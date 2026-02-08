@@ -10,5 +10,5 @@ class MarketDataProvider(ABC):
         pass
     
     @abstractmethod
-    def get_option_chains(self, symbol: str):
+    def get_option_metadata(self, symbol: str):
         pass

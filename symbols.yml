@@ -10,6 +10,7 @@ symbols: [
   "DIA",    # Dow Jones ETF [Blue Chip/Value]
   "IWM",    # Russell 2000 ETF [Small Cap/Rates Proxy]
   "TLT",    # 20+ Year Treasury [Rate Volatility/Hedge]
+  "VIX",    # CBOE Volatility Index [Fear Gauge/Options Sentiment],
 
   # NEW: Sector ETF Validators (for Phase 0.G Cross-Check)
   "XLK",    # Technology Select Sector [Validates NVDA/AAPL/MSFT/AMD]
@@ -19,7 +20,6 @@ symbols: [
   "XLE",    # Energy Select Sector [Validates Energy stocks if added]
   "XLI",    # Industrial Select Sector [Validates CAT if added]
   "XLP",    # Consumer Staples [Validates WMT/COST/PG]
-  "VIX",    # CBOE Volatility Index [For Phase 1.E VIX Dependency Check]
 
   # ==============================================================================
   # TIER 2: MAGNIFICENT 7 & MEGA TECH (Institutional Flow) - 8 Symbols

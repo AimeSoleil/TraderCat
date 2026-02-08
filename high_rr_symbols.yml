@@ -11,6 +11,7 @@ symbols: [
   "DIA",    # Dow Jones ETF [Blue Chip/Value]
   "IWM",    # Russell 2000 ETF [Small Cap/Rates Proxy]
   "TLT",    # 20+ Year Treasury [Rate Volatility/Hedge]
+  "VIX",    # CBOE Volatility Index [Fear Gauge/Options Sentiment],
 
   # ==============================================================================
   # 2. NEXT-GEN AI HARDWARE & INFRA (Beyond NVDA) - 10 Symbols
