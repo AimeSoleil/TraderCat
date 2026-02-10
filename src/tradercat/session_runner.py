@@ -113,10 +113,12 @@ class SessionRunner:
             self.drive_storage.upload_file(filename)
 
         # Save actionable CSV: keep symbols that have at least one non-hold signal
+        # Always keep SPY and QQQ regardless of signal status
+        always_keep = {"SPY", "QQQ"}
         all_hold_symbols = df.groupby("Symbol").filter(
             lambda g: (g["Signal"].str.lower() == "hold").all()
         )["Symbol"].unique()
-        actionable_df = df[~df["Symbol"].isin(all_hold_symbols)]
+        actionable_df = df[~df["Symbol"].isin(all_hold_symbols) | df["Symbol"].isin(always_keep)]
 
         if not actionable_df.empty:
             actionable_filename = f"results/trade_signals_actionable_{scope}_{timestamp}.csv"
