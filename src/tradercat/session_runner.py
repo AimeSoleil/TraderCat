@@ -101,13 +101,32 @@ class SessionRunner:
             return
 
         df = pd.DataFrame(rows)
-        filename = f"results/trade_signals_{scope}_{datetime.now().strftime('%Y%m%d%H%M')}.csv"
+        timestamp = datetime.now().strftime('%Y%m%d%H%M')
         os.makedirs("results", exist_ok=True)
+
+        # Save full signals CSV
+        filename = f"results/trade_signals_{scope}_{timestamp}.csv"
         df.to_csv(filename, index=False, encoding='utf-8-sig')
         logger.info(f"📄 Signals CSV created: {filename}")
-        
+
         if self.drive_storage:
             self.drive_storage.upload_file(filename)
+
+        # Save actionable CSV: keep symbols that have at least one non-hold signal
+        all_hold_symbols = df.groupby("Symbol").filter(
+            lambda g: (g["Signal"].str.lower() == "hold").all()
+        )["Symbol"].unique()
+        actionable_df = df[~df["Symbol"].isin(all_hold_symbols)]
+
+        if not actionable_df.empty:
+            actionable_filename = f"results/trade_signals_actionable_{scope}_{timestamp}.csv"
+            actionable_df.to_csv(actionable_filename, index=False, encoding='utf-8-sig')
+            logger.info(f"📄 Actionable CSV created: {actionable_filename} ({actionable_df['Symbol'].nunique()} symbols)")
+
+            if self.drive_storage:
+                self.drive_storage.upload_file(actionable_filename)
+        else:
+            logger.info("All symbols are hold-only; skipping actionable CSV export.")
 
     async def _send_discord_summary(self, all_signals: List[Dict]):
         """Internal helper: Formats and sends a summary to Discord."""
