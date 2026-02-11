@@ -32,11 +32,24 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize database: {e}")
         raise
     
-    # TODO: Start pipeline scheduler if configured
+    # Start pipeline scheduler
+    try:
+        from tradercat.pipeline.scheduler import start_scheduler
+        start_scheduler()
+        logger.info("Pipeline scheduler started")
+    except Exception as e:
+        logger.warning(f"Failed to start pipeline scheduler: {e}")
     
     yield
     
+    # Shutdown
     logger.info("Shutting down TraderCat API...")
+    try:
+        from tradercat.pipeline.scheduler import stop_scheduler
+        stop_scheduler()
+        logger.info("Pipeline scheduler stopped")
+    except Exception:
+        pass
 
 
 # Create FastAPI application

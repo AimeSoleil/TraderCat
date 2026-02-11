@@ -48,6 +48,7 @@ async def trigger_pipeline(
     Admin-only endpoint.
     """
     from datetime import datetime
+    from tradercat.pipeline.orchestrator import PipelineOrchestrator
     
     target_date = run_date or datetime.utcnow().date()
     
@@ -72,43 +73,27 @@ async def trigger_pipeline(
                 run_date=existing_run.run_date,
                 status=existing_run.status.value
             )
-        else:
-            # Failed or pending - reset and re-run
-            existing_run.status = PipelineStatus.PENDING
-            existing_run.step = None
-            existing_run.error_log = None
-            await db.commit()
-            
-            # TODO: Trigger actual pipeline execution
-            # This will be implemented in pipeline/orchestrator.py
-            
-            return PipelineTriggerResponse(
-                message="Pipeline re-triggered for this date",
-                run_id=str(existing_run.id),
-                run_date=existing_run.run_date,
-                status=existing_run.status.value
-            )
     
-    # Create new pipeline run
-    from uuid import uuid4
-    new_run = PipelineRun(
-        id=uuid4(),
-        run_date=target_date,
-        status=PipelineStatus.PENDING,
-    )
-    db.add(new_run)
-    await db.commit()
-    await db.refresh(new_run)
+    # Trigger pipeline execution in background
+    orchestrator = PipelineOrchestrator()
+    import asyncio
+    asyncio.create_task(orchestrator.run_pipeline(target_date))
     
-    # TODO: Trigger actual pipeline execution
-    # This will be implemented in pipeline/orchestrator.py
-    
-    return PipelineTriggerResponse(
-        message="Pipeline triggered successfully",
-        run_id=str(new_run.id),
-        run_date=new_run.run_date,
-        status=new_run.status.value
-    )
+    # Return immediately
+    if existing_run:
+        return PipelineTriggerResponse(
+            message="Pipeline re-triggered for this date",
+            run_id=str(existing_run.id),
+            run_date=existing_run.run_date,
+            status="pending"
+        )
+    else:
+        return PipelineTriggerResponse(
+            message="Pipeline triggered successfully",
+            run_id="pending",
+            run_date=target_date,
+            status="pending"
+        )
 
 
 @router.get("/status", response_model=PipelineRunResponse)
