@@ -27,9 +27,33 @@ services:
       DATABASE_URL: postgresql+asyncpg://tradercat:tradercat@postgres:5432/tradercat
       LOG_FORMAT: json
       LOG_LEVEL: INFO
+      RUN_MODE: api-only
       TRADERCAT_AI_TOKEN: ${TRADERCAT_AI_TOKEN:-}
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  pipeline-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.pipeline
+    container_name: tradercat-pipeline
+    environment:
+      DATABASE_URL: postgresql+asyncpg://tradercat:tradercat@postgres:5432/tradercat
+      LOG_FORMAT: json
+      LOG_LEVEL: INFO
+      RUN_MODE: scheduler
+      PIPELINE_SCHEDULE_HOUR: ${PIPELINE_SCHEDULE_HOUR:-20}
+      PIPELINE_TIMEZONE: ${PIPELINE_TIMEZONE:-America/New_York}
+      PIPELINE_MAX_CONCURRENCY: ${PIPELINE_MAX_CONCURRENCY:-5}
+      TRADERCAT_AI_TOKEN: ${TRADERCAT_AI_TOKEN:-}
+      DEFAULT_LLM_MODEL: ${DEFAULT_LLM_MODEL:-gpt-4o}
+      DEFAULT_PERSONA: ${DEFAULT_PERSONA:-wyckoff}
     depends_on:
       postgres:
         condition: service_healthy

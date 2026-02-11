@@ -22,6 +22,7 @@ logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_js
 async def lifespan(app: FastAPI):
     """Lifecycle manager for FastAPI app."""
     logger.info("Starting TraderCat API...")
+    logger.info(f"Run mode: {settings.run_mode}")
     
     # Initialize database (create tables if they don't exist)
     # Note: In production, use Alembic migrations instead
@@ -32,24 +33,30 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize database: {e}")
         raise
     
-    # Start pipeline scheduler
-    try:
-        from tradercat.pipeline.scheduler import start_scheduler
-        start_scheduler()
-        logger.info("Pipeline scheduler started")
-    except Exception as e:
-        logger.warning(f"Failed to start pipeline scheduler: {e}")
+    # Conditionally start pipeline scheduler based on RUN_MODE
+    scheduler_started = False
+    if settings.run_mode in ["combined", "scheduler"]:
+        try:
+            from tradercat.pipeline.scheduler import start_scheduler
+            start_scheduler()
+            logger.info(f"Pipeline scheduler started (mode: {settings.run_mode})")
+            scheduler_started = True
+        except Exception as e:
+            logger.warning(f"Failed to start pipeline scheduler: {e}")
+    else:
+        logger.info(f"Pipeline scheduler disabled (mode: {settings.run_mode})")
     
     yield
     
     # Shutdown
     logger.info("Shutting down TraderCat API...")
-    try:
-        from tradercat.pipeline.scheduler import stop_scheduler
-        stop_scheduler()
-        logger.info("Pipeline scheduler stopped")
-    except Exception:
-        pass
+    if scheduler_started:
+        try:
+            from tradercat.pipeline.scheduler import stop_scheduler
+            stop_scheduler()
+            logger.info("Pipeline scheduler stopped")
+        except Exception:
+            pass
 
 
 # Create FastAPI application

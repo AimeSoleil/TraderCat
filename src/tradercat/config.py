@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     log_format: str = Field(default="json", description="Log format: json or text")
     log_level: str = Field(default="INFO", description="Logging level")
     
+    # Run Mode
+    run_mode: str = Field(
+        default="combined",
+        description="Deployment mode: 'api-only' (API without scheduler), 'scheduler' (pipeline only), 'combined' (both)"
+    )
+    
     # Global symbols (predefined for signal generation)
     global_symbols: list[str] = Field(
         default=["SPY", "QQQ", "DIA", "IWM", "TLT", "XLK", "XLF", "XLY", "XLV", "XLE", "XLI", "XLP"],
