@@ -92,6 +92,11 @@ Admin endpoints require admin-level API keys.
         description="Predefined global symbols for signal generation"
     )
     
+    # Admin Seeding (for initial migration)
+    admin_username: str = Field(default="admin", description="Initial admin username for seeding")
+    admin_email: str = Field(default="admin@tradercat.local", description="Initial admin email for seeding")
+    admin_max_symbols: int = Field(default=100, description="Initial admin max symbols limit")
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
