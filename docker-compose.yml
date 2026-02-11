@@ -29,6 +29,10 @@ services:
       LOG_LEVEL: INFO
       RUN_MODE: api-only
       TRADERCAT_AI_TOKEN: ${TRADERCAT_AI_TOKEN:-}
+      # Admin user seed configuration (used during initial migration)
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@tradercat.local}
+      ADMIN_MAX_SYMBOLS: ${ADMIN_MAX_SYMBOLS:-100}
     ports:
       - "8000:8000"
     depends_on:

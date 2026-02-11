@@ -144,20 +144,53 @@ The API will be available at `http://localhost:8000`
 
 ---
 
-## �� API Authentication
+## 🔐 API Authentication
 
 All endpoints (except `/api/admin/system/health`) require API key authentication via the `X-API-Key` header.
 
-### Creating Users & API Keys
+### Initial Admin Setup
 
-Only admins can create users. To bootstrap the first admin:
+When you run database migrations for the first time, an initial admin user is automatically created:
 
 ```bash
-# Use alembic or direct SQL to create initial admin user
-# Then generate an API key
+alembic upgrade head
 ```
 
-Or create a migration script to seed the initial admin.
+This will:
+1. Create all database tables
+2. Seed an initial admin user with credentials:
+   - Username: `admin` (configurable via `ADMIN_USERNAME`)
+   - Email: `admin@tradercat.local` (configurable via `ADMIN_EMAIL`)
+   - Role: `admin`
+3. Generate and display an API key (shown only once)
+
+**Important**: Save the API key displayed during migration! It cannot be retrieved later.
+
+**Customizing Admin User**: Set environment variables before running migrations:
+```bash
+export ADMIN_USERNAME=myadmin
+export ADMIN_EMAIL=admin@mycompany.com
+export ADMIN_MAX_SYMBOLS=200
+alembic upgrade head
+```
+
+### Creating Additional Users
+
+Only admins can create users via the API:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/users \
+  -H "X-API-Key: your_admin_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "trader1",
+    "email": "trader1@example.com",
+    "role": "user",
+    "max_symbols": 50
+  }'
+```
+
+The response will include a generated API key for the new user.
 
 ---
 
