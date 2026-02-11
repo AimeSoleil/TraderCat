@@ -233,21 +233,40 @@ pytest --cov=tradercat
 
 ## 🐳 Docker
 
-### Build Image
+### Standalone Pipeline Deployment
+
+TraderCat now supports **separate API and pipeline services** for production deployments. See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed guide.
+
+**Quick Start** (separate services):
 ```bash
-docker build -t tradercat:latest .
+docker-compose up -d  # Starts API, Pipeline Worker, and PostgreSQL
 ```
 
-### Run with Docker Compose
-```bash
-docker-compose up -d
+**Architecture**:
+- **API Service** (port 8000): REST API only, no scheduler
+- **Pipeline Worker**: Dedicated scheduler, runs at 8 PM ET
+- **PostgreSQL**: Shared database
 
+**Deployment Modes** (via `RUN_MODE` env var):
+- `api-only`: API without scheduler (default for API service)
+- `scheduler`: Pipeline worker only (default for pipeline worker)
+- `combined`: Legacy mode, both in one container
+
+### Basic Docker Commands
+
+```bash
 # View logs
 docker-compose logs -f api
+docker-compose logs -f pipeline-worker
 
-# Stop
+# Check status
+docker-compose ps
+
+# Stop services
 docker-compose down
 ```
+
+For advanced deployment options (Kubernetes, scaling, monitoring), see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ---
 
@@ -258,6 +277,7 @@ Key environment variables (see `.env.example`):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATABASE_URL` | postgresql+asyncpg://... | PostgreSQL connection string |
+| `RUN_MODE` | combined | Deployment mode: `api-only`, `scheduler`, or `combined` |
 | `PIPELINE_SCHEDULE_HOUR` | 20 | Hour to run pipeline (24h format) |
 | `PIPELINE_TIMEZONE` | America/New_York | Timezone for scheduling |
 | `PIPELINE_MAX_CONCURRENCY` | 5 | Max concurrent workers |
