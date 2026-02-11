@@ -1,6 +1,5 @@
 from typing import Any, Dict, List, Literal, Optional
 
-from regex import R
 
 class ExitPlanner:
     def __init__(
