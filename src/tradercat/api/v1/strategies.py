@@ -13,14 +13,14 @@ from tradercat.schemas.strategy import (
 )
 
 # Import strategy preset functions
-from tradercat.strategy.bbands_breakout_strategy import make_bbands_breakout_presets
-from tradercat.strategy.bbands_reversal_strategy import make_bbands_reversal_presets
-from tradercat.strategy.candlestick_reversal_strategy import make_candlestick_reversal_presets
-from tradercat.strategy.chart_pattern_strategy import make_chart_pattern_presets
-from tradercat.strategy.divergence_strategy import make_divergence_presets
-from tradercat.strategy.fibonacci_retracement_strategy import make_fibonacci_presets
-from tradercat.strategy.momentum_strategy import make_momentum_presets
-from tradercat.strategy.sector_rotation_strategy import make_sector_rotation_presets
+from tradercat.core.strategy.bbands_breakout_strategy import make_bbands_breakout_presets
+from tradercat.core.strategy.bbands_reversal_strategy import make_bbands_reversal_presets
+from tradercat.core.strategy.candlestick_reversal_strategy import make_candlestick_reversal_presets
+from tradercat.core.strategy.chart_pattern_strategy import make_chart_pattern_presets
+from tradercat.core.strategy.divergence_strategy import make_divergence_presets
+from tradercat.core.strategy.fibonacci_retracement_strategy import make_fibonacci_presets
+from tradercat.core.strategy.momentum_strategy import make_momentum_presets
+from tradercat.core.strategy.sector_rotation_strategy import make_sector_rotation_presets
 
 router = APIRouter(prefix="/strategies", tags=["strategies"])
 

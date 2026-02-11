@@ -4,11 +4,11 @@ from scipy.stats import zscore
 import numpy as np
 import pandas as pd
 
-from tradercat.data.market_data_provider import MarketDataProvider
-from tradercat.strategy.trading_strategy import TradingStrategy
-from tradercat.strategy.signal_model import SignalModel
+from tradercat.core.data.market_data_provider import MarketDataProvider
+from tradercat.core.strategy.trading_strategy import TradingStrategy
+from tradercat.core.strategy.signal_model import SignalModel
 from tradercat.logger.logger import get_logger
-from tradercat.strategy.strategy_presets import StrategyPreset
+from tradercat.core.strategy.strategy_presets import StrategyPreset
 
 logger = get_logger(__name__)
 

@@ -1,24 +1,24 @@
 from typing import List, Dict, Any, Optional
-from tradercat.strategy.trading_strategy import TradingStrategy
-from tradercat.strategy.signal_model import SignalModel
-from tradercat.strategy.exit_planner import ExitPlanner
-from tradercat.strategy.signal_scorer import Factor, FactorName, ScoringEngine
+from tradercat.core.strategy.trading_strategy import TradingStrategy
+from tradercat.core.strategy.signal_model import SignalModel
+from tradercat.core.strategy.exit_planner import ExitPlanner
+from tradercat.core.strategy.signal_scorer import Factor, FactorName, ScoringEngine
 from tradercat.logger.logger import get_logger
 
-from tradercat.strategy.chart_pattern.pivot_utils import PivotFinder
-from tradercat.strategy.chart_pattern.reversal import (
+from tradercat.core.strategy.chart_pattern.pivot_utils import PivotFinder
+from tradercat.core.strategy.chart_pattern.reversal import (
     DoubleBottomDetector,
     DoubleTopDetector,
     HeadAndShouldersTopDetector,
     HeadAndShouldersBottomDetector,
     TripleBottomDetector,
 )
-from tradercat.strategy.chart_pattern.continuation import (
+from tradercat.core.strategy.chart_pattern.continuation import (
     AscendingTriangleDetector,
     DescendingTriangleDetector,
     BullFlagDetector,
 )
-from tradercat.strategy.chart_pattern.base_detector import ChartData, PatternResult
+from tradercat.core.strategy.chart_pattern.base_detector import ChartData, PatternResult
 
 logger = get_logger(__name__)
 

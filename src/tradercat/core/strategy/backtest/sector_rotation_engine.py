@@ -11,7 +11,7 @@ from typing import List, Dict, Any
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 from tradercat.logger.logger import get_logger
-from tradercat.strategy.sector_rotation_strategy import SectorRotationStrategy, make_sector_rotation_presets
+from tradercat.core.strategy.sector_rotation_strategy import SectorRotationStrategy, make_sector_rotation_presets
 from tradercat.data.openbb_provider import OpenBBProvider
 from tradercat.data.market_data_provider import MarketDataProvider
 
@@ -169,10 +169,10 @@ def run_sector_rotation_backtest(
     # 2. Prepare Universe
     universe_map = {}
     if config['universe'] == 'sub_sector':
-        from tradercat.strategy.sector_rotation_strategy import SUB_SECTOR_LIST
+        from tradercat.core.strategy.sector_rotation_strategy import SUB_SECTOR_LIST
         universe_map = SUB_SECTOR_LIST
     else:
-        from tradercat.strategy.sector_rotation_strategy import GICS_SECTOR_LIST
+        from tradercat.core.strategy.sector_rotation_strategy import GICS_SECTOR_LIST
         universe_map = GICS_SECTOR_LIST
         
     symbols_to_download = list(universe_map.values()) + [config['benchmark_symbol'], config['safe_haven_symbol']]

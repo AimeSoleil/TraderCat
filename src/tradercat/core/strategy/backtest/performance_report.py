@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from typing import Dict, Any
-from tradercat.backtest.trader_tracker import TradeTracker
+from tradercat.core.strategy.backtest.trader_tracker import TradeTracker
 
 class PerformanceReport:
     """

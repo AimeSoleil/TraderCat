@@ -1,9 +1,9 @@
 from typing import List, Optional, Dict, Any, Tuple
 
-from tradercat.strategy.exit_planner import ExitPlanner
-from tradercat.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
-from tradercat.strategy.trading_strategy import TradingStrategy
-from tradercat.strategy.signal_model import SignalModel
+from tradercat.core.strategy.exit_planner import ExitPlanner
+from tradercat.core.strategy.signal_scorer import Factor, FactorName, ScoringEngine, ScoringResult
+from tradercat.core.strategy.trading_strategy import TradingStrategy
+from tradercat.core.strategy.signal_model import SignalModel
 from tradercat.logger.logger import get_logger
 
 logger = get_logger(__name__)

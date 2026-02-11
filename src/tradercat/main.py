@@ -114,12 +114,5 @@ def run_api():
     )
 
 
-# Keep the old CLI entry point for backward compatibility
-def main():
-    """CLI entry point (legacy)."""
-    from tradercat.main_cli import main as cli_main
-    cli_main()
-
-
 if __name__ == "__main__":
     run_api()

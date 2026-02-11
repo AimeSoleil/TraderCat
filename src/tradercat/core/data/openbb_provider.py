@@ -3,7 +3,7 @@ import traceback
 import numpy as np
 import pandas as pd
 from openbb import obb
-from tradercat.data.market_data_provider import MarketDataProvider
+from tradercat.core.data.market_data_provider import MarketDataProvider
 from tradercat.logger.logger import get_logger
 
 logger = get_logger(__name__)

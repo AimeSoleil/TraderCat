@@ -14,7 +14,7 @@ from tradercat.strategy.chart_pattern_strategy import ChartPatternStrategy, make
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 from tradercat.logger.logger import get_logger
-from tradercat.data.openbb_provider import OpenBBProvider
+from tradercat.core.data.openbb_provider import OpenBBProvider
 
 # --- Import Strategies ---
 from tradercat.strategy.bbands_breakout_strategy import BollingerBreakoutStrategy, make_bbands_breakout_presets
@@ -26,8 +26,8 @@ from tradercat.strategy.momentum_strategy import MomentumTrendStrategy, make_mom
 from tradercat.strategy.sector_rotation_strategy import SectorRotationStrategy, make_sector_rotation_presets
 
 # --- Import Runners ---
-from tradercat.backtest.backtest_engine import BacktestRunner
-from tradercat.backtest.sector_rotation_engine import run_sector_rotation_backtest
+from tradercat.core.strategy.backtest.backtest_engine import BacktestRunner
+from tradercat.core.strategy.backtest.sector_rotation_engine import run_sector_rotation_backtest
 
 logger = get_logger(__name__)
 

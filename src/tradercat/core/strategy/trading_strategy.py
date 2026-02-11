@@ -5,8 +5,8 @@ from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 
-from tradercat.strategy.signal_model import SignalModel
-from tradercat.strategy.signal_scorer import FactorName
+from tradercat.core.strategy.signal_model import SignalModel
+from tradercat.core.strategy.signal_scorer import FactorName
 
 EPS = 1e-9
 

@@ -3,10 +3,10 @@ import pandas as pd
 from datetime import datetime, timedelta, date
 from typing import Dict, List, Any
 
-from tradercat.backtest.performance_report import PerformanceReport
-from tradercat.backtest.trader_tracker import TradeTracker
-from tradercat.backtest.visualizer import BacktestVisualizer
-from tradercat.strategy.signal_model import SignalModel
+from tradercat.core.strategy.backtest.performance_report import PerformanceReport
+from tradercat.core.strategy.backtest.trader_tracker import TradeTracker
+from tradercat.core.strategy.backtest.visualizer import BacktestVisualizer
+from tradercat.core.strategy.signal_model import SignalModel
 from tradercat.logger.logger import get_logger
 from tradercat.utils.spinner import LoadingSpinner
 

@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any, Tuple
-from tradercat.strategy.candle_pattern.pattern_detector import PatternResult, DoubleCandlePatternDetector
+from tradercat.core.strategy.candle_pattern.pattern_detector import PatternResult, DoubleCandlePatternDetector
 
 class TweezerTopDetector(DoubleCandlePatternDetector):
     """

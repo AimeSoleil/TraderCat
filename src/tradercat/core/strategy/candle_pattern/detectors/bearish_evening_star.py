@@ -1,5 +1,5 @@
 from typing import Optional, Tuple, Dict, Any
-from tradercat.strategy.candle_pattern.pattern_detector import TripleCandlePatternDetector, PatternResult
+from tradercat.core.strategy.candle_pattern.pattern_detector import TripleCandlePatternDetector, PatternResult
 
 class EveningStarDetector(TripleCandlePatternDetector):
     """

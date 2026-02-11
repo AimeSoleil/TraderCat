@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any
-from tradercat.strategy.candle_pattern.pattern_detector import DoubleCandlePatternDetector, PatternResult
+from tradercat.core.strategy.candle_pattern.pattern_detector import DoubleCandlePatternDetector, PatternResult
 
 class BullishHaramiDetector(DoubleCandlePatternDetector):
     """

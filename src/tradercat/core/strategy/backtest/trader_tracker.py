@@ -1,7 +1,7 @@
 from datetime import datetime
 import pandas as pd
 from tradercat.logger.logger import get_logger
-from tradercat.strategy.signal_model import SignalModel
+from tradercat.core.strategy.signal_model import SignalModel
 
 logger = get_logger(__name__)
 

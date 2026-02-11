@@ -48,7 +48,6 @@ dev = [
 ]
 
 [project.scripts]
-tradercat = "tradercat.main:main"
 tradercat-api = "tradercat.main:run_api"
 
 [tool.pytest.ini_options]

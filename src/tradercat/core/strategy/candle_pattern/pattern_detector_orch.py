@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Any
-from tradercat.strategy.candle_pattern.pattern_detector import (
+from tradercat.core.strategy.candle_pattern.pattern_detector import (
     PatternResult,
     SingleCandlePatternDetector,
     DoubleCandlePatternDetector,
@@ -7,28 +7,28 @@ from tradercat.strategy.candle_pattern.pattern_detector import (
 )
 
 # Single-candle
-from tradercat.strategy.candle_pattern.detectors.neutral_standard_doji import StandardDojiDetector
-from tradercat.strategy.candle_pattern.detectors.bullish_hammer import HammerDetector
-from tradercat.strategy.candle_pattern.detectors.bearish_shooting_star import ShootingStarDetector
-from tradercat.strategy.candle_pattern.detectors.neutral_spinning_top import SpinningTopDetector
-from tradercat.strategy.candle_pattern.detectors.bullish_dragonfly_doji import DragonflyDojiDetector
-from tradercat.strategy.candle_pattern.detectors.bearish_gravestone_doji import GravestoneDojiDetector
+from tradercat.core.strategy.candle_pattern.detectors.neutral_standard_doji import StandardDojiDetector
+from tradercat.core.strategy.candle_pattern.detectors.bullish_hammer import HammerDetector
+from tradercat.core.strategy.candle_pattern.detectors.bearish_shooting_star import ShootingStarDetector
+from tradercat.core.strategy.candle_pattern.detectors.neutral_spinning_top import SpinningTopDetector
+from tradercat.core.strategy.candle_pattern.detectors.bullish_dragonfly_doji import DragonflyDojiDetector
+from tradercat.core.strategy.candle_pattern.detectors.bearish_gravestone_doji import GravestoneDojiDetector
 
 # Double-candle
-from tradercat.strategy.candle_pattern.detectors.bullish_engulfing import BullishEngulfingDetector
-from tradercat.strategy.candle_pattern.detectors.bearish_engulfing import BearishEngulfingDetector
-from tradercat.strategy.candle_pattern.detectors.bullish_harami import BullishHaramiDetector
-from tradercat.strategy.candle_pattern.detectors.bearish_harami import BearishHaramiDetector
-from tradercat.strategy.candle_pattern.detectors.bullish_piercing import PiercingPatternDetector
-from tradercat.strategy.candle_pattern.detectors.bearish_dark_cloud_cover import DarkCloudCoverDetector
-from tradercat.strategy.candle_pattern.detectors.bullish_tweezer_bottom import TweezerBottomDetector
-from tradercat.strategy.candle_pattern.detectors.bearish_tweezer_top import TweezerTopDetector
+from tradercat.core.strategy.candle_pattern.detectors.bullish_engulfing import BullishEngulfingDetector
+from tradercat.core.strategy.candle_pattern.detectors.bearish_engulfing import BearishEngulfingDetector
+from tradercat.core.strategy.candle_pattern.detectors.bullish_harami import BullishHaramiDetector
+from tradercat.core.strategy.candle_pattern.detectors.bearish_harami import BearishHaramiDetector
+from tradercat.core.strategy.candle_pattern.detectors.bullish_piercing import PiercingPatternDetector
+from tradercat.core.strategy.candle_pattern.detectors.bearish_dark_cloud_cover import DarkCloudCoverDetector
+from tradercat.core.strategy.candle_pattern.detectors.bullish_tweezer_bottom import TweezerBottomDetector
+from tradercat.core.strategy.candle_pattern.detectors.bearish_tweezer_top import TweezerTopDetector
 
 # Triple-candle
-from tradercat.strategy.candle_pattern.detectors.bullish_morning_star import MorningStarDetector
-from tradercat.strategy.candle_pattern.detectors.bearish_evening_star import EveningStarDetector
-from tradercat.strategy.candle_pattern.detectors.bullish_three_white_soldiers import ThreeWhiteSoldiersDetector
-from tradercat.strategy.candle_pattern.detectors.bearish_three_black_crows import ThreeBlackCrowsDetector
+from tradercat.core.strategy.candle_pattern.detectors.bullish_morning_star import MorningStarDetector
+from tradercat.core.strategy.candle_pattern.detectors.bearish_evening_star import EveningStarDetector
+from tradercat.core.strategy.candle_pattern.detectors.bullish_three_white_soldiers import ThreeWhiteSoldiersDetector
+from tradercat.core.strategy.candle_pattern.detectors.bearish_three_black_crows import ThreeBlackCrowsDetector
 
 def _first_match(results: List[PatternResult]) -> PatternResult:
     """Return the first PatternResult that is a pattern."""
