@@ -1,26 +1,62 @@
 import logging
 import sys
 import os
+import json
+from datetime import datetime
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
-from colorama import Fore, Style, init
+from typing import Optional
 
-# Initialize colorama for cross-platform color support
-init(autoreset=True)
+try:
+    from colorama import Fore, Style, init
+    # Initialize colorama for cross-platform color support
+    init(autoreset=True)
+    COLORAMA_AVAILABLE = True
+except ImportError:
+    COLORAMA_AVAILABLE = False
+    Fore = Style = type('Mock', (), {'__getattr__': lambda self, name: ''})()
 
 # Define color mapping for log levels
 LOG_COLORS = {
-    logging.DEBUG: Fore.CYAN,
-    logging.INFO: Fore.GREEN,
-    logging.WARNING: Fore.YELLOW,
-    logging.ERROR: Fore.RED,
-    logging.CRITICAL: Fore.MAGENTA + Style.BRIGHT
+    logging.DEBUG: Fore.CYAN if COLORAMA_AVAILABLE else "",
+    logging.INFO: Fore.GREEN if COLORAMA_AVAILABLE else "",
+    logging.WARNING: Fore.YELLOW if COLORAMA_AVAILABLE else "",
+    logging.ERROR: Fore.RED if COLORAMA_AVAILABLE else "",
+    logging.CRITICAL: (Fore.MAGENTA + Style.BRIGHT) if COLORAMA_AVAILABLE else ""
 }
+
+
+class JSONFormatter(logging.Formatter):
+    """Structured JSON logging formatter."""
+    
+    def format(self, record):
+        log_entry = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        
+        # Add extra fields if present
+        if hasattr(record, "user_id"):
+            log_entry["user_id"] = record.user_id
+        if hasattr(record, "symbol"):
+            log_entry["symbol"] = record.symbol
+        if hasattr(record, "strategy"):
+            log_entry["strategy"] = record.strategy
+            
+        # Add exception info if present
+        if record.exc_info:
+            log_entry["exception"] = self.formatException(record.exc_info)
+            
+        return json.dumps(log_entry)
+
 
 class ColorFormatter(logging.Formatter):
     def format(self, record):
         color = LOG_COLORS.get(record.levelno, "")
         message = super().format(record)
-        return f"{color}{message}{Style.RESET_ALL}"
+        reset = Style.RESET_ALL if COLORAMA_AVAILABLE else ""
+        return f"{color}{message}{reset}"
 
 def _is_same_file_handler(handler, path):
     base = getattr(handler, "baseFilename", None)
@@ -33,12 +69,13 @@ def _is_same_file_handler(handler, path):
 
 def get_logger(name: str,
                 level=logging.INFO,
-                log_file: str = "logs/trade_bot.log",
+                log_file: Optional[str] = None,
                 max_bytes: int = 10 * 1024 * 1024,
                 backup_count: int = 5,
                 timed: bool = False,
                 when: str = "midnight",
-                interval: int = 1):
+                interval: int = 1,
+                use_json: bool = False):
     """
     Return a named logger.
 
@@ -48,6 +85,7 @@ def get_logger(name: str,
     - log_file: if provided, add a file handler (rotating or timed)
     - max_bytes, backup_count: for RotatingFileHandler
     - timed, when, interval, backup_count: for TimedRotatingFileHandler
+    - use_json: if True, use JSON formatting for console output
 
     Behavior:
     - Keeps existing behavior: if logger has no handlers, add colored console handler.
@@ -58,14 +96,18 @@ def get_logger(name: str,
     logger.setLevel(level)
     logger.propagate = False  # prevent double logging via root handlers
 
-    # Ensure console handler exists (colored)
+    # Ensure console handler exists
     console_present = any(isinstance(h, logging.StreamHandler) and getattr(h, "stream", None) in (sys.stdout, sys.stderr)
                             for h in logger.handlers)
     if not console_present:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(level)
-        console_formatter = ColorFormatter('%(asctime)s | %(name)s | %(levelname)s | %(message)s',
-                                        datefmt='%Y-%m-%d %H:%M:%S')
+        
+        if use_json:
+            console_formatter = JSONFormatter()
+        else:
+            console_formatter = ColorFormatter('%(asctime)s | %(name)s | %(levelname)s | %(message)s',
+                                            datefmt='%Y-%m-%d %H:%M:%S')
         console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
     else:
