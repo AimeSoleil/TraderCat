@@ -43,7 +43,7 @@ class PipelineOrchestrator:
         Returns:
             True if successful, False otherwise
         """
-        run_date = run_date or datetime.utcnow().date()
+        run_date = run_date or datetime.now(datetime.timezone.utc).date()
         
         # Check if it's a market day
         if not is_market_day(run_date):
@@ -79,7 +79,7 @@ class PipelineOrchestrator:
                 
                 # Start pipeline
                 pipeline_run.status = PipelineStatus.RUNNING
-                pipeline_run.started_at = datetime.utcnow()
+                pipeline_run.started_at = datetime.now(datetime.timezone.utc)
                 await db.commit()
                 
                 # Execute pipeline steps
@@ -88,7 +88,7 @@ class PipelineOrchestrator:
                 # Update final status
                 if success:
                     pipeline_run.status = PipelineStatus.COMPLETED
-                    pipeline_run.completed_at = datetime.utcnow()
+                    pipeline_run.completed_at = datetime.now(datetime.timezone.utc)
                 else:
                     pipeline_run.status = PipelineStatus.FAILED
                 
