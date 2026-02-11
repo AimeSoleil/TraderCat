@@ -92,3 +92,16 @@ test-output/
 credentials.json
 token.json
 client_secret*.json
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+postgres_data/
+
+# Docker
+.env
+docker-compose.override.yml
+
+# Alembic
+alembic/versions/*.pyc
