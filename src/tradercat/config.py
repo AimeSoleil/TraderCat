@@ -15,7 +15,53 @@ class Settings(BaseSettings):
     # API
     api_title: str = "TraderCat API"
     api_version: str = "2.0.0"
-    api_description: str = "Multi-tenant trading signal and report generation API"
+    api_description: str = """
+## TraderCat Trading Signal & Report Generation API
+
+A production-ready multi-tenant API for trading signal generation and LLM-powered market analysis.
+
+### Features
+
+* 🔐 **API Key Authentication** - Secure access with SHA-256 hashed keys
+* 👥 **Multi-Tenant** - User-level watchlists and reports
+* 📊 **8 Trading Strategies** - Technical analysis with customizable parameters
+* 🤖 **AI Reports** - LLM-powered market analysis (GPT-4)
+* 📅 **Scheduled Pipeline** - Automatic nightly signal generation
+* 🎯 **Smart Deduplication** - Global + user-specific signals
+
+### Authentication
+
+All endpoints (except `/` and `/api/admin/system/health`) require API key authentication:
+
+```
+X-API-Key: tc_your_api_key_here
+```
+
+Admin endpoints require admin-level API keys.
+
+### Getting Started
+
+1. **Admin creates user**: `POST /api/v1/users` (returns API key)
+2. **Add watchlist symbols**: `POST /api/v1/watchlist`
+3. **View signals**: `GET /api/v1/signals`
+4. **Read reports**: `GET /api/v1/reports`
+
+### Architecture
+
+- **API Service**: FastAPI with async SQLAlchemy
+- **Database**: PostgreSQL with async driver
+- **Pipeline**: Standalone scheduler service (8 PM ET)
+- **Deployment**: Docker Compose / Kubernetes ready
+"""
+    api_contact: dict = {
+        "name": "TraderCat Support",
+        "url": "https://github.com/AimeSoleil/TraderCat",
+        "email": "jeaimesoleil@gmail.com"
+    }
+    api_license: dict = {
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT"
+    }
     
     # Pipeline
     pipeline_schedule_hour: int = Field(default=20, description="Hour to run pipeline (24h format)")

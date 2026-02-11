@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
 
 from tradercat.config import settings
 from tradercat.database import init_db
@@ -79,8 +81,106 @@ app = FastAPI(
     title=settings.api_title,
     description=settings.api_description,
     version=settings.api_version,
+    contact=settings.api_contact,
+    license_info=settings.api_license,
     lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    swagger_ui_parameters={
+        "defaultModelsExpandDepth": 1,
+        "displayRequestDuration": True,
+        "filter": True,
+        "syntaxHighlight.theme": "monokai",
+        "tryItOutEnabled": True,
+        "persistAuthorization": True,
+    },
+    openapi_tags=[
+        {
+            "name": "users",
+            "description": "User management operations (Admin only). Create users and manage API keys.",
+        },
+        {
+            "name": "watchlist",
+            "description": "Manage user watchlist. Add/remove symbols to track for signal generation.",
+        },
+        {
+            "name": "strategies",
+            "description": "View and configure trading strategies. Customize strategy parameters per user.",
+        },
+        {
+            "name": "signals",
+            "description": "Query trading signals. Access global signals and user-specific signals.",
+        },
+        {
+            "name": "reports",
+            "description": "Access LLM-generated market analysis reports per symbol.",
+        },
+        {
+            "name": "admin-pipeline",
+            "description": "Pipeline management (Admin only). Trigger and monitor signal generation pipeline.",
+        },
+        {
+            "name": "admin-system",
+            "description": "System operations. Health checks and system information.",
+        },
+    ],
 )
+
+
+def custom_openapi():
+    """Customize OpenAPI schema with security schemes."""
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+        contact=app.contact,
+        license_info=app.license_info,
+        tags=app.openapi_tags,
+    )
+    
+    # Add security scheme for API Key
+    openapi_schema["components"]["securitySchemes"] = {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-API-Key",
+            "description": "API Key authentication. Use your API key in the X-API-Key header. Get your key from admin by creating a user.",
+        }
+    }
+    
+    # Add security to all endpoints except public ones
+    for path, path_item in openapi_schema["paths"].items():
+        # Skip public endpoints
+        if path in ["/", "/docs", "/redoc", "/openapi.json", "/api/admin/system/health"]:
+            continue
+        
+        # Add security requirement to all operations
+        for operation in path_item.values():
+            if isinstance(operation, dict) and "security" not in operation:
+                operation["security"] = [{"ApiKeyAuth": []}]
+    
+    # Add server information
+    openapi_schema["servers"] = [
+        {
+            "url": "http://localhost:8000",
+            "description": "Local development server"
+        },
+        {
+            "url": "https://api.tradercat.example.com",
+            "description": "Production server (configure as needed)"
+        }
+    ]
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
 
 # Add CORS middleware
 app.add_middleware(
@@ -113,14 +213,32 @@ app.include_router(pipeline.router, prefix="/api/admin")
 app.include_router(system.router, prefix="/api/admin")
 
 
-@app.get("/")
+@app.get("/", tags=["root"])
 async def root():
-    """Root endpoint."""
+    """
+    Root endpoint with API information and quick links.
+    
+    Returns basic information about the API and links to documentation.
+    This endpoint is public and does not require authentication.
+    """
     return {
         "name": settings.api_title,
         "version": settings.api_version,
-        "docs": "/docs",
-        "health": "/api/admin/system/health"
+        "description": "Multi-tenant trading signal and report generation API",
+        "documentation": {
+            "swagger_ui": "/docs",
+            "redoc": "/redoc",
+            "openapi_schema": "/openapi.json"
+        },
+        "endpoints": {
+            "health": "/api/admin/system/health",
+            "users": "/api/v1/users",
+            "watchlist": "/api/v1/watchlist",
+            "strategies": "/api/v1/strategies",
+            "signals": "/api/v1/signals",
+            "reports": "/api/v1/reports"
+        },
+        "authentication": "X-API-Key header required (except for / and /api/admin/system/health)"
     }
 
 
