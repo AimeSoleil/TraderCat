@@ -2,36 +2,64 @@
 
 ## Overview
 
-The TraderCat pipeline can now be deployed as a **standalone service** separate from the API. This provides:
-- ✅ Independent scaling
-- ✅ Isolated resource usage
-- ✅ No API downtime during pipeline execution
-- ✅ Easier monitoring and debugging
-- ✅ Flexible deployment options
+The TraderCat pipeline is **completely separated** from the API service. This provides:
+- ✅ **Complete code isolation**: API never imports scheduler code
+- ✅ **Independent scaling**: Scale API and pipeline separately
+- ✅ **Isolated resource usage**: No resource contention
+- ✅ **No API downtime**: Pipeline runs don't affect API
+- ✅ **Easier monitoring**: Separate logs and metrics
+- ✅ **Flexible deployment**: Deploy services independently
 
 ## Architecture
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  API Service    │────▶│    PostgreSQL    │◀────│  Pipeline Worker│
-│  (port 8000)    │     │                  │     │  (cron scheduler)│
-│  - REST API     │     │  Shared Database │     │  - Signal gen   │
-│  - Manual       │     │                  │     │  - Report gen   │
-│    triggers     │     │                  │     │  - Scheduled    │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
+┌─────────────────────────┐     ┌──────────────────┐     ┌─────────────────────────┐
+│  API Service            │────▶│    PostgreSQL    │◀────│  Pipeline Worker        │
+│  (main.py)              │     │                  │     │  (pipeline.runner)      │
+│  RUN_MODE=api-only      │     │  Shared Database │     │  RUN_MODE=scheduler     │
+│                         │     │                  │     │                         │
+│  ├── FastAPI app        │     │  Communication:  │     │  ├── APScheduler        │
+│  ├── REST endpoints     │     │  Database only   │     │  ├── Orchestrator       │
+│  ├── Manual triggers    │     │                  │     │  ├── Signal workers     │
+│  └── NO scheduler code  │     │                  │     │  └── Report workers     │
+└─────────────────────────┘     └──────────────────┘     └─────────────────────────┘
+                                                           
+                                                           COMPLETE SEPARATION:
+                                                           - Different entry points
+                                                           - No shared scheduler state
+                                                           - Independent processes
 ```
+
+## Complete Separation Design
+
+### API Service (`RUN_MODE=api-only`)
+- **Entry Point**: `python -m uvicorn tradercat.main:app`
+- **Scheduler Code**: NEVER imported
+- **Pipeline Execution**: Manual triggers only (via `/api/admin/pipeline/trigger`)
+- **Uses**: `PipelineOrchestrator` directly (not scheduler)
+
+### Pipeline Worker (`RUN_MODE=scheduler`)
+- **Entry Point**: `python -m tradercat.pipeline.runner`
+- **Scheduler Code**: Exclusively owned by this service
+- **Pipeline Execution**: Automatic via APScheduler cron
+- **No API**: Does not expose HTTP endpoints
+
+### Communication
+- **Database**: Only communication channel
+- **No RPC**: Services don't call each other
+- **Async**: Pipeline runs asynchronously from API
 
 ## Deployment Modes
 
 ### RUN_MODE Configuration
 
-The `RUN_MODE` environment variable controls how services run:
+The `RUN_MODE` environment variable enforces complete separation:
 
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| `api-only` | API without scheduler | Production API service |
-| `scheduler` | Pipeline worker only | Production pipeline worker |
-| `combined` | Both API + scheduler | Development, legacy deployments |
+| Mode | Entry Point | Scheduler Imported? | Use Case |
+|------|-------------|---------------------|----------|
+| `api-only` | `main.py` | ❌ NO | **Production API** (recommended) |
+| `scheduler` | `pipeline.runner` | ✅ YES | **Production Pipeline** (recommended) |
+| `combined` | `main.py` | ⚠️ YES | **Development only** (not recommended) |
 
 ## Deployment Options
 

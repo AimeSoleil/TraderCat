@@ -1,4 +1,29 @@
-"""Standalone pipeline runner for dedicated pipeline worker service."""
+"""Standalone pipeline runner for dedicated pipeline worker service.
+
+This is the entry point for the pipeline worker service that runs
+the scheduler independently from the API service.
+
+Usage:
+    python -m tradercat.pipeline.runner
+
+Environment:
+    RUN_MODE=scheduler (required)
+
+Docker:
+    See Dockerfile.pipeline for containerized deployment
+
+Architecture:
+    API Service (main.py)           Pipeline Worker (this file)
+    ├── FastAPI app                 ├── Scheduler loop
+    ├── REST endpoints              ├── Signal generation
+    ├── Manual triggers             ├── Report generation
+    └── No scheduler code           └── APScheduler cron
+
+The API and pipeline services are completely separated:
+- API: Never imports scheduler module when RUN_MODE=api-only
+- Pipeline: Only runs scheduler, no API endpoints
+- Communication: Via shared PostgreSQL database
+"""
 import asyncio
 import signal
 import sys

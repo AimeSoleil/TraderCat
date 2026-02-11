@@ -34,8 +34,15 @@ async def lifespan(app: FastAPI):
         raise
     
     # Conditionally start pipeline scheduler based on RUN_MODE
+    # NOTE: In production, use RUN_MODE=api-only for API service
+    # and run a separate pipeline-worker container with RUN_MODE=scheduler
     scheduler_started = False
-    if settings.run_mode in ["combined", "scheduler"]:
+    if settings.run_mode == "combined":
+        # Legacy mode: both API and scheduler in one process
+        logger.warning(
+            "Running in COMBINED mode - not recommended for production. "
+            "Use separate services with RUN_MODE=api-only and RUN_MODE=scheduler"
+        )
         try:
             from tradercat.pipeline.scheduler import start_scheduler
             start_scheduler()
@@ -43,8 +50,16 @@ async def lifespan(app: FastAPI):
             scheduler_started = True
         except Exception as e:
             logger.warning(f"Failed to start pipeline scheduler: {e}")
-    else:
+    elif settings.run_mode == "scheduler":
+        # This should not happen - scheduler mode should use pipeline.runner
+        logger.error(
+            "RUN_MODE=scheduler detected in API service. "
+            "Use 'python -m tradercat.pipeline.runner' instead of main.py"
+        )
+        raise ValueError("Invalid RUN_MODE for API service")
+    else:  # api-only
         logger.info(f"Pipeline scheduler disabled (mode: {settings.run_mode})")
+        logger.info("Manual pipeline triggers available via /api/admin/pipeline/trigger")
     
     yield
     

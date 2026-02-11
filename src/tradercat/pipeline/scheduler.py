@@ -1,4 +1,16 @@
-"""Pipeline scheduler using APScheduler."""
+"""Pipeline scheduler using APScheduler.
+
+IMPORTANT: This module should ONLY be used by:
+1. The standalone pipeline worker (tradercat.pipeline.runner)
+2. Legacy combined mode (not recommended for production)
+
+For production deployments:
+- API Service: Use RUN_MODE=api-only (no scheduler imports)
+- Pipeline Worker: Use RUN_MODE=scheduler (runs this scheduler)
+
+Manual pipeline triggers from the API use PipelineOrchestrator directly,
+not the scheduler.
+"""
 import asyncio
 from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
