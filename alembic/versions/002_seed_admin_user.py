@@ -37,7 +37,7 @@ def generate_api_key() -> tuple[str, str, str]:
 def upgrade() -> None:
     # Get admin details from environment variables or use defaults
     admin_username = os.getenv("ADMIN_USERNAME", "admin")
-    admin_email = os.getenv("ADMIN_EMAIL", "admin@tradercat.local")
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@tradercat.com")
     admin_max_symbols = int(os.getenv("ADMIN_MAX_SYMBOLS", "100"))
     
     # Check if admin already exists

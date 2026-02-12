@@ -2,7 +2,8 @@
 from tradercat.models.user import User, ApiKey
 from tradercat.models.symbol import WatchlistItem
 from tradercat.models.signal import SignalRecord, SignalScope
-from tradercat.models.report import Report
+from tradercat.models.global_report import GlobalReport
+from tradercat.models.user_report import UserReport
 from tradercat.models.strategy import StrategyConfig
 from tradercat.models.pipeline import PipelineRun, PipelineStatus
 
@@ -12,7 +13,8 @@ __all__ = [
     "WatchlistItem",
     "SignalRecord",
     "SignalScope",
-    "Report",
+    "GlobalReport",
+    "UserReport",
     "StrategyConfig",
     "PipelineRun",
     "PipelineStatus",

@@ -160,7 +160,7 @@ This will:
 1. Create all database tables
 2. Seed an initial admin user with credentials:
    - Username: `admin` (configurable via `ADMIN_USERNAME`)
-   - Email: `admin@tradercat.local` (configurable via `ADMIN_EMAIL`)
+   - Email: `admin@tradercat.com` (configurable via `ADMIN_EMAIL`)
    - Role: `admin`
 3. Generate and display an API key (shown only once)
 

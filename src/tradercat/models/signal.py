@@ -2,7 +2,7 @@
 from datetime import datetime, date
 from uuid import uuid4
 from enum import Enum as PyEnum
-from sqlalchemy import Column, String, Float, Date, DateTime, Index, Enum
+from sqlalchemy import Column, String, Float, Date, DateTime, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
@@ -31,6 +31,6 @@ class SignalRecord(Base):
     confidence = Column(Float, default=0.0, nullable=False)
     reason = Column(String(1000), nullable=True)
     details = Column(JSONB, nullable=True)  # Flexible Dict[str, Any] stored as JSONB
-    scope = Column(Enum(SignalScope), default=SignalScope.USER, nullable=False)
+    scope = Column(String(20), default=SignalScope.USER.value, nullable=False)
     pipeline_run_id = Column(UUID(as_uuid=True), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

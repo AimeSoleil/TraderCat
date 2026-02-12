@@ -5,12 +5,13 @@ from pydantic import BaseModel, Field
 from typing import Any
 
 
-class ReportResponse(BaseModel):
-    """Schema for report response."""
+# --- Global Report Schemas ---
+
+class GlobalReportResponse(BaseModel):
+    """Schema for global report response."""
     id: UUID
-    user_id: UUID
     run_date: date
-    symbol: str
+    symbol: str | None
     report_type: str
     content_md: str
     model_used: str | None
@@ -20,23 +21,43 @@ class ReportResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ReportDetail(ReportResponse):
-    """Schema for detailed report response (includes input context)."""
+class GlobalReportDetail(GlobalReportResponse):
+    """Schema for detailed global report response (includes input context)."""
     input_context: dict[str, Any] | None
 
     model_config = {"from_attributes": True}
 
 
-class ReportList(BaseModel):
-    """Schema for report list response."""
-    reports: list[ReportResponse]
+class GlobalReportList(BaseModel):
+    """Schema for global report list response."""
+    reports: list[GlobalReportResponse]
     total: int
 
 
-class ReportQuery(BaseModel):
-    """Schema for report query filters."""
-    run_date: date | None = None
-    symbol: str | None = Field(None, max_length=20)
-    report_type: str | None = Field(None, max_length=50)
-    limit: int = Field(100, ge=1, le=1000)
-    offset: int = Field(0, ge=0)
+# --- User Report Schemas ---
+
+class UserReportResponse(BaseModel):
+    """Schema for user report response."""
+    id: UUID
+    user_id: UUID
+    run_date: date
+    report_type: str
+    content_md: str
+    model_used: str | None
+    persona_used: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class UserReportDetail(UserReportResponse):
+    """Schema for detailed user report response (includes input context)."""
+    input_context: dict[str, Any] | None
+
+    model_config = {"from_attributes": True}
+
+
+class UserReportList(BaseModel):
+    """Schema for user report list response."""
+    reports: list[UserReportResponse]
+    total: int

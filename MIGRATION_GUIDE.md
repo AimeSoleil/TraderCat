@@ -45,7 +45,7 @@ INFO  [alembic.runtime.migration] Running upgrade 001 -> 002, Seed initial admin
 🎉 INITIAL ADMIN USER CREATED SUCCESSFULLY!
 ================================================================================
 Username: admin
-Email:    admin@tradercat.local
+Email:    admin@tradercat.com
 Role:     admin
 Max Symbols: 100
 

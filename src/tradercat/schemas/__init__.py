@@ -19,10 +19,12 @@ from tradercat.schemas.signal import (
     SignalQuery,
 )
 from tradercat.schemas.report import (
-    ReportResponse,
-    ReportDetail,
-    ReportList,
-    ReportQuery,
+    GlobalReportResponse,
+    GlobalReportDetail,
+    GlobalReportList,
+    UserReportResponse,
+    UserReportDetail,
+    UserReportList,
 )
 from tradercat.schemas.strategy import (
     StrategyInfo,
@@ -46,10 +48,12 @@ __all__ = [
     "SignalResponse",
     "SignalList",
     "SignalQuery",
-    "ReportResponse",
-    "ReportDetail",
-    "ReportList",
-    "ReportQuery",
+    "GlobalReportResponse",
+    "GlobalReportDetail",
+    "GlobalReportList",
+    "UserReportResponse",
+    "UserReportDetail",
+    "UserReportList",
     "StrategyInfo",
     "StrategyConfigResponse",
     "StrategyWithUserConfig",

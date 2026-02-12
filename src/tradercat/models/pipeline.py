@@ -2,7 +2,7 @@
 from datetime import datetime, date
 from uuid import uuid4
 from enum import Enum as PyEnum
-from sqlalchemy import Column, String, Integer, Text, Date, DateTime, Enum
+from sqlalchemy import Column, String, Integer, Text, Date, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 
 from tradercat.database import Base
@@ -22,7 +22,7 @@ class PipelineRun(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     run_date = Column(Date, unique=True, nullable=False, index=True)  # One run per market day
-    status = Column(Enum(PipelineStatus), default=PipelineStatus.PENDING, nullable=False)
+    status = Column(String(20), default=PipelineStatus.PENDING.value, nullable=False)
     step = Column(String(50), nullable=True)  # Current step name
     total_symbols = Column(Integer, default=0, nullable=False)
     processed_symbols = Column(Integer, default=0, nullable=False)

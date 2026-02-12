@@ -1,5 +1,6 @@
 """Admin system API endpoints."""
 from fastapi import APIRouter
+from fastapi.security import HTTPBearer
 from pydantic import BaseModel
 
 from tradercat.config import settings
@@ -14,10 +15,13 @@ class HealthResponse(BaseModel):
     database: str
 
 
-@router.get("/health", response_model=HealthResponse)
+@router.get("/health", response_model=HealthResponse, dependencies=[])
 async def health_check():
     """
     Public health check endpoint (no authentication required).
+    
+    This endpoint does not require an API key and can be used
+    for monitoring and load balancer health checks.
     """
     # TODO: Add actual database health check
     db_status = "connected"

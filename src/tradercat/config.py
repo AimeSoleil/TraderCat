@@ -67,6 +67,8 @@ Admin endpoints require admin-level API keys.
     pipeline_schedule_hour: int = Field(default=20, description="Hour to run pipeline (24h format)")
     pipeline_timezone: str = Field(default="America/New_York", description="Timezone for pipeline schedule")
     pipeline_max_concurrency: int = Field(default=5, description="Max concurrent workers")
+    pipeline_report_batch_size: int = Field(default=10, description="Number of symbols per LLM batch in Q2")
+    pipeline_llm_max_retries: int = Field(default=2, description="Max retries for LLM calls before skipping")
     
     # AI/LLM
     tradercat_ai_token: str = Field(default="", description="GitHub Copilot SDK token")
@@ -94,7 +96,7 @@ Admin endpoints require admin-level API keys.
     
     # Admin Seeding (for initial migration)
     admin_username: str = Field(default="admin", description="Initial admin username for seeding")
-    admin_email: str = Field(default="admin@tradercat.local", description="Initial admin email for seeding")
+    admin_email: str = Field(default="admin@tradercat.com", description="Initial admin email for seeding")
     admin_max_symbols: int = Field(default=100, description="Initial admin max symbols limit")
     
     model_config = SettingsConfigDict(

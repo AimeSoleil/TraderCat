@@ -143,26 +143,12 @@ def custom_openapi():
         tags=app.openapi_tags,
     )
     
-    # Add security scheme for API Key
-    openapi_schema["components"]["securitySchemes"] = {
-        "ApiKeyAuth": {
-            "type": "apiKey",
-            "in": "header",
-            "name": "X-API-Key",
-            "description": "API Key authentication. Use your API key in the X-API-Key header. Get your key from admin by creating a user.",
-        }
-    }
-    
-    # Add security to all endpoints except public ones
-    for path, path_item in openapi_schema["paths"].items():
-        # Skip public endpoints
-        if path in ["/", "/docs", "/redoc", "/openapi.json", "/api/admin/system/health"]:
-            continue
-        
-        # Add security requirement to all operations
-        for operation in path_item.values():
-            if isinstance(operation, dict) and "security" not in operation:
-                operation["security"] = [{"ApiKeyAuth": []}]
+    # Update API Key security scheme description
+    if "ApiKeyHeader" in openapi_schema.get("components", {}).get("securitySchemes", {}):
+        openapi_schema["components"]["securitySchemes"]["ApiKeyHeader"]["description"] = (
+            "API Key authentication. Click 'Authorize' button above and enter your API key. "
+            "Get your key from admin by creating a user."
+        )
     
     # Add server information
     openapi_schema["servers"] = [
@@ -213,7 +199,7 @@ app.include_router(pipeline.router, prefix="/api/admin")
 app.include_router(system.router, prefix="/api/admin")
 
 
-@app.get("/", tags=["root"])
+@app.get("/", tags=["root"], dependencies=[])
 async def root():
     """
     Root endpoint with API information and quick links.

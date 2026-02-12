@@ -1,6 +1,7 @@
 """API dependencies for authentication and database sessions."""
 from typing import AsyncGenerator, Annotated
-from fastapi import Depends, HTTPException, Header, status
+from fastapi import Depends, HTTPException, status
+from fastapi.security import APIKeyHeader
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -8,9 +9,14 @@ from tradercat.database import get_db
 from tradercat.models import User, ApiKey
 from datetime import datetime
 
+from tradercat.logger.logger import get_logger
+logger = get_logger(__name__)
+
+# Define API Key security scheme
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
 
 async def get_current_user(
-    x_api_key: Annotated[str, Header(description="API Key for authentication")],
+    x_api_key: Annotated[str, Depends(api_key_header)],
     db: AsyncSession = Depends(get_db)
 ) -> User:
     """
