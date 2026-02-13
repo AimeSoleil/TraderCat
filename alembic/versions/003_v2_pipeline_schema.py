@@ -94,7 +94,7 @@ def downgrade() -> None:
     )
     op.create_index(op.f('ix_reports_user_run_date_symbol'), 'reports', ['user_id', 'run_date', 'symbol'])
 
-    # --- 2. Migrate user_reports data back to reports ---
+    # --- 2. Migrate user_reports data back to reports (if any exist) ---
     # Note: user_reports may not have 'symbol' column. Set symbol to 'N/A' for those.
     op.execute("""
         INSERT INTO reports (id, user_id, run_date, symbol, report_type, content_md,

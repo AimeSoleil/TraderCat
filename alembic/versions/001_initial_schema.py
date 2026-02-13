@@ -132,6 +132,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Drop all tables in reverse order of foreign key dependencies
+    # First drop tables that reference others, then drop the referenced tables
+    
     op.drop_index(op.f('ix_pipeline_runs_run_date'), table_name='pipeline_runs')
     op.drop_table('pipeline_runs')
     

@@ -110,7 +110,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Remove the seeded admin user (and cascade will remove API key)
+    # Remove the seeded admin user and its API key
     admin_username = os.getenv("ADMIN_USERNAME", "admin")
     connection = op.get_bind()
     
@@ -121,17 +121,42 @@ def downgrade() -> None:
     )
     admin_user = result.fetchone()
     
-    if admin_user:
-        # Delete API keys first (explicit for clarity, though CASCADE would handle it)
+    if not admin_user:
+        print(f"ℹ️  Admin user '{admin_username}' does not exist. Nothing to downgrade.")
+        return
+    
+    user_id = admin_user[0]
+    
+    # Check which tables exist and delete dependent records
+    infoResult = connection.execute(
+        sa.text("""
+            SELECT table_name FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name IN ('user_reports', 'watchlist_items', 'strategy_configs', 'global_reports')
+        """)
+    )
+    existing_tables = [row[0] for row in infoResult.fetchall()]
+    
+    # Delete from tables that exist
+    for table in existing_tables:
+        if table == 'global_reports':
+            # global_reports doesn't have user_id, skip it
+            continue
         connection.execute(
-            sa.text("DELETE FROM api_keys WHERE user_id = :user_id"),
-            {"user_id": admin_user[0]}
+            sa.text(f"DELETE FROM {table} WHERE user_id = :user_id"),
+            {"user_id": user_id}
         )
-        
-        # Delete admin user
-        connection.execute(
-            sa.text("DELETE FROM users WHERE id = :id"),
-            {"id": admin_user[0]}
-        )
-        
-        print(f"✅ Removed admin user '{admin_username}' and associated API keys.")
+    
+    # Delete API keys
+    connection.execute(
+        sa.text("DELETE FROM api_keys WHERE user_id = :user_id"),
+        {"user_id": user_id}
+    )
+    
+    # Finally delete the user
+    connection.execute(
+        sa.text("DELETE FROM users WHERE id = :id"),
+        {"id": user_id}
+    )
+    
+    print(f"✅ Removed admin user '{admin_username}' and associated data.")
