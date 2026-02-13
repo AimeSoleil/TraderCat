@@ -28,7 +28,6 @@ services:
       LOG_FORMAT: json
       LOG_LEVEL: INFO
       RUN_MODE: api-only
-      TRADERCAT_AI_TOKEN: ${TRADERCAT_AI_TOKEN:-}
       # Admin user seed configuration (used during initial migration)
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@tradercat.com}
@@ -55,7 +54,6 @@ services:
       PIPELINE_SCHEDULE_HOUR: ${PIPELINE_SCHEDULE_HOUR:-20}
       PIPELINE_TIMEZONE: ${PIPELINE_TIMEZONE:-America/New_York}
       PIPELINE_MAX_CONCURRENCY: ${PIPELINE_MAX_CONCURRENCY:-5}
-      TRADERCAT_AI_TOKEN: ${TRADERCAT_AI_TOKEN:-}
       DEFAULT_LLM_MODEL: ${DEFAULT_LLM_MODEL:-gpt-4o}
       DEFAULT_PERSONA: ${DEFAULT_PERSONA:-wyckoff}
     depends_on:

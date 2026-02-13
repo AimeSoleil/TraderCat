@@ -2,7 +2,7 @@
 from datetime import datetime, date
 from uuid import uuid4
 from enum import Enum as PyEnum
-from sqlalchemy import Column, String, Float, Date, DateTime, Index
+from sqlalchemy import Column, String, Float, Date, DateTime, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
@@ -19,6 +19,7 @@ class SignalRecord(Base):
     """Signal record - stores generated trading signals."""
     __tablename__ = "signal_records"
     __table_args__ = (
+        UniqueConstraint("run_date", "symbol", "strategy", name="uq_signal_run_date_symbol_strategy"),
         Index("ix_signal_run_date_symbol", "run_date", "symbol"),
         Index("ix_signal_scope_run_date", "scope", "run_date"),
     )

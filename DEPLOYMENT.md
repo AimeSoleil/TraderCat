@@ -171,7 +171,6 @@ DATABASE_URL=postgresql+asyncpg://tradercat:tradercat@postgres:5432/tradercat
 PIPELINE_SCHEDULE_HOUR=20
 PIPELINE_TIMEZONE=America/New_York
 PIPELINE_MAX_CONCURRENCY=5
-TRADERCAT_AI_TOKEN=your_token_here
 DEFAULT_LLM_MODEL=gpt-4o
 DEFAULT_PERSONA=wyckoff
 LOG_FORMAT=json

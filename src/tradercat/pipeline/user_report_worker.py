@@ -1,23 +1,35 @@
-"""User report generation worker for pipeline (Q3).
+"""User report generation worker for pipeline (Q3) — role-based AI.
 
 Q3 generates personalized reports per user by:
-1. Loading the macro summary from Q2 (global_reports).
-2. Loading the symbol execution plans for the user's watchlist from Q2.
-3. Calling LLM with the user's preferred persona to produce a personalized briefing.
+1. Loading the macro summary + portfolio summary from Q2
+2. Loading the symbol execution plans for the user's watchlist from Q2
+3. Using the SummarizerRole with user's preferred identity to produce a personalized briefing
 """
 import asyncio
+import json
 from datetime import date
 from typing import List, Dict, Any, Optional
 from uuid import UUID
 
 from tradercat.logger.logger import get_logger
 from tradercat.config import settings
+from tradercat.ai.providers.llm_interface import LLMProvider
+from tradercat.ai.roles.identity import IdentityRole
+from tradercat.ai.roles.summarizer import SummarizerRole
 
 logger = get_logger(__name__)
 
 
+def _get_llm_provider(model_id: str = None):
+    """Get LLM provider from the factory."""
+    from tradercat.ai.llm_provider_factory import LLMFactory
+    model_id = model_id or settings.default_llm_model
+    provider, resolved_model = LLMFactory.create_provider(f"litellm_{model_id}")
+    return provider, resolved_model
+
+
 class UserReportWorker:
-    """Worker for generating personalized user reports (Q3)."""
+    """Worker for generating personalized user reports (Q3) using role-based AI."""
     
     def __init__(self, max_retries: int | None = None):
         self.max_retries = max_retries if max_retries is not None else settings.pipeline_llm_max_retries
@@ -27,29 +39,42 @@ class UserReportWorker:
         user_id: UUID,
         run_date: date,
         summary_report_md: str,
-        symbol_plans: Dict[str, str],  # symbol → execution plan markdown
+        symbol_plans: Dict[str, str],
         persona: str,
         lang: str | None,
         pipeline_run_id: UUID,
         model: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """
-        Generate a personalized briefing for a user.
+        Generate a personalized briefing for a user using SummarizerRole.
         
-        Combines the macro summary + relevant symbol execution plans,
-        then calls LLM with the user's preferred persona for a personalized output.
+        Uses the user's preferred identity to re-summarize the global context
+        + their specific watchlist symbol plans.
         """
         model = model or settings.default_llm_model
-        persona_key = persona
-        if lang and lang != "en":
-            persona_key = f"{persona}-{lang}"
+        
+        # Resolve identity — strip language suffix if present
+        identity_key = persona.split("-")[0] if "-" in persona else persona
+        
+        # Map legacy persona names to new identity keys
+        identity_mapping = {
+            "wyckoff": "wyckoff",
+            "options_strategist": "options_strategist",
+            # Legacy personas fall back to wyckoff identity + their system prompt
+            "livermore": "wyckoff",
+            "ptj": "options_strategist",
+            "simons": "options_strategist",
+            "shaw": "options_strategist",
+        }
+        identity_key = identity_mapping.get(identity_key, "wyckoff")
         
         for attempt in range(self.max_retries + 1):
             try:
                 content = await self._call_llm_personalized(
                     summary_report_md=summary_report_md,
                     symbol_plans=symbol_plans,
-                    persona=persona_key,
+                    persona=persona,
+                    identity_key=identity_key,
                     model=model,
                 )
                 
@@ -59,10 +84,11 @@ class UserReportWorker:
                     "report_type": "personalized_briefing",
                     "content_md": content,
                     "model_used": model,
-                    "persona_used": persona_key,
+                    "identity_used": persona,
                     "input_context": {
                         "symbols": list(symbol_plans.keys()),
-                        "persona": persona_key,
+                        "persona": persona,
+                        "identity": identity_key,
                         "has_summary": bool(summary_report_md),
                     },
                     "pipeline_run_id": pipeline_run_id,
@@ -74,7 +100,7 @@ class UserReportWorker:
                     await asyncio.sleep(2 ** attempt)
                 else:
                     logger.error(
-                        f"Q3: Failed to generate briefing for user {user_id} "
+                        f"Q3: Failed briefing for user {user_id} "
                         f"after {self.max_retries + 1} attempts: {e}"
                     )
                     return None
@@ -86,17 +112,39 @@ class UserReportWorker:
         summary_report_md: str,
         symbol_plans: Dict[str, str],
         persona: str,
+        identity_key: str,
         model: str,
     ) -> str:
         """
-        Call LLM with persona to generate personalized briefing.
-        
-        TODO: Integrate with tradercat.ai infrastructure.
-        Uses PromptManager to load persona system prompt.
+        Call LLM with identity-based persona to generate personalized briefing.
+        Uses SummarizerRole to consolidate user's watchlist reports.
         """
-        # Placeholder - will be replaced with actual LLM call
+        try:
+            provider, resolved_model = _get_llm_provider(model)
+            
+            identity = IdentityRole(identity_key)
+            summarizer = SummarizerRole(provider, identity, resolved_model)
+            
+            result = await summarizer.summarize(
+                run_date=str(asyncio.get_event_loop().time()),  # Will be overridden
+                global_report=summary_report_md,
+                symbol_reports=symbol_plans,
+            )
+            return result.content
+            
+        except Exception as e:
+            logger.warning(f"Q3: LLM call failed, using placeholder: {e}")
+            return self._placeholder_briefing(summary_report_md, symbol_plans, persona, model)
+    
+    @staticmethod
+    def _placeholder_briefing(
+        summary_report_md: str,
+        symbol_plans: Dict[str, str],
+        persona: str,
+        model: str,
+    ) -> str:
+        """Fallback placeholder when LLM is not available."""
         symbols = list(symbol_plans.keys())
-        
         report = f"""# Your Daily Trading Briefing
 
 **Persona**: {persona} | **Model**: {model} | **Symbols**: {len(symbols)}
@@ -113,19 +161,10 @@ class UserReportWorker:
 
 """
         for symbol, plan in symbol_plans.items():
-            # Extract first few lines of each plan
             plan_preview = "\n".join(plan.split("\n")[:10])
             report += f"### {symbol}\n\n{plan_preview}\n\n"
         
-        report += """---
-
-## Personalized Recommendations
-
-*Pending LLM integration with persona: """ + persona + """*
-
----
-*Generated by TraderCat Pipeline Q3*
-"""
+        report += f"---\n*Generated by TraderCat Pipeline Q3 (persona: {persona})*\n"
         return report
 
 
@@ -135,15 +174,6 @@ async def generate_user_reports_q3(
 ) -> List[Dict[str, Any]]:
     """
     Q3: Generate personalized reports for all users concurrently.
-    
-    Each user_task should contain:
-        - user_id: UUID
-        - run_date: date
-        - summary_report_md: str (from Q2)
-        - symbol_plans: Dict[str, str] (from Q2, filtered to user's watchlist)
-        - persona: str
-        - lang: str | None
-        - pipeline_run_id: UUID
     """
     if not user_tasks:
         return []

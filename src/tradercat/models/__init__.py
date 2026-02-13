@@ -1,6 +1,6 @@
 """Database models package."""
 from tradercat.models.user import User, ApiKey
-from tradercat.models.symbol import WatchlistItem
+from tradercat.models.symbol import WatchlistItem, GlobalSymbol
 from tradercat.models.signal import SignalRecord, SignalScope
 from tradercat.models.global_report import GlobalReport
 from tradercat.models.user_report import UserReport
@@ -11,6 +11,7 @@ __all__ = [
     "User",
     "ApiKey",
     "WatchlistItem",
+    "GlobalSymbol",
     "SignalRecord",
     "SignalScope",
     "GlobalReport",

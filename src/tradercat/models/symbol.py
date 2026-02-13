@@ -8,6 +8,20 @@ from sqlalchemy.orm import relationship
 from tradercat.database import Base
 
 
+class GlobalSymbol(Base):
+    """Global symbol tracked by the pipeline for signal generation."""
+    __tablename__ = "global_symbols"
+    __table_args__ = (
+        UniqueConstraint("symbol", name="uq_global_symbol"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    symbol = Column(String(20), nullable=False, index=True)
+    symbol_type = Column(String(20), nullable=False, index=True)  # "macro" or "sector"
+    description = Column(String(255), nullable=True)
+    added_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class WatchlistItem(Base):
     """Watchlist item - symbols tracked by users."""
     __tablename__ = "watchlist_items"
@@ -18,7 +32,7 @@ class WatchlistItem(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     symbol = Column(String(20), nullable=False, index=True)
-    company_name = Column(String(255), nullable=True)
+    description = Column(String(255), nullable=True)
     added_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships

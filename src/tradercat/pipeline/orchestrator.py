@@ -1,4 +1,4 @@
-"""Pipeline orchestrator V2 - 3-phase queue pipeline.
+"""Pipeline orchestrator — 3-phase queue pipeline.
 
 Phase 1 (Q1): Signal generation for all unique symbols (global + watchlist).
 Phase 2 (Q2): Global reports - macro summary + batched execution plans.
@@ -10,8 +10,9 @@ import asyncio
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Any
 from uuid import UUID
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tradercat.logger.logger import get_logger
 from tradercat.config import settings
@@ -25,6 +26,7 @@ from tradercat.models import (
     UserReport,
     User,
     WatchlistItem,
+    GlobalSymbol,
 )
 from tradercat.pipeline.signal_worker import process_symbols_q1
 from tradercat.pipeline.report_worker import generate_global_reports_q2
@@ -35,16 +37,15 @@ logger = get_logger(__name__)
 
 
 class PipelineOrchestrator:
-    """Orchestrates the V2 3-phase pipeline execution."""
+    """Orchestrates the 3-phase pipeline execution."""
     
     def __init__(self):
-        self.global_symbols = settings.global_symbols
         self.max_concurrency = settings.pipeline_max_concurrency
         self.batch_size = settings.pipeline_report_batch_size
     
     async def run_pipeline(self, run_date: date | None = None) -> bool:
         """
-        Run the complete V2 pipeline for the given date.
+        Run the complete pipeline for the given date.
         
         Flow: Q1 (signals) → Q2 (global reports) → Q3 (user reports)
         """
@@ -67,7 +68,7 @@ class PipelineOrchestrator:
                 await db.commit()
                 
                 # Execute 3-phase pipeline
-                success = await self._execute_v2_pipeline(db, pipeline_run)
+                success = await self._execute_pipeline(db, pipeline_run)
                 
                 # Finalize
                 pipeline_run.status = PipelineStatus.COMPLETED.value if success else PipelineStatus.FAILED.value
@@ -113,10 +114,10 @@ class PipelineOrchestrator:
         
         return pipeline_run
     
-    async def _execute_v2_pipeline(
+    async def _execute_pipeline(
         self, db: AsyncSession, pipeline_run: PipelineRun
     ) -> bool:
-        """Execute the 3-phase V2 pipeline."""
+        """Execute the 3-phase pipeline."""
         try:
             # =============================================
             # PHASE 1 (Q1): Signal Generation
@@ -127,19 +128,30 @@ class PipelineOrchestrator:
             pipeline_run.step = "q1_signals"
             await db.commit()
             
+            # Collect global symbols from database
+            result = await db.execute(
+                select(GlobalSymbol.symbol).order_by(GlobalSymbol.symbol_type, GlobalSymbol.symbol)
+            )
+            global_symbols = [row[0] for row in result.all()]
+
+            if not global_symbols:
+                logger.warning("No global symbols configured in database — "
+                               "falling back to config default")
+                global_symbols = settings.global_symbols
+
             # Collect all unique symbols: global + all watchlists
             result = await db.execute(select(WatchlistItem.symbol).distinct())
             watchlist_symbols = [row[0] for row in result.all()]
             
             all_symbols = list(dict.fromkeys(
-                self.global_symbols + watchlist_symbols
+                global_symbols + watchlist_symbols
             ))  # Preserves order, deduplicates
             
             pipeline_run.total_symbols = len(all_symbols)
             await db.commit()
             
             logger.info(f"Q1: Processing {len(all_symbols)} unique symbols "
-                        f"({len(self.global_symbols)} global + "
+                        f"({len(global_symbols)} global + "
                         f"{len(watchlist_symbols)} watchlist, deduped)")
             
             all_signals = await process_symbols_q1(
@@ -149,9 +161,22 @@ class PipelineOrchestrator:
                 max_concurrency=self.max_concurrency,
             )
             
-            # Save signals to DB
+            # Save signals to DB (upsert: on conflict update)
             for signal_data in all_signals:
-                db.add(SignalRecord(**signal_data))
+                stmt = pg_insert(SignalRecord).values(**signal_data)
+                stmt = stmt.on_conflict_do_update(
+                    constraint="uq_signal_run_date_symbol_strategy",
+                    set_={
+                        "signal": stmt.excluded.signal,
+                        "confidence": stmt.excluded.confidence,
+                        "reason": stmt.excluded.reason,
+                        "details": stmt.excluded.details,
+                        "scope": stmt.excluded.scope,
+                        "pipeline_run_id": stmt.excluded.pipeline_run_id,
+                        "created_at": stmt.excluded.created_at,
+                    },
+                )
+                await db.execute(stmt)
             
             pipeline_run.processed_symbols = len(all_symbols)
             await db.commit()
@@ -170,26 +195,46 @@ class PipelineOrchestrator:
                 run_date=pipeline_run.run_date,
                 all_signals=all_signals,
                 pipeline_run_id=pipeline_run.id,
-                global_symbols=self.global_symbols,
+                global_symbols=global_symbols,
                 batch_size=self.batch_size,
                 max_concurrency=self.max_concurrency,
+                identity_key=settings.default_identity,
             )
             
-            # Save global reports to DB
+            # Save global reports to DB (upsert: on conflict update)
             for report_data in global_report_records:
-                db.add(GlobalReport(**report_data))
+                stmt = pg_insert(GlobalReport).values(**report_data)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=[
+                        GlobalReport.run_date,
+                        GlobalReport.report_type,
+                        text("COALESCE(symbol, '')"),
+                    ],
+                    set_={
+                        "content_md": stmt.excluded.content_md,
+                        "model_used": stmt.excluded.model_used,
+                        "identity_used": stmt.excluded.identity_used,
+                        "input_context": stmt.excluded.input_context,
+                        "pipeline_run_id": stmt.excluded.pipeline_run_id,
+                        "created_at": stmt.excluded.created_at,
+                    },
+                )
+                await db.execute(stmt)
             await db.commit()
             
             # Build lookup for Q3
             summary_report_md = ""
+            portfolio_summary_md = ""
             symbol_plans: Dict[str, str] = {}
             for rec in global_report_records:
                 if rec["report_type"] == "macro_summary":
                     summary_report_md = rec["content_md"]
+                elif rec["report_type"] == "portfolio_summary":
+                    portfolio_summary_md = rec["content_md"]
                 elif rec["report_type"] == "symbol_execution_plan" and rec.get("symbol"):
                     symbol_plans[rec["symbol"]] = rec["content_md"]
             
-            logger.info(f"Q2 DONE: 1 summary + {len(symbol_plans)} execution plans saved")
+            logger.info(f"Q2 DONE: 1 summary + {len(symbol_plans)} execution plans + 1 portfolio summary saved")
             
             # =============================================
             # PHASE 3 (Q3): User Reports
@@ -252,7 +297,19 @@ class PipelineOrchestrator:
                 )
                 
                 for report_data in user_report_records:
-                    db.add(UserReport(**report_data))
+                    stmt = pg_insert(UserReport).values(**report_data)
+                    stmt = stmt.on_conflict_do_update(
+                        constraint="uq_user_report_user_run_date_type",
+                        set_={
+                            "content_md": stmt.excluded.content_md,
+                            "model_used": stmt.excluded.model_used,
+                            "identity_used": stmt.excluded.identity_used,
+                            "input_context": stmt.excluded.input_context,
+                            "pipeline_run_id": stmt.excluded.pipeline_run_id,
+                            "created_at": stmt.excluded.created_at,
+                        },
+                    )
+                    await db.execute(stmt)
                 
                 pipeline_run.processed_reports = len(user_report_records)
                 await db.commit()
@@ -265,7 +322,7 @@ class PipelineOrchestrator:
             await db.commit()
             
             logger.info("=" * 60)
-            logger.info("PIPELINE V2 COMPLETE")
+            logger.info("PIPELINE COMPLETE")
             logger.info(f"  Signals: {len(all_signals)}")
             logger.info(f"  Global reports: {len(global_report_records)}")
             logger.info(f"  User reports: {pipeline_run.processed_reports}")

@@ -1,4 +1,3 @@
-import os
 from typing import Dict, Type, Tuple, List, Union
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.logger.logger import get_logger
@@ -23,13 +22,8 @@ class LLMFactory:
     def register(cls, prefix: str):
         def wrapper(provider_cls):
             try:
-                # Instantiate immediately upon registration (Import Time)
-                # Pass the global AI token if available
-                token = os.environ.get("TRADERCAT_AI_TOKEN")
-                
-                # Initialize the provider with the token
-                instance = provider_cls(api_key=token)
-                
+                # Instantiate immediately upon registration (import time)
+                instance = provider_cls()
                 cls._registry[prefix] = instance
             except Exception as e:
                 logger.error(f"Failed to auto-init provider '{prefix}': {e}")
@@ -50,11 +44,12 @@ class LLMFactory:
 
     @classmethod
     def _ensure_providers_loaded(cls):
-        """Lazy load provider modules to invoke the @register decorators"""
+        """Lazy load provider modules to invoke the @register decorators."""
         if not cls._providers_loaded:
-            # Import modules here to trigger @register decorators
-            import tradercat.ai.providers.mock_provider
-            import tradercat.ai.providers.github_models
+            try:
+                import tradercat.ai.providers.litellm_provider
+            except ImportError:
+                logger.warning("LiteLLM provider not available (litellm not installed)")
             cls._providers_loaded = True
 
     @classmethod
@@ -114,5 +109,5 @@ class LLMFactory:
             for row in table_data:
                 print(f"{row[0]:<15} | {row[1]:<30} | {row[2]}")
 
-        print("\n📝 Note: Set 'TRADERCAT_AI_TOKEN' env var for authentication.")
+        print("\n📝 Note: Set provider-specific API keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.) for authentication.")
 

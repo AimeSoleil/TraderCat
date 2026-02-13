@@ -8,8 +8,8 @@ class LLMProvider(ABC):
     """
     
     @abstractmethod
-    def __init__(self, api_key: str = None):
-        """Initialize the client connection (Auth only)."""
+    def __init__(self):
+        """Initialize the client connection."""
         pass
     
     @abstractmethod

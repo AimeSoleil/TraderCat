@@ -14,6 +14,7 @@ from tradercat.logger.logger import get_logger
 # Import routers
 from tradercat.api.v1 import users, watchlist, strategies, signals, reports
 from tradercat.api.admin import pipeline, system
+from tradercat.api.admin import global_symbols as admin_global_symbols
 
 # Set up logger
 use_json = settings.log_format == "json"
@@ -124,6 +125,10 @@ app = FastAPI(
             "name": "admin-system",
             "description": "System operations. Health checks and system information.",
         },
+        {
+            "name": "admin-global-symbols",
+            "description": "Global symbol management (Admin only). Manage macro/sector symbols used by the pipeline.",
+        },
     ],
 )
 
@@ -197,6 +202,7 @@ app.include_router(signals.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
 app.include_router(pipeline.router, prefix="/api/admin")
 app.include_router(system.router, prefix="/api/admin")
+app.include_router(admin_global_symbols.router, prefix="/api/admin")
 
 
 @app.get("/", tags=["root"], dependencies=[])

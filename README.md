@@ -315,7 +315,7 @@ Key environment variables (see `.env.example`):
 | `PIPELINE_TIMEZONE` | America/New_York | Timezone for scheduling |
 | `PIPELINE_MAX_CONCURRENCY` | 5 | Max concurrent workers |
 | `DEFAULT_MAX_SYMBOLS_PER_USER` | 50 | Max watchlist size |
-| `TRADERCAT_AI_TOKEN` | - | GitHub Copilot SDK token |
+| `DEFAULT_LLM_MODEL` | gpt-4o | Default LLM model for pipeline |
 | `LOG_FORMAT` | json | Log format (json or text) |
 
 ---

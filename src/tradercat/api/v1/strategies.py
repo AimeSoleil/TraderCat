@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
-from tradercat.api.deps import CurrentUser, DatabaseSession
+from tradercat.api.deps import CurrentUser, CurrentAdminUser, DatabaseSession
 from tradercat.models import StrategyConfig
 from tradercat.schemas.strategy import (
     StrategyListResponse,
@@ -81,10 +81,11 @@ STRATEGY_METADATA = {
 @router.get("", response_model=StrategyListResponse)
 async def list_strategies(
     db: DatabaseSession,
-    current_user: CurrentUser
+    current_user: CurrentAdminUser
 ):
     """
     List all available strategies with default parameters and user overrides.
+    Requires admin access.
     """
     # Get user's strategy configs
     result = await db.execute(
@@ -124,10 +125,11 @@ async def update_strategy_config(
     strategy_name: str,
     config_update: StrategyConfigUpdate,
     db: DatabaseSession,
-    current_user: CurrentUser
+    current_user: CurrentAdminUser
 ):
     """
-    Update user-level strategy parameter overrides.
+    Update strategy parameter overrides.
+    Requires admin access.
     """
     # Validate strategy name
     if strategy_name not in STRATEGY_METADATA:

@@ -11,7 +11,7 @@ async def test_add_watchlist_item(db_session, test_user):
     item = WatchlistItem(
         user_id=test_user.id,
         symbol="AAPL",
-        company_name="Apple Inc.",
+        description="Apple Inc.",
     )
     db_session.add(item)
     await db_session.commit()
@@ -19,7 +19,7 @@ async def test_add_watchlist_item(db_session, test_user):
     
     assert item.id is not None
     assert item.symbol == "AAPL"
-    assert item.company_name == "Apple Inc."
+    assert item.description == "Apple Inc."
     assert item.user_id == test_user.id
 
 

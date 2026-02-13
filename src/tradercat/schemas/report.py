@@ -15,7 +15,7 @@ class GlobalReportResponse(BaseModel):
     report_type: str
     content_md: str
     model_used: str | None
-    persona_used: str | None
+    identity_used: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -44,7 +44,7 @@ class UserReportResponse(BaseModel):
     report_type: str
     content_md: str
     model_used: str | None
-    persona_used: str | None
+    identity_used: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

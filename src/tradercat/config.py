@@ -71,9 +71,10 @@ Admin endpoints require admin-level API keys.
     pipeline_llm_max_retries: int = Field(default=2, description="Max retries for LLM calls before skipping")
     
     # AI/LLM
-    tradercat_ai_token: str = Field(default="", description="GitHub Copilot SDK token")
     default_llm_model: str = Field(default="gpt-4o", description="Default LLM model")
     default_persona: str = Field(default="wyckoff", description="Default analyst persona")
+    default_identity: str = Field(default="wyckoff", description="Default analysis identity (wyckoff, options_strategist)")
+    default_llm_provider: str = Field(default="litellm", description="Default LLM provider (litellm, copilot-azure, mock)")
     
     # Limits
     default_max_symbols_per_user: int = Field(default=50, description="Default max symbols per user")
@@ -88,10 +89,10 @@ Admin endpoints require admin-level API keys.
         description="Deployment mode: 'api-only' (API without scheduler), 'scheduler' (pipeline only), 'combined' (both)"
     )
     
-    # Global symbols (predefined for signal generation)
+    # Global symbols (fallback only — primary source is global_symbols DB table)
     global_symbols: list[str] = Field(
         default=["SPY", "QQQ", "DIA", "IWM", "TLT", "XLK", "XLF", "XLY", "XLV", "XLE", "XLI", "XLP"],
-        description="Predefined global symbols for signal generation"
+        description="Fallback global symbols if database table is empty"
     )
     
     # Admin Seeding (for initial migration)
