@@ -12,9 +12,10 @@ from tradercat.database import init_db
 from tradercat.logger.logger import get_logger
 
 # Import routers
-from tradercat.api.v1 import users, watchlist, strategies, signals, reports
+from tradercat.api.v1 import users, watchlist, signals, reports
 from tradercat.api.admin import pipeline, system
 from tradercat.api.admin import global_symbols as admin_global_symbols
+from tradercat.api.admin import strategies as admin_strategies
 
 # Set up logger
 use_json = settings.log_format == "json"
@@ -106,8 +107,8 @@ app = FastAPI(
             "description": "Manage user watchlist. Add/remove symbols to track for signal generation.",
         },
         {
-            "name": "strategies",
-            "description": "View and configure trading strategies. Customize strategy parameters per user.",
+            "name": "admin-strategies",
+            "description": "Strategy management (Admin only). View and configure trading strategy parameters.",
         },
         {
             "name": "signals",
@@ -197,12 +198,12 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Register routers
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(watchlist.router, prefix="/api/v1")
-app.include_router(strategies.router, prefix="/api/v1")
 app.include_router(signals.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
 app.include_router(pipeline.router, prefix="/api/admin")
 app.include_router(system.router, prefix="/api/admin")
 app.include_router(admin_global_symbols.router, prefix="/api/admin")
+app.include_router(admin_strategies.router, prefix="/api/admin")
 
 
 @app.get("/", tags=["root"], dependencies=[])
@@ -226,7 +227,7 @@ async def root():
             "health": "/api/admin/system/health",
             "users": "/api/v1/users",
             "watchlist": "/api/v1/watchlist",
-            "strategies": "/api/v1/strategies",
+            "strategies": "/api/admin/strategies",
             "signals": "/api/v1/signals",
             "reports": "/api/v1/reports"
         },

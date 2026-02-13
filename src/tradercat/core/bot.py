@@ -5,7 +5,6 @@ from tradercat.core.data.openbb_provider import OpenBBProvider
 from tradercat.logger.logger import get_logger
 from tradercat.core.strategy.chart_pattern_strategy import ChartPatternStrategy, make_chart_pattern_presets
 from tradercat.core.strategy.signal_model import SignalModel
-from tradercat.core.strategy.strategy_presets import StrategyPreset
 
 # Import Strategies and Presets
 from tradercat.core.strategy.bbands_breakout_strategy import (
@@ -32,92 +31,123 @@ from tradercat.core.strategy.momentum_strategy import (
     MomentumTrendStrategy,
     make_momentum_presets,
 )
-from tradercat.core.strategy.sector_rotation_strategy import SectorRotationStrategy, make_sector_rotation_presets
 
 logger = get_logger(__name__)
+
+# ── Strategy class registry ───────────────────────────────────
+STRATEGY_CLASS_MAP: Dict[str, type] = {
+    "BollingerBreakoutStrategy": BollingerBreakoutStrategy,
+    "BBandsReversalStrategy": BBandsReversalStrategy,
+    "CandlestickReversalStrategy": CandlestickReversalStrategy,
+    "ChartPatternStrategy": ChartPatternStrategy,
+    "DivergenceStrategy": DivergenceStrategy,
+    "FibonacciRetracementStrategy": FibonacciRetracementStrategy,
+    "MomentumTrendStrategy": MomentumTrendStrategy,
+}
+
+# ── Hardcoded fallback defaults (when DB unavailable) ─────────
+_FALLBACK_DEFAULTS: Dict[str, Dict[str, Any]] = {
+    "bbands_breakout": {
+        "strategy_class": "BollingerBreakoutStrategy",
+        "make_presets": make_bbands_breakout_presets,
+        "default_preset": "gamma",
+    },
+    "bbands_reversal": {
+        "strategy_class": "BBandsReversalStrategy",
+        "make_presets": make_bbands_reversal_presets,
+        "default_preset": "fade",
+    },
+    "candlestick_reversal": {
+        "strategy_class": "CandlestickReversalStrategy",
+        "make_presets": make_candlestick_reversal_presets,
+        "default_preset": "gamma_dip",
+    },
+    "chart_pattern": {
+        "strategy_class": "ChartPatternStrategy",
+        "make_presets": make_chart_pattern_presets,
+        "default_preset": "momentum_pattern",
+    },
+    "divergence": {
+        "strategy_class": "DivergenceStrategy",
+        "make_presets": make_divergence_presets,
+        "default_preset": "trend_continuation",
+    },
+    "fibonacci_retracement": {
+        "strategy_class": "FibonacciRetracementStrategy",
+        "make_presets": make_fibonacci_presets,
+        "default_preset": "trend_pullback",
+    },
+    "momentum": {
+        "strategy_class": "MomentumTrendStrategy",
+        "make_presets": make_momentum_presets,
+        "default_preset": "swing_momentum",
+    },
+}
 
 
 class StrategyFactory:
     """
-    Centralized place to initialize strategies.
-    Easier to manage configurations and presets here.
+    Centralized strategy initialization.
+
+    Supports two modes:
+      1. **DB-driven** (preferred) — receives ``strategy_configs`` loaded from
+         the ``strategies`` + ``strategy_presets`` tables.
+      2. **Fallback** — when ``strategy_configs`` is ``None`` or empty, uses
+         hardcoded default presets so the pipeline can still run without a DB.
     """
+
     @staticmethod
     def get_single_asset_strategies(
         data_provider: OpenBBProvider,
-        user_overrides: Optional[Dict[str, Dict[str, Any]]] = None
+        strategy_configs: Optional[List[Dict[str, Any]]] = None,
     ) -> List:
         """
-        Get single-asset strategies with optional user parameter overrides.
-        
+        Build strategy instances from DB-loaded configs or hardcoded fallback.
+
         Args:
-            data_provider: Data provider instance
-            user_overrides: Dict mapping strategy names to parameter overrides
+            data_provider: Data provider instance.
+            strategy_configs: List of dicts with keys:
+                ``name``, ``strategy_class``, ``parameters`` (from active preset).
+                Only active strategies are included.
         """
-        user_overrides = user_overrides or {}
-        
-        # Default presets for each strategy
-        strategies = []
-        
-        # BBands Breakout
-        params = make_bbands_breakout_presets()["gamma"].copy()
-        if "bbands_breakout" in user_overrides:
-            params.update(user_overrides["bbands_breakout"])
-        strategies.append(BollingerBreakoutStrategy(data_provider=data_provider, **params))
-        
-        # BBands Reversal
-        params = make_bbands_reversal_presets()["fade"].copy()
-        if "bbands_reversal" in user_overrides:
-            params.update(user_overrides["bbands_reversal"])
-        strategies.append(BBandsReversalStrategy(data_provider=data_provider, **params))
-        
-        # Candlestick Reversal
-        params = make_candlestick_reversal_presets()["gamma_dip"].copy()
-        if "candlestick_reversal" in user_overrides:
-            params.update(user_overrides["candlestick_reversal"])
-        strategies.append(CandlestickReversalStrategy(data_provider=data_provider, **params))
-        
-        # Chart Pattern
-        params = make_chart_pattern_presets()["momentum_pattern"].copy()
-        if "chart_pattern" in user_overrides:
-            params.update(user_overrides["chart_pattern"])
-        strategies.append(ChartPatternStrategy(data_provider=data_provider, **params))
-        
-        # Divergence
-        params = make_divergence_presets()["trend_continuation"].copy()
-        if "divergence" in user_overrides:
-            params.update(user_overrides["divergence"])
-        strategies.append(DivergenceStrategy(data_provider=data_provider, **params))
-        
-        # Fibonacci
-        params = make_fibonacci_presets()["trend_pullback"].copy()
-        if "fibonacci_retracement" in user_overrides:
-            params.update(user_overrides["fibonacci_retracement"])
-        strategies.append(FibonacciRetracementStrategy(data_provider=data_provider, **params))
-        
-        # Momentum
-        params = make_momentum_presets()["swing_momentum"].copy()
-        if "momentum" in user_overrides:
-            params.update(user_overrides["momentum"])
-        strategies.append(MomentumTrendStrategy(data_provider=data_provider, **params))
-        
-        return strategies
+        if strategy_configs:
+            return StrategyFactory._from_db_configs(data_provider, strategy_configs)
+        return StrategyFactory._from_fallback(data_provider)
+
+    # ── DB-driven path ────────────────────────────────────────
 
     @staticmethod
-    def get_portfolio_strategies(
+    def _from_db_configs(
         data_provider: OpenBBProvider,
-        preset: StrategyPreset = "swing",
-        user_overrides: Optional[Dict[str, Any]] = None
+        configs: List[Dict[str, Any]],
     ) -> List:
-        """
-        Get portfolio strategies with optional user parameter overrides.
-        """
-        user_overrides = user_overrides or {}
-        params = make_sector_rotation_presets()[preset].copy()
-        params.update(user_overrides)
-        return [
-            SectorRotationStrategy(data_provider=data_provider, **params),
-        ]
+        strategies = []
+        for cfg in configs:
+            cls_name = cfg["strategy_class"]
+            cls = STRATEGY_CLASS_MAP.get(cls_name)
+            if cls is None:
+                logger.warning(f"Unknown strategy class '{cls_name}' — skipping")
+                continue
+            params = cfg.get("parameters") or {}
+            try:
+                strategies.append(cls(data_provider=data_provider, **params))
+                logger.debug(f"Loaded strategy {cls_name} (preset params from DB)")
+            except Exception as e:
+                logger.error(f"Failed to instantiate {cls_name}: {e}")
+        return strategies
+
+    # ── Hardcoded fallback path ───────────────────────────────
+
+    @staticmethod
+    def _from_fallback(data_provider: OpenBBProvider) -> List:
+        logger.warning("No DB strategy configs — using hardcoded fallback defaults")
+        strategies = []
+        for name, meta in _FALLBACK_DEFAULTS.items():
+            cls = STRATEGY_CLASS_MAP[meta["strategy_class"]]
+            presets = meta["make_presets"]()
+            params = presets[meta["default_preset"]].copy()
+            strategies.append(cls(data_provider=data_provider, **params))
+        return strategies
 
 
 class TraderBot:
@@ -129,22 +159,22 @@ class TraderBot:
     def __init__(
         self,
         data_provider: Optional[OpenBBProvider] = None,
-        user_strategy_overrides: Optional[Dict[str, Dict[str, Any]]] = None
+        strategy_configs: Optional[List[Dict[str, Any]]] = None,
     ):
         """
         Initialize TraderBot.
         
         Args:
             data_provider: Data provider instance
-            user_strategy_overrides: User-specific strategy parameter overrides
+            strategy_configs: DB-loaded strategy+preset configs (from orchestrator).
+                              Falls back to hardcoded defaults when ``None``.
         """
         self.data_provider = data_provider or OpenBBProvider()
-        self.user_strategy_overrides = user_strategy_overrides or {}
         
-        # Pre-load strategies with user overrides
+        # Pre-load strategies (DB-driven or fallback)
         self.single_strategies = StrategyFactory.get_single_asset_strategies(
-            self.data_provider, 
-            self.user_strategy_overrides
+            self.data_provider,
+            strategy_configs=strategy_configs,
         )
         self.portfolio_strategies = StrategyFactory.get_portfolio_strategies(self.data_provider)
 
@@ -177,22 +207,5 @@ class TraderBot:
                 signals.append(signal)
             except Exception as e:
                 logger.error(f"Error running {strategy.__class__.__name__} on {symbol}: {traceback.format_exc()}")
-
-        return signals
-
-    async def process_portfolio(self) -> List[SignalModel]:
-        """
-        Runs global/portfolio strategies (e.g., Sector Rotation).
-        Returns list of generated signals (no execution).
-        """
-        logger.info("🌍 Processing Portfolio Strategies...")
-        
-        signals = []
-        for strategy in self.portfolio_strategies:
-            try:
-                signal = strategy.generate_signal()
-                signals.append(signal)
-            except Exception as e:
-                logger.error(f"Error running {strategy.__class__.__name__}: {traceback.format_exc()}")
 
         return signals

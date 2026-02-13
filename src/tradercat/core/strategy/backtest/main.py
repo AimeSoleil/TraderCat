@@ -8,8 +8,6 @@ from typing import List, Dict
 from datetime import datetime
 from tabulate import tabulate
 
-from tradercat.strategy.chart_pattern_strategy import ChartPatternStrategy, make_chart_pattern_presets
-
 # Add project root
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
@@ -17,13 +15,13 @@ from tradercat.logger.logger import get_logger
 from tradercat.core.data.openbb_provider import OpenBBProvider
 
 # --- Import Strategies ---
-from tradercat.strategy.bbands_breakout_strategy import BollingerBreakoutStrategy, make_bbands_breakout_presets
-from tradercat.strategy.bbands_reversal_strategy import BBandsReversalStrategy, make_bbands_reversal_presets
-from tradercat.strategy.candlestick_reversal_strategy import CandlestickReversalStrategy, make_candlestick_reversal_presets
-from tradercat.strategy.divergence_strategy import DivergenceStrategy, make_divergence_presets
-from tradercat.strategy.fibonacci_retracement_strategy import FibonacciRetracementStrategy, make_fibonacci_presets
-from tradercat.strategy.momentum_strategy import MomentumTrendStrategy, make_momentum_presets
-from tradercat.strategy.sector_rotation_strategy import SectorRotationStrategy, make_sector_rotation_presets
+from tradercat.core.strategy.bbands_breakout_strategy import BollingerBreakoutStrategy, make_bbands_breakout_presets
+from tradercat.core.strategy.bbands_reversal_strategy import BBandsReversalStrategy, make_bbands_reversal_presets
+from tradercat.core.strategy.candlestick_reversal_strategy import CandlestickReversalStrategy, make_candlestick_reversal_presets
+from tradercat.core.strategy.chart_pattern_strategy import ChartPatternStrategy, make_chart_pattern_presets
+from tradercat.core.strategy.divergence_strategy import DivergenceStrategy, make_divergence_presets
+from tradercat.core.strategy.fibonacci_retracement_strategy import FibonacciRetracementStrategy, make_fibonacci_presets
+from tradercat.core.strategy.momentum_strategy import MomentumTrendStrategy, make_momentum_presets
 
 # --- Import Runners ---
 from tradercat.core.strategy.backtest.backtest_engine import BacktestRunner
@@ -97,9 +95,6 @@ def setup_registry() -> StrategyRegistry:
     registry.register("Divergence", DivergenceStrategy, make_divergence_presets, "single")
     registry.register("Fibonacci", FibonacciRetracementStrategy, make_fibonacci_presets, "single")
     registry.register("Momentum", MomentumTrendStrategy, make_momentum_presets, "single")
-    
-    # Register Portfolio Strategies
-    registry.register("SectorRotation", SectorRotationStrategy, make_sector_rotation_presets, "portfolio")
     
     return registry
 

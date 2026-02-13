@@ -27,6 +27,8 @@ from tradercat.models import (
     User,
     WatchlistItem,
     GlobalSymbol,
+    Strategy,
+    StrategyPreset,
 )
 from tradercat.pipeline.signal_worker import process_symbols_q1
 from tradercat.pipeline.report_worker import generate_global_reports_q2
@@ -128,6 +130,31 @@ class PipelineOrchestrator:
             pipeline_run.step = "q1_signals"
             await db.commit()
             
+            # ── Load active strategies + presets from DB ──
+            from sqlalchemy.orm import selectinload
+            strat_result = await db.execute(
+                select(Strategy)
+                .where(Strategy.is_active == True)
+                .options(selectinload(Strategy.active_preset))
+            )
+            db_strategies = strat_result.scalars().all()
+
+            strategy_configs = None
+            if db_strategies:
+                strategy_configs = []
+                for strat in db_strategies:
+                    params = {}
+                    if strat.active_preset:
+                        params = strat.active_preset.parameters or {}
+                    strategy_configs.append({
+                        "name": strat.name,
+                        "strategy_class": strat.strategy_class,
+                        "parameters": params,
+                    })
+                logger.info(f"Q1: Loaded {len(strategy_configs)} active strategies from DB")
+            else:
+                logger.warning("Q1: No active strategies in DB — will use hardcoded fallback")
+
             # Collect global symbols from database
             result = await db.execute(
                 select(GlobalSymbol.symbol).order_by(GlobalSymbol.symbol_type, GlobalSymbol.symbol)
@@ -159,6 +186,7 @@ class PipelineOrchestrator:
                 run_date=pipeline_run.run_date,
                 pipeline_run_id=pipeline_run.id,
                 max_concurrency=self.max_concurrency,
+                strategy_configs=strategy_configs,
             )
             
             # Save signals to DB (upsert: on conflict update)

@@ -27,11 +27,15 @@ from tradercat.schemas.report import (
     UserReportList,
 )
 from tradercat.schemas.strategy import (
-    StrategyInfo,
-    StrategyConfigResponse,
-    StrategyWithUserConfig,
-    StrategyConfigUpdate,
+    StrategyResponse,
+    StrategyWithPresets,
+    StrategyPresetResponse,
+    StrategyPresetCreate,
+    StrategyPresetUpdate,
+    StrategyPresetBatchUpdate,
+    StrategyActivePresetUpdate,
     StrategyListResponse,
+    StrategyPresetListResponse,
 )
 
 __all__ = [
@@ -54,9 +58,13 @@ __all__ = [
     "UserReportResponse",
     "UserReportDetail",
     "UserReportList",
-    "StrategyInfo",
-    "StrategyConfigResponse",
-    "StrategyWithUserConfig",
-    "StrategyConfigUpdate",
+    "StrategyResponse",
+    "StrategyWithPresets",
+    "StrategyPresetResponse",
+    "StrategyPresetCreate",
+    "StrategyPresetUpdate",
+    "StrategyPresetBatchUpdate",
+    "StrategyActivePresetUpdate",
     "StrategyListResponse",
+    "StrategyPresetListResponse",
 ]

@@ -28,7 +28,6 @@ class User(Base):
     # Relationships
     api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
     watchlist = relationship("WatchlistItem", back_populates="user", cascade="all, delete-orphan")
-    strategy_configs = relationship("StrategyConfig", back_populates="user", cascade="all, delete-orphan")
     user_reports = relationship("UserReport", back_populates="user", cascade="all, delete-orphan")
 
 

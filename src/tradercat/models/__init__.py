@@ -4,7 +4,7 @@ from tradercat.models.symbol import WatchlistItem, GlobalSymbol
 from tradercat.models.signal import SignalRecord, SignalScope
 from tradercat.models.global_report import GlobalReport
 from tradercat.models.user_report import UserReport
-from tradercat.models.strategy import StrategyConfig
+from tradercat.models.strategy import Strategy, StrategyPreset
 from tradercat.models.pipeline import PipelineRun, PipelineStatus
 
 __all__ = [
@@ -16,7 +16,8 @@ __all__ = [
     "SignalScope",
     "GlobalReport",
     "UserReport",
-    "StrategyConfig",
+    "Strategy",
+    "StrategyPreset",
     "PipelineRun",
     "PipelineStatus",
 ]

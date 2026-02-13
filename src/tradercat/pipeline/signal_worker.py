@@ -23,10 +23,12 @@ class SignalWorker:
     def __init__(
         self,
         data_provider: Optional[OpenBBProvider] = None,
-        max_retries: int = 1
+        max_retries: int = 1,
+        strategy_configs: Optional[List[Dict[str, Any]]] = None,
     ):
         self.data_provider = data_provider or OpenBBProvider()
         self.max_retries = max_retries
+        self.strategy_configs = strategy_configs
         self._global_symbols: Set[str] = set(settings.global_symbols)
     
     def _resolve_scope(self, symbol: str) -> str:
@@ -38,7 +40,6 @@ class SignalWorker:
         symbol: str,
         run_date: date,
         pipeline_run_id: UUID,
-        user_strategy_overrides: Optional[Dict[str, Dict[str, Any]]] = None
     ) -> List[Dict[str, Any]]:
         """
         Process a single symbol and generate signals.
@@ -50,7 +51,7 @@ class SignalWorker:
             try:
                 bot = TraderBot(
                     data_provider=self.data_provider,
-                    user_strategy_overrides=user_strategy_overrides
+                    strategy_configs=self.strategy_configs,
                 )
                 
                 signals = await bot.process_symbol(symbol)
@@ -88,6 +89,7 @@ async def process_symbols_q1(
     run_date: date,
     pipeline_run_id: UUID,
     max_concurrency: int = 5,
+    strategy_configs: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Q1: Process all unique symbols concurrently.
@@ -106,7 +108,7 @@ async def process_symbols_q1(
     
     async def worker():
         worker_results = []
-        signal_worker = SignalWorker()
+        signal_worker = SignalWorker(strategy_configs=strategy_configs)
         
         while True:
             try:
