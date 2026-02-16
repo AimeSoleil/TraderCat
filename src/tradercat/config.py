@@ -99,6 +99,11 @@ Admin endpoints require admin-level API keys.
     admin_username: str = Field(default="admin", description="Initial admin username for seeding")
     admin_email: str = Field(default="admin@tradercat.com", description="Initial admin email for seeding")
     admin_max_symbols: int = Field(default=100, description="Initial admin max symbols limit")
+
+    # JWT
+    jwt_secret: str = Field(default="tradercat-jwt-secret-change-me", description="Secret key for JWT encoding")
+    jwt_algorithm: str = Field(default="HS256", description="JWT algorithm")
+    jwt_expire_minutes: int = Field(default=480, description="JWT token expiration in minutes (default 8h)")
     
     model_config = SettingsConfigDict(
         env_file=".env",

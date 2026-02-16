@@ -176,7 +176,6 @@ class TraderBot:
             self.data_provider,
             strategy_configs=strategy_configs,
         )
-        self.portfolio_strategies = StrategyFactory.get_portfolio_strategies(self.data_provider)
 
     async def process_symbol(self, symbol: str) -> List[SignalModel]:
         """

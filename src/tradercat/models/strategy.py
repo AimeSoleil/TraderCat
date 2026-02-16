@@ -1,11 +1,15 @@
 """Strategy and StrategyPreset models — global strategy configuration."""
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, UniqueConstraint, Index
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, UniqueConstraint, Index, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from tradercat.database import Base
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Strategy(Base):
@@ -25,12 +29,17 @@ class Strategy(Base):
     default_preset_name = Column(String(100), nullable=False)  # fallback preset name
     active_preset_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("strategy_presets.id", ondelete="SET NULL"),
+        ForeignKey(
+            "strategy_presets.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_strategies_active_preset_id",
+        ),
         nullable=True,
     )
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     # Relationships
     presets = relationship(
@@ -69,9 +78,9 @@ class StrategyPreset(Base):
     )
     name = Column(String(100), nullable=False)
     description = Column(String(500), nullable=True)
-    parameters = Column(JSONB, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    parameters = Column(JSONB().with_variant(JSON, "sqlite"), nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     # Relationships
     strategy = relationship(

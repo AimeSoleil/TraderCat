@@ -35,10 +35,12 @@ class AnalystRole(AIRole):
         llm: LLMProvider,
         identity: IdentityRole,
         model_id: str = "gpt-4o",
+        api_key: Optional[str] = None,
     ):
         self.llm = llm
         self.identity = identity
         self.model_id = model_id
+        self.api_key = api_key
     
     @property
     def role_type(self) -> RoleType:
@@ -84,6 +86,7 @@ class AnalystRole(AIRole):
             prompt=user_prompt,
             model_id=self.model_id,
             system_prompt=system_prompt,
+            api_key=self.api_key,
         )
         
         return RoleOutput(
@@ -127,6 +130,7 @@ class AnalystRole(AIRole):
             prompt=user_prompt,
             model_id=self.model_id,
             system_prompt=system_prompt,
+            api_key=self.api_key,
         )
         
         return RoleOutput(

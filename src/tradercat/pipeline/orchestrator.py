@@ -29,6 +29,7 @@ from tradercat.models import (
     GlobalSymbol,
     Strategy,
     StrategyPreset,
+    LlmToken,
 )
 from tradercat.pipeline.signal_worker import process_symbols_q1
 from tradercat.pipeline.report_worker import generate_global_reports_q2
@@ -45,10 +46,19 @@ class PipelineOrchestrator:
         self.max_concurrency = settings.pipeline_max_concurrency
         self.batch_size = settings.pipeline_report_batch_size
     
-    async def run_pipeline(self, run_date: date | None = None) -> bool:
+    async def run_pipeline(
+        self, run_date: date | None = None, *, force: bool = False
+    ) -> bool:
         """
         Run the complete pipeline for the given date.
-        
+
+        Args:
+            run_date: Target date (defaults to today).
+            force: When True, reset a previous COMPLETED / FAILED run to
+                   PENDING so it can be re-executed.  Data produced by the
+                   pipeline (signals, reports) is upserted, so stale rows
+                   are overwritten automatically.
+
         Flow: Q1 (signals) → Q2 (global reports) → Q3 (user reports)
         """
         run_date = run_date or datetime.utcnow().date()
@@ -60,7 +70,9 @@ class PipelineOrchestrator:
         async with AsyncSessionLocal() as db:
             try:
                 # Check / create pipeline run
-                pipeline_run = await self._get_or_create_pipeline_run(db, run_date)
+                pipeline_run = await self._get_or_create_pipeline_run(
+                    db, run_date, force=force
+                )
                 if pipeline_run is None:
                     return False
                 
@@ -88,21 +100,42 @@ class PipelineOrchestrator:
                 return False
     
     async def _get_or_create_pipeline_run(
-        self, db: AsyncSession, run_date: date
+        self, db: AsyncSession, run_date: date, *, force: bool = False
     ) -> PipelineRun | None:
-        """Get existing or create new pipeline run."""
+        """Get existing or create new pipeline run.
+
+        When *force* is ``True``, a COMPLETED or FAILED run is reset to
+        PENDING so the pipeline can overwrite its output.  A RUNNING run
+        is never reset — the caller should reject the request in that case.
+        """
         result = await db.execute(
             select(PipelineRun).where(PipelineRun.run_date == run_date)
         )
         pipeline_run = result.scalars().first()
-        
+
         if pipeline_run:
-            if pipeline_run.status == PipelineStatus.COMPLETED.value:
-                logger.info(f"Pipeline already completed for {run_date}")
-                return None
-            elif pipeline_run.status == PipelineStatus.RUNNING.value:
+            if pipeline_run.status == PipelineStatus.RUNNING.value:
                 logger.warning(f"Pipeline already running for {run_date}")
                 return None
+
+            if not force and pipeline_run.status == PipelineStatus.COMPLETED.value:
+                logger.info(f"Pipeline already completed for {run_date} (use force=True to re-run)")
+                return None
+
+            # force=True  OR  status is FAILED / PENDING → reset and re-use
+            logger.info(f"Resetting pipeline run for {run_date} "
+                        f"(previous status={pipeline_run.status}) — force={force}")
+            pipeline_run.status = PipelineStatus.PENDING.value
+            pipeline_run.step = None
+            pipeline_run.error_log = None
+            pipeline_run.started_at = None
+            pipeline_run.completed_at = None
+            pipeline_run.total_symbols = 0
+            pipeline_run.processed_symbols = 0
+            pipeline_run.total_reports = 0
+            pipeline_run.processed_reports = 0
+            await db.commit()
+            await db.refresh(pipeline_run)
         else:
             from uuid import uuid4
             pipeline_run = PipelineRun(
@@ -113,7 +146,7 @@ class PipelineOrchestrator:
             db.add(pipeline_run)
             await db.commit()
             await db.refresh(pipeline_run)
-        
+
         return pipeline_run
     
     async def _execute_pipeline(
@@ -121,6 +154,24 @@ class PipelineOrchestrator:
     ) -> bool:
         """Execute the 3-phase pipeline."""
         try:
+            # =============================================
+            # PRE-FLIGHT: Load active LLM token
+            # =============================================
+            token_result = await db.execute(
+                select(LlmToken).where(LlmToken.is_active == True).limit(1)
+            )
+            active_token = token_result.scalars().first()
+            if not active_token:
+                msg = "No active LLM token found. Add a token via /api/admin/llm-tokens and set it active."
+                logger.error(f"Pipeline aborted: {msg}")
+                pipeline_run.error_log = msg
+                await db.commit()
+                return False
+
+            llm_api_key = active_token.token
+            logger.info(f"Pipeline: Using LLM token from user={active_token.user_id} "
+                        f"provider={active_token.provider_name}")
+
             # =============================================
             # PHASE 1 (Q1): Signal Generation
             # =============================================
@@ -174,15 +225,30 @@ class PipelineOrchestrator:
                 global_symbols + watchlist_symbols
             ))  # Preserves order, deduplicates
             
+            # ── Skip symbols that already have signals for this run_date ──
+            existing_result = await db.execute(
+                select(SignalRecord.symbol)
+                .where(SignalRecord.run_date == pipeline_run.run_date)
+                .distinct()
+            )
+            existing_symbols = {row[0] for row in existing_result.all()}
+
+            symbols_to_process = [s for s in all_symbols if s not in existing_symbols]
+            skipped_count = len(all_symbols) - len(symbols_to_process)
+            if skipped_count:
+                logger.info(f"Q1: Skipping {skipped_count} symbols with existing signals "
+                            f"for {pipeline_run.run_date}")
+
             pipeline_run.total_symbols = len(all_symbols)
             await db.commit()
             
-            logger.info(f"Q1: Processing {len(all_symbols)} unique symbols "
+            logger.info(f"Q1: Processing {len(symbols_to_process)}/{len(all_symbols)} symbols "
                         f"({len(global_symbols)} global + "
-                        f"{len(watchlist_symbols)} watchlist, deduped)")
+                        f"{len(watchlist_symbols)} watchlist, deduped, "
+                        f"{skipped_count} skipped)")
             
             all_signals = await process_symbols_q1(
-                symbols=all_symbols,
+                symbols=symbols_to_process,
                 run_date=pipeline_run.run_date,
                 pipeline_run_id=pipeline_run.id,
                 max_concurrency=self.max_concurrency,
@@ -208,7 +274,35 @@ class PipelineOrchestrator:
             
             pipeline_run.processed_symbols = len(all_symbols)
             await db.commit()
-            logger.info(f"Q1 DONE: {len(all_signals)} signals saved")
+            logger.info(f"Q1 DONE: {len(all_signals)} new signals saved "
+                        f"({skipped_count} symbols skipped with existing data)")
+
+            # Reload ALL signals for this run_date (including previously-saved
+            # ones for skipped symbols) so Q2/Q3 have the full picture.
+            if skipped_count:
+                existing_rows = await db.execute(
+                    select(SignalRecord).where(
+                        SignalRecord.run_date == pipeline_run.run_date
+                    )
+                )
+                all_signals_for_reports = [
+                    {
+                        "run_date": r.run_date,
+                        "symbol": r.symbol,
+                        "strategy": r.strategy,
+                        "signal": r.signal,
+                        "confidence": r.confidence,
+                        "reason": r.reason,
+                        "details": r.details,
+                        "scope": r.scope,
+                        "pipeline_run_id": r.pipeline_run_id,
+                    }
+                    for r in existing_rows.scalars().all()
+                ]
+                logger.info(f"Q2 input: {len(all_signals_for_reports)} total signals "
+                            f"(including {skipped_count} previously-saved)")
+            else:
+                all_signals_for_reports = all_signals
             
             # =============================================
             # PHASE 2 (Q2): Global Reports
@@ -221,12 +315,13 @@ class PipelineOrchestrator:
             
             global_report_records = await generate_global_reports_q2(
                 run_date=pipeline_run.run_date,
-                all_signals=all_signals,
+                all_signals=all_signals_for_reports,
                 pipeline_run_id=pipeline_run.id,
                 global_symbols=global_symbols,
                 batch_size=self.batch_size,
                 max_concurrency=self.max_concurrency,
                 identity_key=settings.default_identity,
+                api_key=llm_api_key,
             )
             
             # Save global reports to DB (upsert: on conflict update)
@@ -322,6 +417,7 @@ class PipelineOrchestrator:
                 user_report_records = await generate_user_reports_q3(
                     user_tasks=user_tasks,
                     max_concurrency=self.max_concurrency,
+                    api_key=llm_api_key,
                 )
                 
                 for report_data in user_report_records:

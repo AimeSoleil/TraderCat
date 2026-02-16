@@ -39,10 +39,12 @@ class GlobalReportWorker:
         max_retries: int | None = None,
         identity_key: str | None = None,
         model_id: str | None = None,
+        api_key: str | None = None,
     ):
         self.max_retries = max_retries if max_retries is not None else settings.pipeline_llm_max_retries
         self.identity_key = identity_key or settings.default_persona
         self.model_id = model_id or settings.default_llm_model
+        self.api_key = api_key
         
         # Lazy init — roles created on first use
         self._provider: Optional[LLMProvider] = None
@@ -63,8 +65,8 @@ class GlobalReportWorker:
             return
         
         self._identity = IdentityRole(self.identity_key)
-        self._analyst = AnalystRole(self._provider, self._identity, self.model_id)
-        self._summarizer = SummarizerRole(self._provider, self._identity, self.model_id)
+        self._analyst = AnalystRole(self._provider, self._identity, self.model_id, api_key=self.api_key)
+        self._summarizer = SummarizerRole(self._provider, self._identity, self.model_id, api_key=self.api_key)
     
     async def generate_macro_summary(
         self,
@@ -260,6 +262,7 @@ async def generate_global_reports_q2(
     batch_size: int = 10,
     max_concurrency: int = 3,
     identity_key: str | None = None,
+    api_key: str | None = None,
 ) -> List[Dict[str, Any]]:
     """
     Q2: Generate all global reports using the 3-role AI infrastructure.
@@ -269,7 +272,7 @@ async def generate_global_reports_q2(
       2. Per-symbol execution plans (symbol analysis) — batched
       3. Portfolio summary (summary role) — consolidates everything
     """
-    worker = GlobalReportWorker(identity_key=identity_key)
+    worker = GlobalReportWorker(identity_key=identity_key, api_key=api_key)
     all_records: List[Dict[str, Any]] = []
     
     # --- Build contexts ---
@@ -313,7 +316,7 @@ async def generate_global_reports_q2(
     
     async def batch_worker_fn():
         results = []
-        w = GlobalReportWorker(identity_key=identity_key)
+        w = GlobalReportWorker(identity_key=identity_key, api_key=api_key)
         while True:
             try:
                 batch_symbols = batch_queue.get_nowait()

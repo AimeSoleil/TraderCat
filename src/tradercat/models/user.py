@@ -1,13 +1,17 @@
 """User and API Key models."""
 import hashlib
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 from sqlalchemy import Column, String, Boolean, Integer, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from tradercat.database import Base
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class User(Base):
@@ -22,13 +26,14 @@ class User(Base):
     max_symbols = Column(Integer, default=50, nullable=False)
     preferred_persona = Column(String(50), nullable=True)  # e.g. "wyckoff", "livermore"
     preferred_lang = Column(String(10), nullable=True)  # e.g. "en", "zh"
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     # Relationships
     api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
     watchlist = relationship("WatchlistItem", back_populates="user", cascade="all, delete-orphan")
     user_reports = relationship("UserReport", back_populates="user", cascade="all, delete-orphan")
+    llm_tokens = relationship("LlmToken", back_populates="user", cascade="all, delete-orphan")
 
 
 class ApiKey(Base):
@@ -41,7 +46,7 @@ class ApiKey(Base):
     key_prefix = Column(String(12), nullable=False)  # "tc_abc..." for display
     name = Column(String(100), default="default", nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
     last_used_at = Column(DateTime, nullable=True)
 
     # Relationships

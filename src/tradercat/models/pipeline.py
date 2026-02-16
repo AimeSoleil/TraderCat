@@ -1,11 +1,15 @@
 """Pipeline run models."""
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from uuid import uuid4
 from enum import Enum as PyEnum
 from sqlalchemy import Column, String, Integer, Text, Date, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 
 from tradercat.database import Base
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class PipelineStatus(str, PyEnum):
@@ -31,4 +35,4 @@ class PipelineRun(Base):
     error_log = Column(Text, nullable=True)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)

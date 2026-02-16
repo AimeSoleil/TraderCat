@@ -1,9 +1,9 @@
 """Test fixtures and utilities."""
 import pytest
-import asyncio
+import pytest_asyncio
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import StaticPool
 
 from tradercat.database import Base
 from tradercat.models import User, ApiKey
@@ -12,21 +12,13 @@ from tradercat.models import User, ApiKey
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create event loop for async tests."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture
+@pytest_asyncio.fixture
 async def db_engine():
     """Create test database engine."""
     engine = create_async_engine(
         TEST_DATABASE_URL,
         connect_args={"check_same_thread": False},
-        poolclass=NullPool,
+        poolclass=StaticPool,
     )
     
     async with engine.begin() as conn:
@@ -40,7 +32,7 @@ async def db_engine():
     await engine.dispose()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
     """Create test database session."""
     async_session = async_sessionmaker(
@@ -53,7 +45,7 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_user(db_session: AsyncSession) -> User:
     """Create a test user."""
     user = User(
@@ -68,7 +60,7 @@ async def test_user(db_session: AsyncSession) -> User:
     return user
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_admin(db_session: AsyncSession) -> User:
     """Create a test admin user."""
     admin = User(
@@ -83,7 +75,7 @@ async def test_admin(db_session: AsyncSession) -> User:
     return admin
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_api_key(db_session: AsyncSession, test_user: User) -> tuple[str, ApiKey]:
     """Create a test API key."""
     plaintext, key_hash = ApiKey.generate_key()

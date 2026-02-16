@@ -1,11 +1,16 @@
 """User report models - personalized reports generated in Q3 pipeline phase."""
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from uuid import uuid4
 from sqlalchemy import Column, String, Text, Date, DateTime, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import JSON
 from sqlalchemy.orm import relationship
 
 from tradercat.database import Base
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class UserReport(Base):
@@ -31,9 +36,12 @@ class UserReport(Base):
     content_md = Column(Text, nullable=False)  # LLM-generated markdown
     model_used = Column(String(100), nullable=True)
     identity_used = Column(String(50), nullable=True)
-    input_context = Column(JSONB, nullable=True)  # Snapshot: summary + symbol plans used
+    input_context = Column(
+        JSONB().with_variant(JSON, "sqlite"),
+        nullable=True,
+    )  # Snapshot: summary + symbol plans used
     pipeline_run_id = Column(UUID(as_uuid=True), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
 
     # Relationships
     user = relationship("User", back_populates="user_reports")

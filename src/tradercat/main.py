@@ -12,10 +12,11 @@ from tradercat.database import init_db
 from tradercat.logger.logger import get_logger
 
 # Import routers
-from tradercat.api.v1 import users, watchlist, signals, reports
+from tradercat.api.v1 import auth, users, watchlist, signals, reports
 from tradercat.api.admin import pipeline, system
 from tradercat.api.admin import global_symbols as admin_global_symbols
 from tradercat.api.admin import strategies as admin_strategies
+from tradercat.api.admin import llm_tokens as admin_llm_tokens
 
 # Set up logger
 use_json = settings.log_format == "json"
@@ -127,6 +128,10 @@ app = FastAPI(
             "description": "System operations. Health checks and system information.",
         },
         {
+            "name": "admin-llm-tokens",
+            "description": "LLM token management (Admin only). Store and manage API keys for LLM providers.",
+        },
+        {
             "name": "admin-global-symbols",
             "description": "Global symbol management (Admin only). Manage macro/sector symbols used by the pipeline.",
         },
@@ -150,11 +155,24 @@ def custom_openapi():
     )
     
     # Update API Key security scheme description
-    if "ApiKeyHeader" in openapi_schema.get("components", {}).get("securitySchemes", {}):
-        openapi_schema["components"]["securitySchemes"]["ApiKeyHeader"]["description"] = (
+    schemes = openapi_schema.setdefault("components", {}).setdefault("securitySchemes", {})
+    if "ApiKeyHeader" in schemes:
+        schemes["ApiKeyHeader"]["description"] = (
             "API Key authentication. Click 'Authorize' button above and enter your API key. "
             "Get your key from admin by creating a user."
         )
+
+    # Add Bearer JWT scheme for web portal auth
+    schemes["HTTPBearer"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": (
+            "JWT authentication for the web portal. "
+            "First call POST /api/v1/auth/login with your API key to get a token, "
+            "then paste it here."
+        ),
+    }
     
     # Add server information
     openapi_schema["servers"] = [
@@ -177,7 +195,11 @@ app.openapi = custom_openapi
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "*",  # TODO: restrict in production
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -196,10 +218,12 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # Register routers
+app.include_router(auth.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(watchlist.router, prefix="/api/v1")
 app.include_router(signals.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
+app.include_router(admin_llm_tokens.router, prefix="/api/admin")
 app.include_router(pipeline.router, prefix="/api/admin")
 app.include_router(system.router, prefix="/api/admin")
 app.include_router(admin_global_symbols.router, prefix="/api/admin")

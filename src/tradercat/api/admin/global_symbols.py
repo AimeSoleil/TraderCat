@@ -1,5 +1,6 @@
 """Admin Global Symbols API — manage pipeline global symbols."""
 from fastapi import APIRouter, HTTPException, status, Query
+from uuid import UUID
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from datetime import datetime
@@ -23,7 +24,7 @@ class GlobalSymbolItem(BaseModel):
 
 class GlobalSymbolResponse(BaseModel):
     """Response for a single global symbol."""
-    id: str
+    id: UUID
     symbol: str
     symbol_type: str
     description: str | None

@@ -1,10 +1,14 @@
 """Global report models - pipeline-generated reports not bound to a specific user."""
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from uuid import uuid4
-from sqlalchemy import Column, String, Text, Date, DateTime, Index, text
+from sqlalchemy import Column, String, Text, Date, DateTime, Index, text, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from tradercat.database import Base
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class GlobalReport(Base):
@@ -33,6 +37,9 @@ class GlobalReport(Base):
     content_md = Column(Text, nullable=False)  # LLM-generated markdown
     model_used = Column(String(100), nullable=True)
     identity_used = Column(String(50), nullable=True)
-    input_context = Column(JSONB, nullable=True)  # Snapshot of signal data sent to LLM
+    input_context = Column(
+        JSONB().with_variant(JSON, "sqlite"),
+        nullable=True,
+    )  # Snapshot of signal data sent to LLM
     pipeline_run_id = Column(UUID(as_uuid=True), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)

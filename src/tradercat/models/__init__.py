@@ -6,6 +6,7 @@ from tradercat.models.global_report import GlobalReport
 from tradercat.models.user_report import UserReport
 from tradercat.models.strategy import Strategy, StrategyPreset
 from tradercat.models.pipeline import PipelineRun, PipelineStatus
+from tradercat.models.llm_token import LlmToken
 
 __all__ = [
     "User",
@@ -20,4 +21,5 @@ __all__ = [
     "StrategyPreset",
     "PipelineRun",
     "PipelineStatus",
+    "LlmToken",
 ]

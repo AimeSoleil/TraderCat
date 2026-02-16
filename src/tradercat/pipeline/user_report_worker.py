@@ -31,8 +31,9 @@ def _get_llm_provider(model_id: str = None):
 class UserReportWorker:
     """Worker for generating personalized user reports (Q3) using role-based AI."""
     
-    def __init__(self, max_retries: int | None = None):
+    def __init__(self, max_retries: int | None = None, api_key: str | None = None):
         self.max_retries = max_retries if max_retries is not None else settings.pipeline_llm_max_retries
+        self.api_key = api_key
     
     async def generate_user_briefing(
         self,
@@ -76,6 +77,7 @@ class UserReportWorker:
                     persona=persona,
                     identity_key=identity_key,
                     model=model,
+                    api_key=self.api_key,
                 )
                 
                 return {
@@ -114,6 +116,7 @@ class UserReportWorker:
         persona: str,
         identity_key: str,
         model: str,
+        api_key: str | None = None,
     ) -> str:
         """
         Call LLM with identity-based persona to generate personalized briefing.
@@ -123,7 +126,7 @@ class UserReportWorker:
             provider, resolved_model = _get_llm_provider(model)
             
             identity = IdentityRole(identity_key)
-            summarizer = SummarizerRole(provider, identity, resolved_model)
+            summarizer = SummarizerRole(provider, identity, resolved_model, api_key=api_key)
             
             result = await summarizer.summarize(
                 run_date=str(asyncio.get_event_loop().time()),  # Will be overridden
@@ -171,6 +174,7 @@ class UserReportWorker:
 async def generate_user_reports_q3(
     user_tasks: List[Dict[str, Any]],
     max_concurrency: int = 5,
+    api_key: str | None = None,
 ) -> List[Dict[str, Any]]:
     """
     Q3: Generate personalized reports for all users concurrently.
@@ -184,7 +188,7 @@ async def generate_user_reports_q3(
     
     async def worker():
         results = []
-        w = UserReportWorker()
+        w = UserReportWorker(api_key=api_key)
         while True:
             try:
                 task = queue.get_nowait()

@@ -1,12 +1,16 @@
 """Signal record models."""
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from uuid import uuid4
 from enum import Enum as PyEnum
-from sqlalchemy import Column, String, Float, Date, DateTime, Index, UniqueConstraint
+from sqlalchemy import Column, String, Float, Date, DateTime, Index, UniqueConstraint, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from tradercat.database import Base
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class SignalScope(str, PyEnum):
@@ -31,7 +35,10 @@ class SignalRecord(Base):
     signal = Column(String(20), nullable=False)  # "buy", "sell", "hold", "rebalance"
     confidence = Column(Float, default=0.0, nullable=False)
     reason = Column(String(1000), nullable=True)
-    details = Column(JSONB, nullable=True)  # Flexible Dict[str, Any] stored as JSONB
+    details = Column(
+        JSONB().with_variant(JSON, "sqlite"),
+        nullable=True,
+    )  # Flexible Dict[str, Any] stored as JSONB
     scope = Column(String(20), default=SignalScope.USER.value, nullable=False)
     pipeline_run_id = Column(UUID(as_uuid=True), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)

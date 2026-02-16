@@ -12,6 +12,8 @@ from tradercat.schemas.user import (
     UserResponse,
     UserWithKeys,
     ApiKeyCreated,
+    ApiKeyCreate,
+    ApiKeyResponse,
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -160,3 +162,98 @@ async def update_user(
     await db.refresh(user)
     
     return user
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: UUID,
+    db: DatabaseSession,
+    admin: CurrentAdminUser,
+):
+    """Delete a user and all their API keys. Admin-only."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if user.id == admin.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete yourself")
+
+    # Delete API keys first
+    keys_result = await db.execute(select(ApiKey).where(ApiKey.user_id == user_id))
+    for key in keys_result.scalars().all():
+        await db.delete(key)
+    await db.delete(user)
+    await db.commit()
+
+
+# ── API Key management ────────────────────────────────────────
+
+@router.post("/{user_id}/api-keys", response_model=ApiKeyCreated, status_code=status.HTTP_201_CREATED)
+async def create_api_key(
+    user_id: UUID,
+    body: ApiKeyCreate,
+    db: DatabaseSession,
+    admin: CurrentAdminUser,
+):
+    """Generate a new API key for a user. Admin-only."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    plaintext_key, key_hash = ApiKey.generate_key()
+    api_key = ApiKey(
+        user_id=user.id,
+        key_hash=key_hash,
+        key_prefix=ApiKey.get_key_prefix(plaintext_key),
+        name=body.name,
+    )
+    db.add(api_key)
+    await db.commit()
+
+    return ApiKeyCreated(
+        api_key=plaintext_key,
+        key_prefix=api_key.key_prefix,
+        name=api_key.name,
+        created_at=api_key.created_at,
+    )
+
+
+@router.patch("/{user_id}/api-keys/{key_id}", response_model=ApiKeyResponse)
+async def update_api_key(
+    user_id: UUID,
+    key_id: UUID,
+    db: DatabaseSession,
+    admin: CurrentAdminUser,
+):
+    """Toggle an API key active/inactive. Admin-only."""
+    result = await db.execute(
+        select(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == user_id)
+    )
+    api_key = result.scalars().first()
+    if not api_key:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+
+    api_key.is_active = not api_key.is_active
+    await db.commit()
+    await db.refresh(api_key)
+    return api_key
+
+
+@router.delete("/{user_id}/api-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_api_key(
+    user_id: UUID,
+    key_id: UUID,
+    db: DatabaseSession,
+    admin: CurrentAdminUser,
+):
+    """Delete an API key. Admin-only."""
+    result = await db.execute(
+        select(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == user_id)
+    )
+    api_key = result.scalars().first()
+    if not api_key:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+
+    await db.delete(api_key)
+    await db.commit()

@@ -92,6 +92,7 @@ class LiteLLMProvider(LLMProvider):
         system_prompt: str = None,
         temperature: float = 0.7,
         max_tokens: int = 8192,
+        api_key: Optional[str] = None,
     ) -> str:
         """Single-shot generation using LiteLLM's unified API."""
         if not self._available:
@@ -102,13 +103,17 @@ class LiteLLMProvider(LLMProvider):
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
         
+        kwargs = dict(
+            model=model_id,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        if api_key:
+            kwargs["api_key"] = api_key
+
         try:
-            response = await litellm.acompletion(
-                model=model_id,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+            response = await litellm.acompletion(**kwargs)
             return response.choices[0].message.content
         except Exception as e:
             logger.error(f"LiteLLM generation error (model={model_id}): {e}")
@@ -120,18 +125,23 @@ class LiteLLMProvider(LLMProvider):
         model_id: str,
         temperature: float = 0.7,
         max_tokens: int = 8192,
+        api_key: Optional[str] = None,
     ) -> str:
         """Multi-turn chat using LiteLLM's unified API."""
         if not self._available:
             return "Error: litellm not installed"
         
+        kwargs = dict(
+            model=model_id,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        if api_key:
+            kwargs["api_key"] = api_key
+
         try:
-            response = await litellm.acompletion(
-                model=model_id,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+            response = await litellm.acompletion(**kwargs)
             return response.choices[0].message.content
         except Exception as e:
             logger.error(f"LiteLLM chat error (model={model_id}): {e}")

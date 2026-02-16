@@ -1,7 +1,7 @@
 """API dependencies for authentication and database sessions."""
 from typing import AsyncGenerator, Annotated
-from fastapi import Depends, HTTPException, status
-from fastapi.security import APIKeyHeader
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -12,58 +12,70 @@ from datetime import datetime
 from tradercat.logger.logger import get_logger
 logger = get_logger(__name__)
 
-# Define API Key security scheme
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
+# Security schemes
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def _decode_jwt(token: str) -> dict:
+    """Decode a JWT token. Imported lazily to avoid circular imports."""
+    import jwt as pyjwt
+    from tradercat.config import settings
+    try:
+        return pyjwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    except pyjwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+    except pyjwt.InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
 
 async def get_current_user(
-    x_api_key: Annotated[str, Depends(api_key_header)],
-    db: AsyncSession = Depends(get_db)
+    x_api_key: Annotated[str | None, Depends(api_key_header)] = None,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)] = None,
+    db: AsyncSession = Depends(get_db),
 ) -> User:
     """
-    Authenticate user via API key.
-    
-    Args:
-        x_api_key: API key from X-API-Key header
-        db: Database session
-        
-    Returns:
-        Authenticated User object
-        
-    Raises:
-        HTTPException: If authentication fails
+    Authenticate user via JWT Bearer token **or** X-API-Key header.
+
+    Priority: Bearer token first, then API key.
     """
-    # Hash the provided key
-    key_hash = ApiKey.hash_key(x_api_key)
-    
-    # Look up the API key
-    result = await db.execute(
-        select(ApiKey).where(ApiKey.key_hash == key_hash, ApiKey.is_active == True)
-    )
-    api_key = result.scalars().first()
-    
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or inactive API key"
+    # ── Path 1: JWT Bearer ──
+    if credentials is not None:
+        payload = _decode_jwt(credentials.credentials)
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
+        result = await db.execute(
+            select(User).where(User.id == user_id, User.is_active == True)
         )
-    
-    # Update last used timestamp
-    api_key.last_used_at = datetime.utcnow()
-    await db.commit()
-    
-    # Get the user
-    result = await db.execute(
-        select(User).where(User.id == api_key.user_id, User.is_active == True)
-    )
-    user = result.scalars().first()
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive"
+        user = result.scalars().first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+        return user
+
+    # ── Path 2: API Key ──
+    if x_api_key is not None:
+        key_hash = ApiKey.hash_key(x_api_key)
+        result = await db.execute(
+            select(ApiKey).where(ApiKey.key_hash == key_hash, ApiKey.is_active == True)
         )
-    
-    return user
+        api_key = result.scalars().first()
+        if not api_key:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or inactive API key")
+
+        api_key.last_used_at = datetime.utcnow()
+        await db.commit()
+
+        result = await db.execute(
+            select(User).where(User.id == api_key.user_id, User.is_active == True)
+        )
+        user = result.scalars().first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+        return user
+
+    # ── Neither provided ──
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
 
 async def get_current_admin_user(

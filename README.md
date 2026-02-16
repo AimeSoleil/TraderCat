@@ -219,6 +219,12 @@ The response will include a generated API key for the new user.
 - `GET /api/v1/reports` - List reports (filters: date, symbol, type)
 - `GET /api/v1/reports/{id}` - Get full report with context
 
+### Admin: LLM Tokens
+- `GET /api/admin/llm-tokens` - List LLM tokens
+- `POST /api/admin/llm-tokens` - Add LLM token
+- `PATCH /api/admin/llm-tokens/{id}` - Update LLM token
+- `DELETE /api/admin/llm-tokens/{id}` - Remove LLM token
+
 ### Admin: Pipeline
 - `POST /api/admin/pipeline/trigger` - Manually trigger pipeline
 - `GET /api/admin/pipeline/status` - Get pipeline status
@@ -240,6 +246,7 @@ The pipeline runs automatically at **8:00 PM Eastern Time** on market days (Mond
 curl -X POST http://localhost:8000/api/admin/pipeline/trigger \
   -H "X-API-Key: your_admin_api_key"
 ```
+Note: The pipeline requires at least one active LLM token. Add one via `/api/admin/llm-tokens`.
 
 ### Pipeline Flow
 1. **Global Signals**: Generate signals for SPY, QQQ, DIA, IWM, TLT, XLK, XLF, XLY, XLV, XLE, XLI, XLP
@@ -257,6 +264,7 @@ pytest
 # Run specific test modules
 pytest tests/models/
 pytest tests/pipeline/
+pytest tests/core/strategy/
 
 # With coverage
 pytest --cov=tradercat
@@ -328,6 +336,7 @@ Key environment variables (see `.env.example`):
 - **watchlist_items**: Per-user symbol tracking
 - **signal_records**: Generated trading signals (GLOBAL/USER scope)
 - **reports**: LLM-generated analysis reports
+- **llm_tokens**: Stored LLM provider tokens (admin-managed)
 - **strategy_configs**: User-level strategy parameter overrides
 - **pipeline_runs**: Pipeline execution tracking
 

@@ -5,7 +5,7 @@ from sqlalchemy import select
 from pydantic import BaseModel
 
 from tradercat.api.deps import CurrentAdminUser, DatabaseSession
-from tradercat.models import PipelineRun, PipelineStatus
+from tradercat.models import PipelineRun, PipelineStatus, LlmToken
 
 router = APIRouter(prefix="/pipeline", tags=["admin-pipeline"])
 
@@ -44,56 +44,70 @@ async def trigger_pipeline(
 ):
     """
     Manually trigger the pipeline for a specific date (or today if not specified).
-    Idempotent: will not re-run if already completed for that date.
+
+    - If a pipeline is currently RUNNING for today, the request is rejected.
+    - If a previous run exists (COMPLETED / FAILED / PENDING), it will be
+      re-run and all output data (signals, reports) will be overwritten via
+      upsert.
+
     Admin-only endpoint.
     """
     from datetime import datetime
     from tradercat.pipeline.orchestrator import PipelineOrchestrator
-    
+
     target_date = run_date or datetime.utcnow().date()
-    
-    # Check if pipeline run already exists
+
+    # ── Guard: at least one active LLM token must exist ──
+    token_result = await db.execute(
+        select(LlmToken).where(LlmToken.is_active == True).limit(1)
+    )
+    if not token_result.scalars().first():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No active LLM token configured. "
+                   "Add an active token via /api/admin/llm-tokens before triggering the pipeline.",
+        )
+
+    # Block if any pipeline is already RUNNING for today
+    today = datetime.utcnow().date()
+    result = await db.execute(
+        select(PipelineRun).where(
+            PipelineRun.run_date == today,
+            PipelineRun.status == PipelineStatus.RUNNING.value,
+        )
+    )
+    running = result.scalars().first()
+    if running:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A pipeline is already running today (run_id={running.id}). "
+                   "Wait for it to finish before triggering again.",
+        )
+
+    # Check if a run already exists for the target date
     result = await db.execute(
         select(PipelineRun).where(PipelineRun.run_date == target_date)
     )
     existing_run = result.scalars().first()
-    
-    if existing_run:
-        if existing_run.status == PipelineStatus.COMPLETED:
-            return PipelineTriggerResponse(
-                message="Pipeline already completed for this date",
-                run_id=str(existing_run.id),
-                run_date=existing_run.run_date,
-                status=existing_run.status.value
-            )
-        elif existing_run.status == PipelineStatus.RUNNING:
-            return PipelineTriggerResponse(
-                message="Pipeline is already running for this date",
-                run_id=str(existing_run.id),
-                run_date=existing_run.run_date,
-                status=existing_run.status.value
-            )
-    
-    # Trigger pipeline execution in background
+
+    # Trigger pipeline execution in background (force=True to overwrite)
     orchestrator = PipelineOrchestrator()
     import asyncio
-    asyncio.create_task(orchestrator.run_pipeline(target_date))
-    
-    # Return immediately
+    asyncio.create_task(orchestrator.run_pipeline(target_date, force=True))
+
     if existing_run:
         return PipelineTriggerResponse(
-            message="Pipeline re-triggered for this date",
+            message=f"Pipeline re-triggered — previous {existing_run.status} run will be overwritten",
             run_id=str(existing_run.id),
             run_date=existing_run.run_date,
-            status="pending"
+            status="pending",
         )
-    else:
-        return PipelineTriggerResponse(
-            message="Pipeline triggered successfully",
-            run_id="pending",
-            run_date=target_date,
-            status="pending"
-        )
+    return PipelineTriggerResponse(
+        message="Pipeline triggered successfully",
+        run_id="pending",
+        run_date=target_date,
+        status="pending",
+    )
 
 
 @router.get("/status", response_model=PipelineRunResponse)
@@ -126,7 +140,7 @@ async def get_pipeline_status(
     return PipelineRunResponse(
         id=str(pipeline_run.id),
         run_date=pipeline_run.run_date,
-        status=pipeline_run.status.value,
+        status=pipeline_run.status,
         step=pipeline_run.step,
         total_symbols=pipeline_run.total_symbols,
         processed_symbols=pipeline_run.processed_symbols,
