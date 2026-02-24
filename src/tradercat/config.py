@@ -72,9 +72,9 @@ Admin endpoints require admin-level API keys.
     
     # AI/LLM
     default_llm_model: str = Field(default="gpt-4o", description="Default LLM model")
-    default_persona: str = Field(default="wyckoff", description="Default analyst persona")
-    default_identity: str = Field(default="wyckoff", description="Default analysis identity (wyckoff, options_strategist)")
-    default_llm_provider: str = Field(default="litellm", description="Default LLM provider (litellm, copilot-azure, mock)")
+    default_persona: str = Field(default="options_strategist", description="Default analyst persona")
+    default_identity: str = Field(default="options_strategist", description="Default analysis identity (wyckoff, options_strategist)")
+    default_llm_provider: str = Field(default="copilot", description="Default LLM provider (litellm, copilot, copilot-azure, mock)")
     
     # Limits
     default_max_symbols_per_user: int = Field(default=50, description="Default max symbols per user")

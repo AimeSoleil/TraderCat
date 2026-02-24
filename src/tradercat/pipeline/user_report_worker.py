@@ -24,7 +24,8 @@ def _get_llm_provider(model_id: str = None):
     """Get LLM provider from the factory."""
     from tradercat.ai.llm_provider_factory import LLMFactory
     model_id = model_id or settings.default_llm_model
-    provider, resolved_model = LLMFactory.create_provider(f"litellm_{model_id}")
+    provider_key = settings.default_llm_provider
+    provider, resolved_model = LLMFactory.create_provider(f"{provider_key}_{model_id}")
     return provider, resolved_model
 
 

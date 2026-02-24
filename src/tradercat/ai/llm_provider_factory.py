@@ -50,6 +50,10 @@ class LLMFactory:
                 import tradercat.ai.providers.litellm_provider
             except ImportError:
                 logger.warning("LiteLLM provider not available (litellm not installed)")
+            try:
+                import tradercat.ai.providers.copilot_provider
+            except ImportError:
+                logger.warning("Copilot SDK provider not available (copilot-sdk not installed)")
             cls._providers_loaded = True
 
     @classmethod
