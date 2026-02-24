@@ -174,15 +174,11 @@ def custom_openapi():
         ),
     }
     
-    # Add server information
+    # Use relative URL so Swagger always targets the host the user is accessing
     openapi_schema["servers"] = [
         {
-            "url": "http://localhost:8000",
-            "description": "Local development server"
-        },
-        {
-            "url": "https://api.tradercat.example.com",
-            "description": "Production server (configure as needed)"
+            "url": "/",
+            "description": "Current server"
         }
     ]
     
@@ -195,14 +191,11 @@ app.openapi = custom_openapi
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "*",  # TODO: restrict in production
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],  # TODO: restrict in production
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
