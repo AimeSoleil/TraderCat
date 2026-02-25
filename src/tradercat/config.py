@@ -71,7 +71,7 @@ Admin endpoints require admin-level API keys.
     pipeline_llm_max_retries: int = Field(default=2, description="Max retries for LLM calls before skipping")
     
     # AI/LLM
-    default_llm_model: str = Field(default="gpt-4o", description="Default LLM model")
+    default_llm_model: str = Field(default="claude-opus-4.6", description="Default LLM model")
     default_persona: str = Field(default="options_strategist", description="Default analyst persona")
     default_identity: str = Field(default="options_strategist", description="Default analysis identity (wyckoff, options_strategist)")
     default_llm_provider: str = Field(default="copilot", description="Default LLM provider (litellm, copilot, copilot-azure, mock)")

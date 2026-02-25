@@ -34,7 +34,7 @@ class AnalystRole(AIRole):
         self,
         llm: LLMProvider,
         identity: IdentityRole,
-        model_id: str = "gpt-4o",
+        model_id: str = "claude-opus-4.6",
         api_key: Optional[str] = None,
     ):
         self.llm = llm

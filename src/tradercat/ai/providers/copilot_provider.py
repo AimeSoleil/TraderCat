@@ -53,14 +53,23 @@ class CopilotProvider(LLMProvider):
 
     # Fallback catalogue when the CLI is not reachable at import time.
     KNOWN_MODELS = [
-        "gpt-4o",
-        "gpt-4o-mini",
-        "gpt-4",
-        "o1",
-        "o3-mini",
-        "claude-sonnet-4-20250514",
-        "claude-3.5-haiku",
-        "gemini-2.0-flash",
+        "claude-haiku-4.5",
+        "claude-opus-4.5",
+        "claude-opus-4.6",
+        "claude-opus-4.6-fast",
+        "claude-sonnet-4",
+        "claude-sonnet-4.5",
+        "gemini-3-pro-preview",
+        "gpt-4.1",
+        "gpt-5",
+        "gpt-5-mini",
+        "gpt-5.1",
+        "gpt-5.1-codex",
+        "gpt-5.1-codex-max",
+        "gpt-5.1-codex-mini",
+        "gpt-5.2",
+        "gpt-5.2-codex",
+        "gpt-5.3-codex",
     ]
 
     # ------------------------------------------------------------------
