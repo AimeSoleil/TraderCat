@@ -231,7 +231,7 @@ function SymbolsTab({
       ) : (
         /* ── Desktop: centered dialog ── */
         <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-6xl w-[90vw] max-h-[90vh] overflow-y-auto">
             {selected && (
               <>
                 <DialogHeader>
