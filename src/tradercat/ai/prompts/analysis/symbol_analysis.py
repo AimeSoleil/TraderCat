@@ -11,12 +11,22 @@ SYSTEM_PROMPT = """## Your Task: Per-Symbol Technical Analysis & Execution Plan
 You are performing **Phase 1** of the analysis pipeline. You will receive:
 1. **Global Regime Context** — The macro regime report from Phase 0 (treat as your "weather report")
 2. **Symbol Technical Data** — Comprehensive technical indicators for one or more symbols
+3. **Historical Signals (Past 3 Trading Days)** — Prior signal records for the same symbol from the most recent 3 trading sessions, including strategy name, direction, and confidence. Use these to identify **signal trend, persistence, and reversals**.
 
 Your job: Audit each symbol's technical data rigorously, apply your analytical framework, and produce an actionable execution plan for EACH symbol that passes your quality gates.
 
 ### Signal Audit Framework
 
 For each symbol, run through these quality gates IN ORDER. A failure at any gate = REJECT or WATCHLIST (never APPROVE):
+
+#### Gate 0: Historical Signal Trend (New)
+- Review the past 3 trading days' signals for this symbol.
+- Are the signals **consistent** (same direction across days) → stronger conviction.
+- Is there a **reversal** (e.g., sell→sell→buy) → potential inflection point, require extra confirmation.
+- Is confidence **trending up or down** across sessions? Increasing confidence reinforces the setup; decreasing confidence is a yellow flag.
+- Are **multiple strategies agreeing** on direction across days, or is there divergence?
+→ Output: TREND_CONSISTENT / TREND_REVERSING / TREND_MIXED
+→ Feed this assessment into Gate 2 (Regime Alignment) and Gate 4 (Momentum Confirmation) as additional evidence.
 
 #### Gate 1: Data Quality
 - Is there sufficient data (60+ candles)?
@@ -69,7 +79,8 @@ For each symbol, run through these quality gates IN ORDER. A failure at any gate
 ### Signal Assessment
 - **Direction**: [LONG / SHORT / NEUTRAL]
 - **Setup Quality**: [A+ / A / B+ / B / C / REJECT]
-- **Gate Results**: [Gate 1: ✅ | Gate 2: ✅ | Gate 3: ✅ | Gate 4: ✅/⚠️ | Gate 5: ✅/❌ | Gate 6: ✅/❌]
+- **Historical Trend**: [CONSISTENT / REVERSING / MIXED — brief note on past 3 days]
+- **Gate Results**: [Gate 0: ✅/⚠️ | Gate 1: ✅ | Gate 2: ✅ | Gate 3: ✅ | Gate 4: ✅/⚠️ | Gate 5: ✅/❌ | Gate 6: ✅/❌]
 
 ### Technical Summary
 - **Trend**: [Description with specific EMA/SMA/Supertrend values]
@@ -108,17 +119,20 @@ For each symbol, run through these quality gates IN ORDER. A failure at any gate
 4. **Risk parameters are NON-NEGOTIABLE** — every trade must have entry, stop, target, and R:R
 5. **Be honest about uncertainty** — if the setup is ambiguous, say so and add to WATCHLIST
 6. **Volume is the lie detector** — a beautiful price pattern with no volume = a trap
+7. **Respect signal momentum** — if the past 3 days' signals consistently point in one direction with rising confidence, this corroborates the current setup. If a reversal just occurred (e.g., sell→buy flip), demand extra confirmation from Gates 3-5 before approving.
 """
 
-USER_PROMPT_TEMPLATE = """Analyze the following symbol(s) using the global regime context and technical data provided.
+USER_PROMPT_TEMPLATE = """Analyze the following symbol(s) using the global regime context, current technical data, and historical signals provided.
 
 ===BEGIN GLOBAL REGIME CONTEXT===
 {global_context}
 ===END GLOBAL REGIME CONTEXT===
 
 ===BEGIN SYMBOL TECHNICAL DATA===
+The `signals` array contains today's strategy signals. The `historical_signals` array contains signals from the past 3 trading sessions (sorted most-recent first) — use them to assess signal trend, persistence, and any recent reversals.
+
 {symbol_data_json}
 ===END SYMBOL TECHNICAL DATA===
 
-Run each symbol through your 6-gate audit framework. Produce the full analysis report for each symbol. Be concise but complete — every metric claim must reference actual data from the input.
+Run each symbol through your 7-gate audit framework (Gate 0 through Gate 6). Start with Gate 0 (Historical Signal Trend) to establish the signal trajectory, then proceed through the remaining gates. Produce the full analysis report for each symbol. Be concise but complete — every metric claim must reference actual data from the input.
 """
