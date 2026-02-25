@@ -347,17 +347,14 @@ class PipelineOrchestrator:
             
             # Build lookup for Q3
             summary_report_md = ""
-            portfolio_summary_md = ""
             symbol_plans: Dict[str, str] = {}
             for rec in global_report_records:
                 if rec["report_type"] == "macro_summary":
                     summary_report_md = rec["content_md"]
-                elif rec["report_type"] == "portfolio_summary":
-                    portfolio_summary_md = rec["content_md"]
                 elif rec["report_type"] == "symbol_execution_plan" and rec.get("symbol"):
                     symbol_plans[rec["symbol"]] = rec["content_md"]
             
-            logger.info(f"Q2 DONE: 1 summary + {len(symbol_plans)} execution plans + 1 portfolio summary saved")
+            logger.info(f"Q2 DONE: 1 macro summary + {len(symbol_plans)} execution plans saved")
             
             # =============================================
             # PHASE 3 (Q3): User Reports

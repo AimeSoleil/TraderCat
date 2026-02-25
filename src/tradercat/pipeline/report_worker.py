@@ -1,9 +1,11 @@
 """Global report generation worker for pipeline (Q2) — role-based AI.
 
-Q2 uses the 3-role AI infrastructure:
+Q2 uses the role-based AI infrastructure:
   Phase 2a: Global Analysis — Macro regime + sector rotation (AnalystRole)
-  Phase 2b: Symbol Analysis — Per-symbol execution plans (AnalystRole)
-  Phase 2c: Portfolio Summary — Consolidated report (SummarizerRole)
+  Phase 2b: Symbol Analysis — Per-symbol options execution plans (AnalystRole)
+
+Personalized portfolio summaries are generated per-user in Q3 (user_report_worker)
+using SummarizerRole with each user's preferred persona and watchlist.
 
 These reports are stored in global_reports (no user_id).
 """
@@ -21,7 +23,6 @@ from tradercat.config import settings
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.ai.roles.identity import IdentityRole
 from tradercat.ai.roles.analyst import AnalystRole
-from tradercat.ai.roles.summarizer import SummarizerRole
 from tradercat.pipeline.holidays import get_previous_market_day
 
 logger = get_logger(__name__)
@@ -60,7 +61,6 @@ class GlobalReportWorker:
         self._provider: Optional[LLMProvider] = None
         self._identity: Optional[IdentityRole] = None
         self._analyst: Optional[AnalystRole] = None
-        self._summarizer: Optional[SummarizerRole] = None
     
     def _ensure_roles(self):
         """Initialize AI roles lazily."""
@@ -76,7 +76,6 @@ class GlobalReportWorker:
         
         self._identity = IdentityRole(self.identity_key)
         self._analyst = AnalystRole(self._provider, self._identity, self.model_id, api_key=self.api_key)
-        self._summarizer = SummarizerRole(self._provider, self._identity, self.model_id, api_key=self.api_key)
     
     async def generate_macro_summary(
         self,
@@ -189,57 +188,6 @@ class GlobalReportWorker:
                         logger.error(f"Q2: Failed {symbol} after {self.max_retries + 1} attempts: {e}")
         
         return records
-    
-    async def generate_portfolio_summary(
-        self,
-        run_date: date,
-        global_report_md: str,
-        symbol_plans: Dict[str, str],
-        pipeline_run_id: UUID,
-        model: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Generate portfolio summary using SummarizerRole.
-        Consolidates global report + all symbol plans into a final portfolio report.
-        """
-        self._ensure_roles()
-        model = model or self.model_id
-        
-        for attempt in range(self.max_retries + 1):
-            try:
-                if self._summarizer:
-                    result = await self._summarizer.summarize(
-                        run_date=str(run_date),
-                        global_report=global_report_md,
-                        symbol_reports=symbol_plans,
-                    )
-                    content = result.content
-                else:
-                    content = f"# Portfolio Summary — {run_date}\n\n*Pending LLM integration*"
-                
-                return {
-                    "run_date": run_date,
-                    "symbol": None,
-                    "report_type": "portfolio_summary",
-                    "content_md": content,
-                    "model_used": model,
-                    "identity_used": self.identity_key,
-                    "input_context": _json_safe({
-                        "symbols": list(symbol_plans.keys()),
-                        "has_global_context": bool(global_report_md),
-                    }),
-                    "pipeline_run_id": pipeline_run_id,
-                }
-                
-            except Exception as e:
-                if attempt < self.max_retries:
-                    logger.warning(f"Q2: Retry {attempt + 1}/{self.max_retries} for portfolio_summary: {e}")
-                    await asyncio.sleep(2 ** attempt)
-                else:
-                    logger.error(f"Q2: Failed portfolio_summary after {self.max_retries + 1} attempts: {e}")
-                    return None
-        
-        return None
     
     # --- Placeholder methods (fallback when LLM not available) ---
     
@@ -419,19 +367,11 @@ async def generate_global_reports_q2(
             if rec.get("symbol"):
                 symbol_plans[rec["symbol"]] = rec["content_md"]
     
-    # --- Step 3: Portfolio Summary ---
-    if symbol_plans:
-        portfolio_record = await worker.generate_portfolio_summary(
-            run_date=run_date,
-            global_report_md=global_context_md,
-            symbol_plans=symbol_plans,
-            pipeline_run_id=pipeline_run_id,
-        )
-        if portfolio_record:
-            all_records.append(portfolio_record)
+    # NOTE: Portfolio summary removed from Q2 — personalized summaries
+    # are generated per-user in Q3 (user_report_worker) using SummarizerRole.
     
     logger.info(
         f"Q2 complete: 1 macro_summary + {len(symbol_plans)} execution plans "
-        f"+ 1 portfolio_summary from {len(batches)} batches"
+        f"from {len(batches)} batches"
     )
     return all_records

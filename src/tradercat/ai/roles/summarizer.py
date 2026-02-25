@@ -1,7 +1,7 @@
-"""Summarizer Role — Consolidates all analyses into final portfolio report.
+"""Summarizer Role — Consolidates all analyses into final options portfolio report.
 
-Takes the Global Regime Report + all Per-Symbol Analysis Reports and produces
-a unified portfolio plan with $2,000 capital, risk management, and ROI estimation.
+Takes the Global Regime Report + all Per-Symbol Options Analysis Reports and produces
+a unified options portfolio plan with $2,000 capital, Greeks budget, risk management, and ROI estimation.
 """
 import json
 from typing import Dict, Any, Optional

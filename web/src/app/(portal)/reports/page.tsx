@@ -213,13 +213,6 @@ export default function ReportsPage() {
       reportsApi.listGlobal({ run_date: dateParam, report_type: "macro_summary", limit: 200 }),
   });
 
-  // Portfolio reports (global, report_type = portfolio_summary)
-  const portfolioReports = useQuery({
-    queryKey: ["reports", "portfolio", runDate],
-    queryFn: () =>
-      reportsApi.listGlobal({ run_date: dateParam, report_type: "portfolio_summary", limit: 200 }),
-  });
-
   // Symbol execution plans (global, report_type = symbol_execution_plan)
   const symbolReports = useQuery({
     queryKey: ["reports", "symbols", runDate],
@@ -248,9 +241,6 @@ export default function ReportsPage() {
           <TabsTrigger value="macro">
             Macro Report ({macroReports.data?.total ?? "…"})
           </TabsTrigger>
-          <TabsTrigger value="portfolio">
-            Portfolio ({portfolioReports.data?.total ?? "…"})
-          </TabsTrigger>
           <TabsTrigger value="symbols">
             Symbols ({symbolReports.data?.total ?? "…"})
           </TabsTrigger>
@@ -270,15 +260,6 @@ export default function ReportsPage() {
           <ReportCardGrid
             isLoading={macroReports.isLoading}
             reports={macroReports.data?.reports}
-            hrefPrefix="/reports/global"
-          />
-        </TabsContent>
-
-        {/* ── Portfolio ── */}
-        <TabsContent value="portfolio" className="mt-4">
-          <ReportCardGrid
-            isLoading={portfolioReports.isLoading}
-            reports={portfolioReports.data?.reports}
             hrefPrefix="/reports/global"
           />
         </TabsContent>

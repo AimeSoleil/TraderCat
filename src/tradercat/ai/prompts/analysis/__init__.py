@@ -2,6 +2,6 @@
 from typing import Dict
 
 ANALYSIS_REGISTRY: Dict[str, str] = {
-    "global_analysis": "tradercat.ai.prompts.analysis.global_analysis",
+    "macro_analysis": "tradercat.ai.prompts.analysis.macro_analysis",
     "symbol_analysis": "tradercat.ai.prompts.analysis.symbol_analysis",
 }

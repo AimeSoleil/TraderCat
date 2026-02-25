@@ -9,9 +9,9 @@ from typing import List, Dict, Any, Optional
 from tradercat.ai.roles.base import AIRole, RoleType, RoleOutput
 from tradercat.ai.roles.identity import IdentityRole
 from tradercat.ai.providers.llm_interface import LLMProvider
-from tradercat.ai.prompts.analysis.global_analysis import (
-    SYSTEM_PROMPT as GLOBAL_ANALYSIS_SYSTEM,
-    USER_PROMPT_TEMPLATE as GLOBAL_ANALYSIS_USER,
+from tradercat.ai.prompts.analysis.macro_analysis import (
+    SYSTEM_PROMPT as MACRO_ANALYSIS_SYSTEM,
+    USER_PROMPT_TEMPLATE as MACRO_ANALYSIS_USER,
 )
 from tradercat.ai.prompts.analysis.symbol_analysis import (
     SYSTEM_PROMPT as SYMBOL_ANALYSIS_SYSTEM,
@@ -70,11 +70,11 @@ class AnalystRole(AIRole):
         Returns:
             RoleOutput containing the global regime report markdown
         """
-        system_prompt = self._compose_system_prompt(GLOBAL_ANALYSIS_SYSTEM)
+        system_prompt = self._compose_system_prompt(MACRO_ANALYSIS_SYSTEM)
         
         # Format signals for the prompt
         signals_json = json.dumps(signals_data, indent=2, default=str)
-        user_prompt = GLOBAL_ANALYSIS_USER.format(
+        user_prompt = MACRO_ANALYSIS_USER.format(
             run_date=run_date,
             signals_json=signals_json,
         )
