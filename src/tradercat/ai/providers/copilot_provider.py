@@ -94,6 +94,7 @@ class CopilotProvider(LLMProvider):
         return "copilot"
 
     def list_supported_models(self) -> List[str]:
+
         return list(self.KNOWN_MODELS)
 
     async def generate_thought(
@@ -215,6 +216,8 @@ class CopilotProvider(LLMProvider):
                         "Copilot models refreshed from server: %s",
                         ", ".join(self.KNOWN_MODELS),
                     )
+                else:
+                    logger.warning("Copilot client returned empty model list")
             except Exception as exc:
                 logger.debug("Could not list Copilot models: %s (using fallback list)", exc)
 
