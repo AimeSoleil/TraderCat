@@ -20,6 +20,11 @@ from tradercat.ai.roles.summarizer import SummarizerRole
 logger = get_logger(__name__)
 
 
+def _json_safe(obj: Any) -> Any:
+    """Round-trip through JSON so every value is JSON-serializable (date → str, etc.)."""
+    return json.loads(json.dumps(obj, default=str))
+
+
 def _get_llm_provider(model_id: str = None):
     """Get LLM provider from the factory."""
     from tradercat.ai.llm_provider_factory import LLMFactory
@@ -88,12 +93,12 @@ class UserReportWorker:
                     "content_md": content,
                     "model_used": model,
                     "identity_used": persona,
-                    "input_context": {
+                    "input_context": _json_safe({
                         "symbols": list(symbol_plans.keys()),
                         "persona": persona,
                         "identity": identity_key,
                         "has_summary": bool(summary_report_md),
-                    },
+                    }),
                     "pipeline_run_id": pipeline_run_id,
                 }
                 

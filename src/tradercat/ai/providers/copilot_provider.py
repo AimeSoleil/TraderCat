@@ -48,6 +48,9 @@ class CopilotProvider(LLMProvider):
         claude-sonnet-4-20250514, claude-3.5-haiku, gemini-2.0-flash …
     """
 
+    # Timeout (seconds) for a single send_and_wait call.
+    REQUEST_TIMEOUT = 300.0
+
     # Fallback catalogue when the CLI is not reachable at import time.
     KNOWN_MODELS = [
         "gpt-4o",
@@ -117,7 +120,7 @@ class CopilotProvider(LLMProvider):
 
         session = await client.create_session(session_config)
         try:
-            reply = await session.send_and_wait({"prompt": prompt})
+            reply = await session.send_and_wait({"prompt": prompt}, timeout=self.REQUEST_TIMEOUT)
             return reply.data.content if (reply and reply.data) else ""
         except Exception as e:
             logger.error("Copilot SDK generation error (model=%s): %s", model_id, e)
@@ -167,7 +170,7 @@ class CopilotProvider(LLMProvider):
         session = await client.create_session(session_config)
         try:
             prompt = self._flatten_conversation(conversation)
-            reply = await session.send_and_wait({"prompt": prompt})
+            reply = await session.send_and_wait({"prompt": prompt}, timeout=self.REQUEST_TIMEOUT)
             return reply.data.content if (reply and reply.data) else ""
         except Exception as e:
             logger.error("Copilot SDK chat error (model=%s): %s", model_id, e)

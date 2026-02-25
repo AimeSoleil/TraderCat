@@ -23,6 +23,11 @@ from tradercat.ai.roles.summarizer import SummarizerRole
 logger = get_logger(__name__)
 
 
+def _json_safe(obj: Any) -> Any:
+    """Round-trip through JSON so every value is JSON-serializable (date → str, etc.)."""
+    return json.loads(json.dumps(obj, default=str))
+
+
 def _get_llm_provider(model_id: str = None) -> LLMProvider:
     """Get LLM provider from the factory."""
     from tradercat.ai.llm_provider_factory import LLMFactory
@@ -102,7 +107,7 @@ class GlobalReportWorker:
                     "content_md": content,
                     "model_used": model,
                     "identity_used": self.identity_key,
-                    "input_context": macro_context,
+                    "input_context": _json_safe(macro_context),
                     "pipeline_run_id": pipeline_run_id,
                 }
                 
@@ -159,10 +164,10 @@ class GlobalReportWorker:
                         "content_md": plan_content,
                         "model_used": model,
                         "identity_used": self.identity_key,
-                        "input_context": {
+                        "input_context": _json_safe({
                             "batch_symbols": batch_symbols,
                             "symbol": symbol,
-                        },
+                        }),
                         "pipeline_run_id": pipeline_run_id,
                     })
                     logger.info(f"Q2: Generated execution plan for {symbol}")
@@ -213,10 +218,10 @@ class GlobalReportWorker:
                     "content_md": content,
                     "model_used": model,
                     "identity_used": self.identity_key,
-                    "input_context": {
+                    "input_context": _json_safe({
                         "symbols": list(symbol_plans.keys()),
                         "has_global_context": bool(global_report_md),
-                    },
+                    }),
                     "pipeline_run_id": pipeline_run_id,
                 }
                 
@@ -285,10 +290,13 @@ async def generate_global_reports_q2(
     
     signals_by_symbol: Dict[str, List[Dict[str, Any]]] = {}
     all_plan_symbols = []
+    # Keep only QQQ/SPY from global symbols; exclude other global ETFs from Step 2
+    keep_global = {"QQQ", "SPY"}
+    excluded_global = set(global_symbols) - keep_global
     for sig in all_signals:
         sym = sig["symbol"]
         signals_by_symbol.setdefault(sym, []).append(sig)
-        if sym not in all_plan_symbols:
+        if sym not in all_plan_symbols and sym not in excluded_global:
             all_plan_symbols.append(sym)
     
     # --- Step 1: Macro summary ---
