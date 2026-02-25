@@ -78,6 +78,7 @@ class UserReportWorker:
         for attempt in range(self.max_retries + 1):
             try:
                 content = await self._call_llm_personalized(
+                    run_date=run_date,
                     summary_report_md=summary_report_md,
                     symbol_plans=symbol_plans,
                     persona=persona,
@@ -117,6 +118,7 @@ class UserReportWorker:
     
     async def _call_llm_personalized(
         self,
+        run_date: date,
         summary_report_md: str,
         symbol_plans: Dict[str, str],
         persona: str,
@@ -135,7 +137,7 @@ class UserReportWorker:
             summarizer = SummarizerRole(provider, identity, resolved_model, api_key=api_key)
             
             result = await summarizer.summarize(
-                run_date=str(asyncio.get_event_loop().time()),  # Will be overridden
+                run_date=run_date,
                 global_report=summary_report_md,
                 symbol_reports=symbol_plans,
             )

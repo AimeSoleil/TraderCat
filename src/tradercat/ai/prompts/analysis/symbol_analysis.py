@@ -7,14 +7,16 @@ Each symbol analysis produces: setup quality, options strategy, trade constructi
 Greeks profile, entry/exit rules, position sizing, risk parameters, and ROI estimation.
 """
 
-SYSTEM_PROMPT = """## Your Task: Per-Symbol Technical Analysis & Options Execution Plan
+SYSTEM_PROMPT = """## Your Task: Batch Symbol Technical Analysis & Options Execution Plans
 
-You are performing **Phase 1** of the analysis pipeline. You will receive:
+You are performing **Phase 1** of the analysis pipeline. You will receive a **batch of symbols** (up to 10) to analyze together. You will receive:
 1. **Global Regime Context** — The macro regime report from Phase 0 (treat as your "weather report")
-2. **Symbol Technical Data** — Comprehensive technical indicators for one or more symbols
-3. **Historical Signals (Past 3 Trading Days)** — Prior signal records for the same symbol from the most recent 3 trading sessions, including strategy name, direction, and confidence. Use these to identify **signal trend, persistence, and reversals**.
+2. **Symbol Technical Data** — An array of symbols, each with comprehensive technical indicators
+3. **Historical Signals (Past 3 Trading Days)** — Prior signal records for each symbol from the most recent 3 trading sessions, including strategy name, direction, and confidence. Use these to identify **signal trend, persistence, and reversals**.
 
 Your job: Audit each symbol's technical data rigorously, apply your analytical framework, and produce a **professional, executable options trading plan** for EACH symbol that passes your quality gates. The output must be precise enough for a trader to place the exact order without further research.
+
+**CRITICAL: You are analyzing multiple symbols in a single batch.** Produce a separate `## {SYMBOL} — Analysis Report` section for EACH symbol. This enables cross-referencing correlations between symbols in the batch.
 
 ### Signal Audit Framework
 
@@ -165,19 +167,26 @@ For each symbol, run through these quality gates IN ORDER. A failure at any gate
 9. **Respect signal momentum** — if the past 3 days' signals consistently point in one direction with rising confidence, this corroborates the current setup. If a reversal just occurred (e.g., sell→buy flip), demand extra confirmation from Gates 3-5 before approving.
 10. **Greeks must be realistic** — estimate delta from moneyness, theta from DTE/premium, vega from IV level. If exact Greeks are unavailable, state estimates clearly with "≈" notation.
 11. **Always check the earnings calendar** — if earnings fall within the DTE window, explicitly note the IV crush risk and adjust strategy accordingly (e.g., use spreads to cap vega exposure).
+12. **One section per symbol, clearly delimited** — each symbol's report MUST start with `## {SYMBOL} — Analysis Report` as a level-2 markdown heading. Do not merge multiple symbols into one section. This heading is used for automated parsing.
+13. **Cross-reference correlations** — when analyzing a batch, flag if two symbols in the batch are highly correlated (ρ > 0.8) or in the same sector, as this affects total portfolio risk.
 """
 
-USER_PROMPT_TEMPLATE = """Analyze the following symbol(s) using the global regime context, current technical data, and historical signals provided.
+USER_PROMPT_TEMPLATE = """Analyze the following batch of symbols using the global regime context, current technical data, and historical signals provided.
 
 ===BEGIN GLOBAL REGIME CONTEXT===
 {global_context}
 ===END GLOBAL REGIME CONTEXT===
 
-===BEGIN SYMBOL TECHNICAL DATA===
-The `signals` array contains today's strategy signals. The `historical_signals` array contains signals from the past 3 trading sessions (sorted most-recent first) — use them to assess signal trend, persistence, and any recent reversals.
+===BEGIN SYMBOL TECHNICAL DATA (BATCH)===
+Below is a JSON array of symbols. Each object contains:
+- `symbol`: ticker
+- `signals`: today's strategy signals for that symbol
+- `historical_signals`: signals from the past 3 trading sessions (sorted most-recent first)
 
 {symbol_data_json}
 ===END SYMBOL TECHNICAL DATA===
 
-Run each symbol through your 7-gate audit framework (Gate 0 through Gate 6). Start with Gate 0 (Historical Signal Trend) to establish the signal trajectory, then proceed through the remaining gates. Produce the full analysis report for each symbol. Be concise but complete — every metric claim must reference actual data from the input.
+For EACH symbol in the batch, run through your 7-gate audit framework (Gate 0 through Gate 6). Start with Gate 0 (Historical Signal Trend) to establish the signal trajectory, then proceed through the remaining gates.
+
+Produce a separate `## {{SYMBOL}} — Analysis Report` section for each symbol. Be concise but complete — every metric claim must reference actual data from the input. If symbols in the batch are correlated, note it in each affected symbol's report.
 """

@@ -134,58 +134,164 @@ class GlobalReportWorker:
         model: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Generate analysis for a batch of symbols using AnalystRole.
-        Each symbol gets its own LLM call with global regime context.
+        Generate analysis for a batch of symbols in a SINGLE LLM call.
+        All symbols in the batch are sent together so the model can
+        cross-reference correlations and produce a more coherent set of plans.
         """
         self._ensure_roles()
         model = model or self.model_id
         
-        records = []
+        # --- Build combined symbol data for the entire batch ---
+        batch_data = []
         for symbol in batch_symbols:
-            for attempt in range(self.max_retries + 1):
-                try:
-                    if self._analyst:
-                        # Get symbol technical data from batch context
-                        symbol_signals = batch_context.get("signals_by_symbol", {}).get(symbol, [])
-                        historical_signals = batch_context.get("historical_signals_by_symbol", {}).get(symbol, [])
-                        symbol_data_json = json.dumps({
-                            "symbol": symbol,
-                            "signals": symbol_signals,
-                            "historical_signals": historical_signals,
-                        }, indent=2, default=str)
-                        
-                        result = await self._analyst.analyze_symbol(
-                            symbol_data_json=symbol_data_json,
-                            global_context=global_context,
-                        )
-                        plan_content = result.content
-                    else:
-                        plan_content = self._placeholder_plan(symbol, batch_context, model)
-                    
+            symbol_signals = batch_context.get("signals_by_symbol", {}).get(symbol, [])
+            historical_signals = batch_context.get("historical_signals_by_symbol", {}).get(symbol, [])
+            batch_data.append({
+                "symbol": symbol,
+                "signals": symbol_signals,
+                "historical_signals": historical_signals,
+            })
+        
+        combined_json = json.dumps(batch_data, indent=2, default=str)
+        
+        for attempt in range(self.max_retries + 1):
+            try:
+                if self._analyst:
+                    result = await self._analyst.analyze_symbol(
+                        symbol_data_json=combined_json,
+                        global_context=global_context,
+                    )
+                    combined_content = result.content
+                else:
+                    # Fallback: generate placeholders for each symbol
+                    parts = []
+                    for symbol in batch_symbols:
+                        parts.append(self._placeholder_plan(symbol, batch_context, model))
+                    combined_content = "\n\n---\n\n".join(parts)
+                
+                # --- Split combined response into per-symbol records ---
+                return self._split_batch_response(
+                    combined_content=combined_content,
+                    batch_symbols=batch_symbols,
+                    run_date=run_date,
+                    model=model,
+                    pipeline_run_id=pipeline_run_id,
+                )
+                
+            except Exception as e:
+                if attempt < self.max_retries:
+                    logger.warning(
+                        f"Q2: Retry {attempt + 1}/{self.max_retries} for batch "
+                        f"{batch_symbols}: {e}"
+                    )
+                    await asyncio.sleep(2 ** attempt)
+                else:
+                    logger.error(
+                        f"Q2: Failed batch {batch_symbols} after "
+                        f"{self.max_retries + 1} attempts: {e}"
+                    )
+        
+        return []
+    
+    def _split_batch_response(
+        self,
+        combined_content: str,
+        batch_symbols: List[str],
+        run_date: date,
+        model: str,
+        pipeline_run_id: UUID,
+    ) -> List[Dict[str, Any]]:
+        """Split a multi-symbol LLM response into per-symbol DB records.
+        
+        Heuristic: look for '## {SYMBOL}' markdown headers to delimit
+        each symbol's section. If a symbol header isn't found, the entire
+        combined output is stored under the first symbol (graceful fallback).
+        """
+        import re
+        
+        records: List[Dict[str, Any]] = []
+        
+        # Build a regex that matches any of the batch symbols as a ## header
+        # e.g. "## AAPL", "## AAPL —", "## AAPL -", "## AAPL:", etc.
+        symbol_pattern = "|".join(re.escape(s) for s in batch_symbols)
+        header_re = re.compile(
+            rf"^(##\s+(?:{symbol_pattern})\b)",
+            re.MULTILINE | re.IGNORECASE,
+        )
+        
+        # Find all header positions
+        headers = list(header_re.finditer(combined_content))
+        
+        if len(headers) >= 2:
+            # Multiple headers found — split by position
+            sections: Dict[str, str] = {}
+            for i, match in enumerate(headers):
+                # Extract symbol from "## SYMBOL ..."
+                hdr_text = match.group(1)
+                sym_match = re.search(rf"({symbol_pattern})", hdr_text, re.IGNORECASE)
+                sym = sym_match.group(1).upper() if sym_match else batch_symbols[i] if i < len(batch_symbols) else None
+                if not sym:
+                    continue
+                
+                start = match.start()
+                end = headers[i + 1].start() if i + 1 < len(headers) else len(combined_content)
+                sections[sym] = combined_content[start:end].strip()
+            
+            for symbol in batch_symbols:
+                content = sections.get(symbol, f"## {symbol}\n\n*No analysis produced for this symbol in batch.*")
+                records.append({
+                    "run_date": run_date,
+                    "symbol": symbol,
+                    "report_type": "symbol_execution_plan",
+                    "content_md": content,
+                    "model_used": model,
+                    "identity_used": self.identity_key,
+                    "input_context": _json_safe({
+                        "batch_symbols": batch_symbols,
+                        "symbol": symbol,
+                    }),
+                    "pipeline_run_id": pipeline_run_id,
+                })
+                logger.info(f"Q2: Generated execution plan for {symbol} (batch)")
+        else:
+            # Couldn't split — store entire response for each symbol with a note,
+            # or if only 1 symbol, use it directly.
+            if len(batch_symbols) == 1:
+                records.append({
+                    "run_date": run_date,
+                    "symbol": batch_symbols[0],
+                    "report_type": "symbol_execution_plan",
+                    "content_md": combined_content,
+                    "model_used": model,
+                    "identity_used": self.identity_key,
+                    "input_context": _json_safe({
+                        "batch_symbols": batch_symbols,
+                        "symbol": batch_symbols[0],
+                    }),
+                    "pipeline_run_id": pipeline_run_id,
+                })
+                logger.info(f"Q2: Generated execution plan for {batch_symbols[0]}")
+            else:
+                # Store combined content under each symbol with prefix
+                for symbol in batch_symbols:
                     records.append({
                         "run_date": run_date,
                         "symbol": symbol,
                         "report_type": "symbol_execution_plan",
-                        "content_md": plan_content,
+                        "content_md": combined_content,
                         "model_used": model,
                         "identity_used": self.identity_key,
                         "input_context": _json_safe({
                             "batch_symbols": batch_symbols,
                             "symbol": symbol,
+                            "note": "batch_unsplit",
                         }),
                         "pipeline_run_id": pipeline_run_id,
                     })
-                    logger.info(f"Q2: Generated execution plan for {symbol}")
-                    break  # Success, move to next symbol
-                    
-                except Exception as e:
-                    if attempt < self.max_retries:
-                        logger.warning(
-                            f"Q2: Retry {attempt + 1}/{self.max_retries} for {symbol}: {e}"
-                        )
-                        await asyncio.sleep(2 ** attempt)
-                    else:
-                        logger.error(f"Q2: Failed {symbol} after {self.max_retries + 1} attempts: {e}")
+                logger.warning(
+                    f"Q2: Could not split batch response for {batch_symbols} — "
+                    f"stored combined output under each symbol"
+                )
         
         return records
     

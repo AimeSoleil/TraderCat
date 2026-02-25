@@ -15,6 +15,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   Table,
   TableBody,
   TableCell,
@@ -23,6 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useState } from "react";
 import Link from "next/link";
 import type { GlobalReportResponse } from "@/lib/types";
@@ -105,6 +112,25 @@ function ReportCardGrid({
 
 /* ── Symbols table with click-to-open modal ── */
 
+function SymbolDetailContent({ report }: { report: GlobalReportResponse }) {
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-lg font-semibold">{report.symbol ?? "Execution Plan"}</span>
+        <Badge variant="outline" className="text-xs font-normal">
+          {report.run_date}
+        </Badge>
+        {report.model_used && (
+          <Badge variant="secondary" className="text-xs font-normal">
+            {report.model_used}
+          </Badge>
+        )}
+      </div>
+      <MarkdownRenderer content={report.content_md} />
+    </>
+  );
+}
+
 function SymbolsTab({
   isLoading,
   reports,
@@ -113,6 +139,7 @@ function SymbolsTab({
   reports: GlobalReportResponse[] | undefined;
 }) {
   const [selected, setSelected] = useState<GlobalReportResponse | null>(null);
+  const isMobile = useIsMobile();
 
   if (isLoading) {
     return (
@@ -132,62 +159,100 @@ function SymbolsTab({
     );
   }
 
+  /* ── Mobile: compact card list ── */
+  const mobileList = (
+    <div className="space-y-2 sm:hidden">
+      {reports.map((r) => (
+        <Card
+          key={r.id}
+          className="cursor-pointer transition-colors hover:bg-muted/50"
+          onClick={() => setSelected(r)}
+        >
+          <CardContent className="flex items-center justify-between p-3">
+            <span className="font-medium">{r.symbol ?? "—"}</span>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">{r.run_date}</Badge>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+
+  /* ── Desktop: table ── */
+  const desktopTable = (
+    <div className="hidden sm:block rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-28">Symbol</TableHead>
+            <TableHead className="w-32">Date</TableHead>
+            <TableHead>Model</TableHead>
+            <TableHead>Persona</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {reports.map((r) => (
+            <TableRow
+              key={r.id}
+              className="cursor-pointer transition-colors hover:bg-muted/60"
+              onClick={() => setSelected(r)}
+            >
+              <TableCell className="font-medium">{r.symbol ?? "—"}</TableCell>
+              <TableCell>{r.run_date}</TableCell>
+              <TableCell className="text-muted-foreground text-xs">
+                {r.model_used ?? "—"}
+              </TableCell>
+              <TableCell className="text-muted-foreground text-xs">
+                {r.identity_used ?? "—"}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
   return (
     <>
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-28">Symbol</TableHead>
-              <TableHead className="w-32">Date</TableHead>
-              <TableHead>Model</TableHead>
-              <TableHead>Persona</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {reports.map((r) => (
-              <TableRow
-                key={r.id}
-                className="cursor-pointer transition-colors hover:bg-muted/60"
-                onClick={() => setSelected(r)}
-              >
-                <TableCell className="font-medium">{r.symbol ?? "—"}</TableCell>
-                <TableCell>{r.run_date}</TableCell>
-                <TableCell className="text-muted-foreground text-xs">
-                  {r.model_used ?? "—"}
-                </TableCell>
-                <TableCell className="text-muted-foreground text-xs">
-                  {r.identity_used ?? "—"}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      {mobileList}
+      {desktopTable}
 
-      {/* ── Symbol detail modal ── */}
-      <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          {selected && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <span>{selected.symbol ?? "Execution Plan"}</span>
-                  <Badge variant="outline" className="text-xs font-normal">
-                    {selected.run_date}
-                  </Badge>
-                  {selected.model_used && (
-                    <Badge variant="secondary" className="text-xs font-normal">
-                      {selected.model_used}
+      {/* ── Mobile: bottom sheet ── */}
+      {isMobile ? (
+        <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+          <SheetContent side="bottom" className="h-[90dvh] overflow-y-auto rounded-t-xl px-4 pb-6">
+            <SheetHeader className="sr-only">
+              <SheetTitle>{selected?.symbol ?? "Execution Plan"}</SheetTitle>
+            </SheetHeader>
+            {selected && <SymbolDetailContent report={selected} />}
+          </SheetContent>
+        </Sheet>
+      ) : (
+        /* ── Desktop: centered dialog ── */
+        <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+            {selected && (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <span>{selected.symbol ?? "Execution Plan"}</span>
+                    <Badge variant="outline" className="text-xs font-normal">
+                      {selected.run_date}
                     </Badge>
-                  )}
-                </DialogTitle>
-              </DialogHeader>
-              <MarkdownRenderer content={selected.content_md} />
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+                    {selected.model_used && (
+                      <Badge variant="secondary" className="text-xs font-normal">
+                        {selected.model_used}
+                      </Badge>
+                    )}
+                  </DialogTitle>
+                </DialogHeader>
+                <MarkdownRenderer content={selected.content_md} />
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }
