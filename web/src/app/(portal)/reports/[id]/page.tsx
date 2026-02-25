@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft } from "lucide-react";
-import ReactMarkdown from "react-markdown";
+import { MarkdownRenderer } from "@/components/markdown-renderer";
 
 export default function UserReportDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -50,9 +50,7 @@ export default function UserReportDetailPage() {
         }
       />
 
-      <article className="prose prose-sm max-w-none dark:prose-invert">
-        <ReactMarkdown>{data.content_md}</ReactMarkdown>
-      </article>
+      <MarkdownRenderer content={data.content_md} />
     </>
   );
 }

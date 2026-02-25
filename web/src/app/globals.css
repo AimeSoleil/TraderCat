@@ -125,6 +125,171 @@
   }
 }
 
+/* ── Markdown / Prose typography (Tailwind v4 – no plugin) ── */
+.prose-tc {
+  line-height: 1.75;
+  font-size: 0.9375rem;
+}
+.prose-tc > * + * {
+  margin-top: 1.25em;
+}
+.prose-tc h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 2em;
+  margin-bottom: 0.75em;
+  letter-spacing: -0.015em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.35em;
+}
+.prose-tc h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 1.75em;
+  margin-bottom: 0.6em;
+  letter-spacing: -0.01em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.3em;
+}
+.prose-tc h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+.prose-tc h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 1.25em;
+  margin-bottom: 0.4em;
+}
+.prose-tc p {
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+}
+.prose-tc strong {
+  font-weight: 650;
+}
+.prose-tc a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-tc a:hover {
+  opacity: 0.8;
+}
+.prose-tc blockquote {
+  border-left: 3px solid var(--primary);
+  padding: 0.6em 1em;
+  margin: 1em 0;
+  background: var(--muted);
+  border-radius: var(--radius);
+  font-style: italic;
+  color: var(--muted-foreground);
+}
+.prose-tc blockquote p {
+  margin: 0;
+}
+
+/* ---- Lists ---- */
+.prose-tc ul {
+  list-style-type: disc;
+  padding-left: 1.5em;
+  margin: 0.75em 0;
+}
+.prose-tc ol {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+  margin: 0.75em 0;
+}
+.prose-tc li {
+  margin: 0.25em 0;
+}
+.prose-tc li > ul,
+.prose-tc li > ol {
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+}
+
+/* ---- Horizontal rule ---- */
+.prose-tc hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2em 0;
+}
+
+/* ---- Inline code ---- */
+.prose-tc :not(pre) > code {
+  background: var(--muted);
+  padding: 0.15em 0.35em;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+/* ---- Code blocks ---- */
+.prose-tc pre {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1em;
+  overflow-x: auto;
+  font-size: 0.85em;
+  line-height: 1.6;
+  margin: 1em 0;
+}
+.prose-tc pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* ---- Tables ---- */
+.prose-tc table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.875em;
+}
+.prose-tc thead th {
+  background: var(--muted);
+  font-weight: 600;
+  text-align: left;
+  padding: 0.5em 0.75em;
+  border-bottom: 2px solid var(--border);
+}
+.prose-tc tbody td {
+  padding: 0.5em 0.75em;
+  border-bottom: 1px solid var(--border);
+}
+.prose-tc tbody tr:last-child td {
+  border-bottom: none;
+}
+.prose-tc tbody tr:hover {
+  background: var(--muted);
+}
+
+/* ---- Task lists (GFM) ---- */
+.prose-tc ul:has(> li > input[type="checkbox"]) {
+  list-style: none;
+  padding-left: 0;
+}
+.prose-tc li > input[type="checkbox"] {
+  margin-right: 0.5em;
+}
+
+/* ---- Images ---- */
+.prose-tc img {
+  border-radius: var(--radius);
+  max-width: 100%;
+  height: auto;
+}
+
 /* ── Smooth transitions for theme switching ── */
 html.transition-colors,
 html.transition-colors *,
