@@ -114,7 +114,8 @@ class LiteLLMProvider(LLMProvider):
 
         try:
             response = await litellm.acompletion(**kwargs)
-            return response.choices[0].message.content
+            content = response.choices[0].message.content
+            return content or ""
         except Exception as e:
             logger.error(f"LiteLLM generation error (model={model_id}): {e}")
             raise

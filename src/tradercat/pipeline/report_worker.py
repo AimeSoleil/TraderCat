@@ -161,7 +161,15 @@ class GlobalReportWorker:
                         symbol_data_json=combined_json,
                         global_context=global_context,
                     )
-                    combined_content = result.content
+                    combined_content = result.content or ""
+                    logger.info(
+                        f"Q2: Batch LLM returned {len(combined_content)} chars "
+                        f"for {len(batch_symbols)} symbols: {batch_symbols}"
+                    )
+                    if not combined_content.strip():
+                        raise ValueError(
+                            f"LLM returned empty content for batch {batch_symbols}"
+                        )
                 else:
                     # Fallback: generate placeholders for each symbol
                     parts = []

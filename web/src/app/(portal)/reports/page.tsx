@@ -221,7 +221,7 @@ function SymbolsTab({
       {/* ── Mobile: bottom sheet ── */}
       {isMobile ? (
         <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-          <SheetContent side="bottom" className="h-[90dvh] overflow-y-auto rounded-t-xl px-4 pb-6">
+          <SheetContent aria-describedby={undefined} side="bottom" className="h-[90dvh] overflow-y-auto rounded-t-xl px-4 pb-6">
             <SheetHeader className="sr-only">
               <SheetTitle>{selected?.symbol ?? "Execution Plan"}</SheetTitle>
             </SheetHeader>
@@ -231,7 +231,7 @@ function SymbolsTab({
       ) : (
         /* ── Desktop: centered dialog ── */
         <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-          <DialogContent className="max-w-6xl w-[90vw] max-h-[90vh] overflow-y-auto">
+          <DialogContent aria-describedby={undefined} className="max-w-6xl w-[90vw] max-h-[90vh] overflow-y-auto">
             {selected && (
               <>
                 <DialogHeader>
