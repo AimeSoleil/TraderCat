@@ -265,8 +265,7 @@ class ChartPatternStrategy(TradingStrategy):
         reward = abs(best_p.target - close)
         rr_ratio = (reward / risk) if risk > 0 else 0.0
 
-        details: Dict[str, Any] = {
-            # OHLCV & Volume Context
+        ohlcv: Dict[str, Any] = {
             "open": round(float(candles[-1].open), 2),
             "high": round(highs[-1], 2),
             "low": round(lows[-1], 2),
@@ -275,7 +274,9 @@ class ChartPatternStrategy(TradingStrategy):
             f"avg_volume_{self.vol_zscore_window}": round(avg_vol, 0),
             f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
             f"vol_zscore_{self.vol_zscore_window}": round(vol_z_val, 2),
+        }
 
+        indicators: Dict[str, Any] = {
             # Pattern Geometry & Trade Logic
             "pattern": best_p.name,
             "target_price": round(best_p.target, 2),
@@ -294,7 +295,7 @@ class ChartPatternStrategy(TradingStrategy):
         }
 
         if not patterns:
-            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="No patterns detected", details=details)
+            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="No patterns detected", ohlcv=ohlcv, indicators=indicators)
         
         # Only generating exit plan if signal is valid
         if score_res.signal != "hold":
@@ -307,7 +308,7 @@ class ChartPatternStrategy(TradingStrategy):
 
             plan["stop_loss"] = best_p.stop
             plan["take_profit"] = best_p.target
-            details["plan"] = plan
+            indicators["plan"] = plan
 
         return SignalModel(
             symbol=symbol,
@@ -316,7 +317,8 @@ class ChartPatternStrategy(TradingStrategy):
             date=dates[-1],
             confidence=round(score_res.score, 2),
             reason=f"{best_p.name} | {', '.join(score_res.reasons) if score_res.reasons else ''}",
-            details=details
+            ohlcv=ohlcv,
+            indicators=indicators
         )
 
 

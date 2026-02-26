@@ -60,7 +60,10 @@ const columns: ColumnDef<SignalResponse>[] = [
     id: "expander",
     header: () => null,
     cell: ({ row }) => {
-      if (!row.original.details || Object.keys(row.original.details).length === 0) {
+      const hasData = 
+        (row.original.ohlcv && Object.keys(row.original.ohlcv).length > 0) ||
+        (row.original.indicators && Object.keys(row.original.indicators).length > 0);
+      if (!hasData) {
         return <span className="inline-block w-4" />;
       }
       return (
@@ -159,32 +162,55 @@ function DetailValue({ value }: { value: unknown }) {
   );
 }
 
-/** Expanded row panel showing details as a key-value grid */
+/** Expanded row panel showing OHLCV + Indicators in separate sections */
 function DetailsPanel({ row }: { row: Row<SignalResponse> }) {
-  const details = row.original.details;
-  if (!details || Object.keys(details).length === 0) return null;
-
-  const entries = Object.entries(details);
+  const { ohlcv, indicators } = row.original;
+  const hasOhlcv = ohlcv && Object.keys(ohlcv).length > 0;
+  const hasIndicators = indicators && Object.keys(indicators).length > 0;
+  if (!hasOhlcv && !hasIndicators) return null;
 
   return (
     <TableRow className="bg-muted/40 hover:bg-muted/40">
       <TableCell colSpan={columns.length} className="p-0">
-        <div className="px-10 py-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Signal Details
-          </p>
-          <div className="grid gap-x-8 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
-            {entries.map(([key, value]) => (
-              <div key={key} className="min-w-0">
-                <p className="text-[11px] font-medium text-muted-foreground">
-                  {key.replace(/_/g, " ")}
-                </p>
-                <div className="mt-0.5 text-sm break-words">
-                  <DetailValue value={value} />
-                </div>
+        <div className="px-10 py-3 space-y-4">
+          {hasOhlcv && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                OHLCV
+              </p>
+              <div className="grid gap-x-8 gap-y-2 sm:grid-cols-3 lg:grid-cols-5">
+                {Object.entries(ohlcv).map(([key, value]) => (
+                  <div key={key} className="min-w-0">
+                    <p className="text-[11px] font-medium text-muted-foreground">
+                      {key.replace(/_/g, " ")}
+                    </p>
+                    <div className="mt-0.5 text-sm break-words">
+                      <DetailValue value={value} />
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
+          {hasIndicators && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Technical Indicators
+              </p>
+              <div className="grid gap-x-8 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
+                {Object.entries(indicators).map(([key, value]) => (
+                  <div key={key} className="min-w-0">
+                    <p className="text-[11px] font-medium text-muted-foreground">
+                      {key.replace(/_/g, " ")}
+                    </p>
+                    <div className="mt-0.5 text-sm break-words">
+                      <DetailValue value={value} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </TableCell>
     </TableRow>
@@ -224,8 +250,11 @@ export default function SignalsPage() {
     state: { sorting, expanded },
     onSortingChange: setSorting,
     onExpandedChange: setExpanded,
-    getRowCanExpand: (row) =>
-      !!row.original.details && Object.keys(row.original.details).length > 0,
+    getRowCanExpand: (row) => {
+      const hasOhlcv = !!row.original.ohlcv && Object.keys(row.original.ohlcv).length > 0;
+      const hasIndicators = !!row.original.indicators && Object.keys(row.original.indicators).length > 0;
+      return hasOhlcv || hasIndicators;
+    },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

@@ -9,4 +9,5 @@ class SignalModel(BaseModel):
     signal: Literal["buy", "sell", "hold", "rebalance"]
     confidence: float = 0.0
     reason: str = "N/A"
-    details: Dict[str, Any] = {}
+    ohlcv: Dict[str, Any] = {}
+    indicators: Dict[str, Any] = {}

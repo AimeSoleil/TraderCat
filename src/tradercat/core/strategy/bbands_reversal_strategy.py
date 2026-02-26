@@ -278,8 +278,7 @@ class BBandsReversalStrategy(TradingStrategy):
         low_curr = lows[-1]
         open_curr = opens[-1]
 
-        details: Dict[str, Any] = {
-            # 基础价格与成交量
+        ohlcv: Dict[str, Any] = {
             "open": round(open_curr, 2),
             "high": round(high_curr, 2),
             "low": round(low_curr, 2),
@@ -288,7 +287,9 @@ class BBandsReversalStrategy(TradingStrategy):
             f"avg_volume_{self.vol_zscore_window}": round(avg_vol, 0),
             f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
             f"vol_zscore_{self.vol_zscore_window}": round(volume_z, 3) if volume_z is not None else 0,
-            
+        }
+
+        indicators: Dict[str, Any] = {
             # 布林带详情
             f"bbu_{self.bb_period}": round(u_curr, 2),
             f"bbl_{self.bb_period}": round(l_curr, 2),
@@ -379,7 +380,7 @@ class BBandsReversalStrategy(TradingStrategy):
                 plan['take_profit_ref'] = m_curr
                 plan['take_profit_type'] = 'mean_reversion_mid'
             
-            details["plan"] = plan
+            indicators["plan"] = plan
 
         return SignalModel(
             symbol=symbol,
@@ -389,7 +390,8 @@ class BBandsReversalStrategy(TradingStrategy):
             # Cap confidence at 1.0
             confidence=round(min(1.0, result.score), 3),
             reason=" | ".join(result.reasons),
-            details=details,
+            ohlcv=ohlcv,
+            indicators=indicators,
         )
 
 def make_bbands_reversal_presets() -> Dict[str, Dict[str, Any]]:

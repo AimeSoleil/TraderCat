@@ -307,9 +307,8 @@ class DivergenceStrategy(TradingStrategy):
         current_rsi = rsi_hist[-1] if rsi_hist else 50.0
         current_macd_hist = macd_hist[-1] if macd_hist else 0.0
 
-        # Base Details (Always present even if hold, though usually we only return on signal)
-        details: Dict[str, Any] = {
-            # OHLCV Context
+        # Base OHLCV (Always present even if hold)
+        ohlcv: Dict[str, Any] = {
             "open": round(float(candles[-1].open), 2),
             "high": round(highs[-1], 2),
             "low": round(lows[-1], 2),
@@ -319,7 +318,10 @@ class DivergenceStrategy(TradingStrategy):
             f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
             f"vol_zscore_{self.vol_zscore_window}": round(vol_z, 2),
             "bar_change_pct": round(bar_change_pct, 2),
+        }
 
+        # Technical indicators
+        indicators: Dict[str, Any] = {
             # Divergence
             "detected_divergence": best_div_details["div_type"] if best_div_details else "none",
             
@@ -335,19 +337,19 @@ class DivergenceStrategy(TradingStrategy):
 
         if not best_result or best_result[0].signal == 'hold':
             # Optionally return details even on Hold for debugging
-            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=dates[-1], confidence=0.0, reason="No valid divergence", details=details)
+            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=dates[-1], confidence=0.0, reason="No valid divergence", ohlcv=ohlcv, indicators=indicators)
 
         res, d_name = best_result
         
         # Merge setup specific details
         if best_div_details:
-            details.update(best_div_details)
+            indicators.update(best_div_details)
 
         if res.signal != 'hold':
             planner = ExitPlanner(highs=highs, lows=lows, atr=curr_atr, close_price=close)
             plan = planner.make_exit_plan(trading_signal=res.signal)
             # Divergence trades can have looser stops if confirmed by structure
-            details["plan"] = plan
+            indicators["plan"] = plan
 
         return SignalModel(
             symbol=symbol,
@@ -356,7 +358,8 @@ class DivergenceStrategy(TradingStrategy):
             date=dates[-1],
             confidence=round(res.score, 3),
             reason=f"{d_name} | {' | '.join(res.reasons)}",
-            details=details,
+            ohlcv=ohlcv,
+            indicators=indicators,
         )
 
 def make_divergence_presets() -> Dict[str, Dict[str, Any]]:

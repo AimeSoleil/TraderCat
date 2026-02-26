@@ -336,8 +336,7 @@ class FibonacciRetracementStrategy(TradingStrategy):
         current_macd_hist = macd_hist_val_history[-1] if macd_hist_val_history else 0.0
         bar_change_pct = (curr_close - opens[-1]) / opens[-1] * 100 if opens[-1] != 0 else 0.0
 
-        details: Dict[str, Any] = {
-            # 基础 OHLCV 上下文
+        ohlcv: Dict[str, Any] = {
             "open": round(opens[-1], 2),
             "high": round(highs[-1], 2),
             "low": round(lows[-1], 2),
@@ -347,7 +346,9 @@ class FibonacciRetracementStrategy(TradingStrategy):
             f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
             f"vol_zscore_{self.vol_zscore_window}": round(vol_z if vol_z is not None else 0.0, 2),
             "bar_change_pct": round(bar_change_pct, 2),
+        }
 
+        indicators: Dict[str, Any] = {
             # 斐波那契结构数据
             "impulse_direction": impulse_type,
             "impulse_start": round(impulse_start_val, 2),
@@ -374,18 +375,18 @@ class FibonacciRetracementStrategy(TradingStrategy):
         is_bull_context = curr_close > ema_slow_val
         
         if is_bull_context and impulse_type == 'short':
-            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Counter-trend Short Impulse ignored", details=details)
+            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Counter-trend Short Impulse ignored", ohlcv=ohlcv, indicators=indicators)
         
         if not is_bull_context and impulse_type == 'long':
-            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Counter-trend Long Impulse ignored", details=details)
+            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Counter-trend Long Impulse ignored", ohlcv=ohlcv, indicators=indicators)
 
         # Impulse Strength Validation
         impulse_range = abs(impulse_end_val - impulse_start_val)
         if impulse_range < 2 * current_atr_val:
-            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Impulse too weak", details=details)
+            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Impulse too weak", ohlcv=ohlcv, indicators=indicators)
 
         if not signal_triggered:
-            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="No trigger in zone", details=details)
+            return SignalModel(date=dates[-1], symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="No trigger in zone", ohlcv=ohlcv, indicators=indicators)
 
         if result.signal != 'hold':
             planner = ExitPlanner(highs=highs, lows=lows, atr=current_atr_val, close_price=curr_close)
@@ -418,9 +419,9 @@ class FibonacciRetracementStrategy(TradingStrategy):
                     plan['fib_stop_loss_at'] = fib_stop
                 plan['fib_stop_loss_at'] = round(plan['fib_stop_loss_at'], 2)
                 # We can store it in details for debugging
-                details['fib_stop'] = round(fib_stop, 2)
+                indicators['fib_stop'] = round(fib_stop, 2)
 
-            details["plan"] = plan
+            indicators["plan"] = plan
 
         return SignalModel(
             date=dates[-1],
@@ -430,7 +431,8 @@ class FibonacciRetracementStrategy(TradingStrategy):
             # Ensure confidence capped at 1.0
             confidence=round(min(1.0, result.score), 3),
             reason=" | ".join(result.reasons),
-            details=details
+            ohlcv=ohlcv,
+            indicators=indicators
         )
 
 def make_fibonacci_presets() -> Dict[str, Dict[str, Any]]:

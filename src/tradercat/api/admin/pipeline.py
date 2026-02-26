@@ -1,7 +1,8 @@
 """Admin pipeline API endpoints."""
 from datetime import date, datetime
+from typing import List
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from pydantic import BaseModel
 
 from tradercat.api.deps import CurrentAdminUser, DatabaseSession
@@ -26,6 +27,12 @@ class PipelineRunResponse(BaseModel):
     created_at: str
     
     model_config = {"from_attributes": True}
+
+
+class PipelineRunListResponse(BaseModel):
+    """Schema for pipeline run list response."""
+    runs: List[PipelineRunResponse]
+    total: int
 
 
 class PipelineTriggerResponse(BaseModel):
@@ -107,6 +114,52 @@ async def trigger_pipeline(
         run_id="pending",
         run_date=target_date,
         status="pending",
+    )
+
+
+@router.get("/runs", response_model=PipelineRunListResponse)
+async def list_pipeline_runs(
+    db: DatabaseSession,
+    admin: CurrentAdminUser,
+    status_filter: str | None = Query(None, alias="status", description="Filter by status (running, completed, failed, pending)"),
+    limit: int = Query(20, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """
+    List pipeline runs ordered by run_date descending.
+    Optionally filter by status.  Admin-only endpoint.
+    """
+    query = select(PipelineRun)
+
+    if status_filter:
+        query = query.where(PipelineRun.status == status_filter.lower())
+
+    count_query = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_query)).scalar() or 0
+
+    query = query.order_by(PipelineRun.run_date.desc()).offset(offset).limit(limit)
+    result = await db.execute(query)
+    runs = result.scalars().all()
+
+    return PipelineRunListResponse(
+        runs=[
+            PipelineRunResponse(
+                id=str(r.id),
+                run_date=r.run_date,
+                status=r.status,
+                step=r.step,
+                total_symbols=r.total_symbols,
+                processed_symbols=r.processed_symbols,
+                total_reports=r.total_reports,
+                processed_reports=r.processed_reports,
+                error_log=r.error_log,
+                started_at=r.started_at.isoformat() if r.started_at else None,
+                completed_at=r.completed_at.isoformat() if r.completed_at else None,
+                created_at=r.created_at.isoformat(),
+            )
+            for r in runs
+        ],
+        total=total,
     )
 
 

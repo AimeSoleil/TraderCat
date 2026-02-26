@@ -14,7 +14,8 @@ class SignalResponse(BaseModel):
     signal: str  # "buy", "sell", "hold", "rebalance"
     confidence: float
     reason: str | None
-    details: dict[str, Any] | None
+    ohlcv: dict[str, Any] | None
+    indicators: dict[str, Any] | None
     scope: str  # "global" or "user"
     created_at: datetime
 

@@ -27,7 +27,7 @@ class TradingStrategy(ABC):
     @abstractmethod
     def generate_signal(self, symbol: str = None, candles: dict = None) -> SignalModel:
         """
-        Returns a dict: { "strategy": name, "signal": 'buy'|'sell'|'hold', "details": {...} }
+        Returns a SignalModel with ohlcv (market data) and indicators (technical analysis).
         """
         pass
 

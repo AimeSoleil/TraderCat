@@ -121,7 +121,8 @@ export interface SignalResponse {
   signal: "buy" | "sell" | "hold" | "rebalance";
   confidence: number;
   reason: string | null;
-  details: Record<string, unknown> | null;
+  ohlcv: Record<string, unknown> | null;
+  indicators: Record<string, unknown> | null;
   scope: "global" | "user";
   created_at: string;
 }
@@ -279,6 +280,11 @@ export interface PipelineTriggerResponse {
   message: string;
   run_date: string;
   pipeline_run_id: string;
+}
+
+export interface PipelineRunListResponse {
+  runs: PipelineRunResponse[];
+  total: number;
 }
 
 export interface PipelineCancelResponse {

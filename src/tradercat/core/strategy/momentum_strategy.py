@@ -271,8 +271,7 @@ class MomentumTrendStrategy(TradingStrategy):
         if ht_ema_ok and ht_slow != 0:
             ht_ema_spread_pct = (ht_fast - ht_slow) / ht_slow * 100
 
-        details: Dict[str, Any] = {
-            # OHLCV Context
+        ohlcv: Dict[str, Any] = {
             "open": round(open_price, 2),
             "high": round(highs[-1], 2),
             "low": round(lows[-1], 2),
@@ -282,7 +281,9 @@ class MomentumTrendStrategy(TradingStrategy):
             f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
             f"vol_zscore_{self.vol_zscore_window}": round(vol_z, 2),
             "bar_change_pct": round(bar_change_pct, 2),
-            
+        }
+
+        indicators: Dict[str, Any] = {
             # Momentum Factors
             "mom_score_risk_adj": round(mom_score, 2),
             f"adx_{self.adx_period}": round(current_adx_val, 1),
@@ -366,7 +367,7 @@ class MomentumTrendStrategy(TradingStrategy):
             plan['trailing_stop_active'] = True
             plan['stop_loss_mult'] = 2.0 # Looser stop for momentum
             
-            details.update({"plan": plan})
+            indicators["plan"] = plan
 
         return SignalModel(
             symbol=symbol,
@@ -375,7 +376,8 @@ class MomentumTrendStrategy(TradingStrategy):
             date=dates[-1],
             confidence=round(min(1.0, result.score), 3),
             reason=" | ".join(result.reasons),
-            details=details,
+            ohlcv=ohlcv,
+            indicators=indicators,
         )
 
 def make_momentum_presets() -> Dict[str, Dict[str, Any]]:

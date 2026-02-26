@@ -339,7 +339,7 @@ async def generate_global_reports_q2(
     all_signals: List[Dict[str, Any]],
     pipeline_run_id: UUID,
     global_symbols: List[str],
-    batch_size: int = 10,
+    batch_size: int = 1,
     max_concurrency: int = 3,
     identity_key: str | None = None,
     api_key: str | None = None,
@@ -389,7 +389,8 @@ async def generate_global_reports_q2(
                     "signal": row.signal,
                     "confidence": row.confidence,
                     "reason": row.reason,
-                    "details": row.details,
+                    "ohlcv": row.ohlcv,
+                    "indicators": row.indicators,
                 })
         
         total_hist = sum(len(v) for v in historical_signals_by_symbol.values())

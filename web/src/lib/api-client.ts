@@ -167,6 +167,14 @@ export const adminPipelineApi = {
     const sp = runDate ? `?run_date=${runDate}` : "";
     return post<T.PipelineTriggerResponse>(`/api/admin/pipeline/trigger${sp}`);
   },
+  list: (params?: { status?: string; limit?: number; offset?: number }) => {
+    const sp = new URLSearchParams();
+    if (params?.status) sp.set("status", params.status);
+    if (params?.limit) sp.set("limit", String(params.limit));
+    if (params?.offset) sp.set("offset", String(params.offset));
+    const qs = sp.toString();
+    return get<T.PipelineRunListResponse>(`/api/admin/pipeline/runs${qs ? `?${qs}` : ""}`);
+  },
   status: (runDate?: string) => {
     const sp = runDate ? `?run_date=${runDate}` : "";
     return get<T.PipelineRunResponse>(`/api/admin/pipeline/status${sp}`);

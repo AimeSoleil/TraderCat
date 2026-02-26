@@ -264,18 +264,20 @@ class BollingerBreakoutStrategy(TradingStrategy):
         # EMA Spread: Divergence between fast and slow (Trend Maturity)
         ema_spread_pct = ((ema_f - ema_s) / ema_s * 100) if ema_s else 0.0
 
-        # 构造详情 - 包含全面的技术指标
-        details: Dict[str, Any] = {
-            # 基础 OHLCV
+        # 构造详情 - OHLCV market data
+        ohlcv: Dict[str, Any] = {
             "open": round(open_price, 2),
             "high": round(high, 2),
             "low": round(low, 2),
             "close": round(close, 2),
             "volume": round(vols[-1], 0),
             f"avg_volume_{self.vol_zscore_window}": round(avg_vol, 0),
-            "rel_volume": round(rel_vol, 2),
+            f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
             f"vol_zscore_{self.vol_zscore_window}": round(vol_z, 2),
-            
+        }
+
+        # Technical indicators
+        indicators: Dict[str, Any] = {
             # 布林带深度数据
             f"bbu_{self.bb_period}": round(bbu or 0.0, 2),
             f"bbl_{self.bb_period}": round(bbl or 0.0, 2),
@@ -304,7 +306,7 @@ class BollingerBreakoutStrategy(TradingStrategy):
         }
 
         if atr_pct < self.min_atr_percent:
-            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=dates[-1], reason=f"Low Volatility ({atr_pct:.2f}%)", confidence=0.0, details=details)
+            return SignalModel(symbol=symbol, strategy=self.get_name(), signal="hold", date=dates[-1], reason=f"Low Volatility ({atr_pct:.2f}%)", confidence=0.0, ohlcv=ohlcv, indicators=indicators)
         
         # --- SCORING ENGINE ---
         is_long = long_break_trigger
@@ -376,7 +378,7 @@ class BollingerBreakoutStrategy(TradingStrategy):
                 plan['trailing_stop_ref'] = round(bbm or 0.0, 2)
                 plan['stop_loss_type'] = 'mean_reversion_band'
             
-            details["plan"] = plan
+            indicators["plan"] = plan
 
         return SignalModel(
             symbol=symbol,
@@ -386,7 +388,8 @@ class BollingerBreakoutStrategy(TradingStrategy):
             # Ensure confidence never exceeds 1.0
             confidence=round(min(1.0, result.score), 3),
             reason=" | ".join(result.reasons),
-            details=details,
+            ohlcv=ohlcv,
+            indicators=indicators,
         )
 
 def make_bbands_breakout_presets() -> Dict[str, Dict[str, Any]]:

@@ -65,7 +65,8 @@ class SignalWorker:
                         "signal": signal.signal,
                         "confidence": signal.confidence,
                         "reason": signal.reason,
-                        "details": signal.details,
+                        "ohlcv": signal.ohlcv,
+                        "indicators": signal.indicators,
                         "scope": scope,
                         "pipeline_run_id": pipeline_run_id,
                     })

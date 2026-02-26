@@ -35,10 +35,14 @@ class SignalRecord(Base):
     signal = Column(String(20), nullable=False)  # "buy", "sell", "hold", "rebalance"
     confidence = Column(Float, default=0.0, nullable=False)
     reason = Column(String(1000), nullable=True)
-    details = Column(
+    ohlcv = Column(
         JSONB().with_variant(JSON, "sqlite"),
         nullable=True,
-    )  # Flexible Dict[str, Any] stored as JSONB
+    )  # OHLCV market data: open, high, low, close, volume + volume stats
+    indicators = Column(
+        JSONB().with_variant(JSON, "sqlite"),
+        nullable=True,
+    )  # Technical indicators, trend flags, exit plan, etc.
     scope = Column(String(20), default=SignalScope.USER.value, nullable=False)
     pipeline_run_id = Column(UUID(as_uuid=True), nullable=True)
     created_at = Column(DateTime, default=utcnow, nullable=False)

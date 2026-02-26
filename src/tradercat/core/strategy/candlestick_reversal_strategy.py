@@ -300,8 +300,7 @@ class CandlestickReversalStrategy(TradingStrategy):
         atr_pct = (current_atr_val / close * 100) if close > 0 else 0.0
         bar_change_pct = (closes[-1] - opens[-1]) / opens[-1] * 100 if opens[-1] != 0 else 0.0
 
-        details: Dict[str, Any] = {
-            # 基础 OHLCV 与 价格行为
+        ohlcv: Dict[str, Any] = {
             "open": round(opens[-1], 2),
             "high": round(highs[-1], 2),
             "low": round(lows[-1], 2),
@@ -311,7 +310,9 @@ class CandlestickReversalStrategy(TradingStrategy):
             f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
             "bar_change_pct": round(bar_change_pct, 2),
             f"vol_zscore_{self.vol_zscore_window}": round(volume_z, 2) if volume_z is not None else None,
+        }
 
+        indicators: Dict[str, Any] = {
             # 识别到的形态
             "detected_pattern": pattern,
             "pattern_bias": effective_bias,
@@ -346,7 +347,7 @@ class CandlestickReversalStrategy(TradingStrategy):
             elif result.signal == 'short':
                 plan['stop_loss'] = round(close + (sl_mult * current_atr_val), 2)
                 
-            details.update({"plan": plan})
+            indicators.update({"plan": plan})
 
         return SignalModel(
             symbol=symbol,
@@ -355,7 +356,8 @@ class CandlestickReversalStrategy(TradingStrategy):
             date=dates[-1],
             confidence=round(min(1.0, result.score), 3),
             reason=" | ".join(result.reasons),
-            details=details
+            ohlcv=ohlcv,
+            indicators=indicators
         )
 
 def make_candlestick_reversal_presets() -> Dict[str, Dict[str, Any]]:
