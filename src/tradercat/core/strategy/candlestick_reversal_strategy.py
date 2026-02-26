@@ -309,7 +309,7 @@ class CandlestickReversalStrategy(TradingStrategy):
             f"avg_volume_{self.vol_zscore_window}": round(avg_vol, 0),
             f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
             "bar_change_pct": round(bar_change_pct, 2),
-            f"vol_zscore_{self.vol_zscore_window}": round(volume_z, 2) if volume_z is not None else None,
+            f"vol_zscore_{self.vol_zscore_window}": round(volume_z or 0.0, 2),
         }
 
         indicators: Dict[str, Any] = {

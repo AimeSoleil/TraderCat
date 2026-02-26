@@ -316,7 +316,7 @@ class DivergenceStrategy(TradingStrategy):
             "volume": round(vols[-1], 0),
             f"avg_volume_{self.vol_zscore_window}": round(avg_vol, 0),
             f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
-            f"vol_zscore_{self.vol_zscore_window}": round(vol_z, 2),
+            f"vol_zscore_{self.vol_zscore_window}": round(vol_z or 0.0, 2),
             "bar_change_pct": round(bar_change_pct, 2),
         }
 

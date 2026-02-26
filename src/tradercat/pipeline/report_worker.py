@@ -90,7 +90,8 @@ class GlobalReportWorker:
         self._ensure_roles()
         model = model or self.model_id
 
-        logger.info(f"Q2: Generating macro summary for {run_date} with identity '{self.identity_key}' and model '{model}'")
+        logger.info(f"Q2: Generating macro summary for {run_date} with identity '{self.identity_key}' "
+                    f"and model '{model}', provider '{self._provider.get_provider_name() if self._provider else 'N/A'}'")
         
         for attempt in range(self.max_retries + 1):
             try:
