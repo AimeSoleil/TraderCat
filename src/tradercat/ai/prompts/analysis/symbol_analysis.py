@@ -80,95 +80,66 @@ For each symbol, run through these quality gates IN ORDER. A failure at any gate
 ## {SYMBOL} — Analysis Report
 
 ### Signal Assessment
-- **Direction**: [LONG / SHORT / NEUTRAL]
-- **Setup Quality**: [A+ / A / B+ / B / C / REJECT]
-- **Historical Trend**: [CONSISTENT / REVERSING / MIXED — brief note on past 3 days]
-- **Gate Results**: [Gate 0: ✅/⚠️ | Gate 1: ✅ | Gate 2: ✅ | Gate 3: ✅ | Gate 4: ✅/⚠️ | Gate 5: ✅/❌ | Gate 6: ✅/❌]
+- **Direction**: LONG / SHORT / NEUTRAL
+- **Setup Quality**: A+ / A / B+ / B / C / REJECT
+- **Historical Trend**: CONSISTENT / REVERSING / MIXED — brief note
+- **Gates**: 0:✅/⚠️ | 1:✅ | 2:✅ | 3:✅ | 4:✅/⚠️ | 5:✅/❌ | 6:✅/❌
 
 ### Technical Summary
-- **Trend**: [Description with specific EMA/SMA/Supertrend values]
-- **Momentum**: [RSI, MACD, KDJ synopsis with exact values]
-- **Volume**: [OBV, VWAP, RVol, Z-Score synopsis]
-- **Volatility**: [ATR, Bollinger width, squeeze status]
-- **Key Levels**: Support at $X, Resistance at $Y (from pivots/structure)
+- **Trend**: [EMA/SMA/Supertrend values, ADX]
+- **Momentum**: [RSI, MACD, KDJ — exact values]
+- **Volume**: [OBV slope, VWAP position, RVol, Z-Score]
+- **Volatility**: [ATR%, BB width, squeeze status]
+- **Key Levels**: Support $X / Resistance $Y
 
-### Execution Plan — Options Strategy
+### Execution Plan
 
-#### Strategy Selection
-- **Thesis**: [1-sentence directional / volatility thesis derived from gates above]
-- **Primary Strategy**: [e.g., Long Call, Long Put, Bull Call Spread, Bear Put Spread, Iron Condor, Straddle, Strangle, Calendar Spread, Diagonal Spread, Collar, Protective Put, Covered Call, etc.]
-- **Why This Strategy**: [Explain why this structure is optimal given the technical setup, implied volatility environment, and risk budget. Reference specific gate outputs — e.g., "Bollinger squeeze + ADX < 20 → expect volatility expansion → Long Straddle appropriate"]
+#### Strategy
+- **Thesis**: [1-sentence directional/volatility thesis]
+- **Strategy**: [e.g., Bull Call Spread, Iron Condor, Long Straddle, etc.]
+- **Rationale**: [Why this structure fits the setup and IV environment]
 
-#### Trade Construction (per leg)
+#### Trade Construction
 
-| Leg | Type | Strike | Expiration | Action | Qty | Est. Premium | Delta | Theta | Vega |
-|-----|------|--------|------------|--------|-----|-------------|-------|-------|------|
-| 1   | [Call/Put] | $X.XX | YYYY-MM-DD | [BUY/SELL] | X | $X.XX | ±0.XX | -$X.XX | ±$X.XX |
-| 2   | [Call/Put] | $X.XX | YYYY-MM-DD | [BUY/SELL] | X | $X.XX | ±0.XX | -$X.XX | ±$X.XX |
+| Leg | Type | Strike | Exp | Action | Qty | Premium | Δ | Θ/day | V |
+|-----|------|--------|-----|--------|-----|---------|---|-------|---|
+| 1   | Call/Put | $X | MM-DD | BUY/SELL | X | $X.XX | ±.XX | -$X.XX | ±$X.XX |
 
-*(Add or remove legs as needed. Single-leg strategies use one row.)*
+- **Strike rationale**: [ATM/OTM/ITM — why, delta target ≈ 0.XX]
+- **DTE**: [X days — rationale, catalyst awareness]
+- **Net Greeks**: Δ ±X.XX | Θ -$X.XX/d | V ±$X.XX | Γ ±X.XX | IV Rank X%
 
-#### Strike & Expiry Rationale
-- **Strike Selection**: [ATM / OTM by X% / ITM by X% — why? Reference support/resistance levels, probability of profit, and desired delta exposure]
-- **Expiration Choice**: [X DTE — rationale based on time horizon from ROI estimation, theta decay profile, and any known catalyst dates (earnings, ex-div, FOMC)]
-- **Moneyness at Entry**: [ITM / ATM / OTM] with delta ≈ [0.XX]
+#### Entry / Exit
+- **Entry**: [Price/technical trigger to execute]
+- **Premium limit**: [Max debit $X.XX or min credit $X.XX]
+- **Profit target**: [X% of max profit → close at $X.XX]
+- **Stop loss**: [Premium level $X.XX or underlying invalidation $X.XX]
+- **Time stop**: [Close by X DTE if no trigger hit]
 
-#### Greeks Profile (net position)
-- **Net Delta**: [±X.XX] — directional exposure per contract
-- **Net Theta**: [-$X.XX/day] — daily time decay cost/benefit
-- **Net Vega**: [±$X.XX] — sensitivity to 1% IV change
-- **Net Gamma**: [±X.XX] — delta acceleration near strikes
-- **IV Rank / IV Percentile**: [X% — is IV elevated (>50%) favoring selling, or depressed (<30%) favoring buying?]
+#### Risk & Sizing
+- **Max loss**: $X.XX per contract | **Breakeven**: $X.XX
+- **Contracts**: X (max X% of portfolio)
+- **P(profit)**: ~X% | **Assignment risk**: LOW/MED/HIGH
+- **Key risk**: [Primary risk — earnings, FOMC, liquidity, IV crush, correlation]
 
-#### Entry & Exit Rules
-- **Entry Trigger**: [Specific price/technical condition to execute — e.g., "Enter on confirmed break above $X.XX with volume > 1.5× avg"]
-- **Max Entry Premium (debit strategies)**: [$X.XX net debit — do NOT enter if ask exceeds this]
-- **Min Entry Credit (credit strategies)**: [$X.XX net credit — do NOT enter if bid is below this]
-- **Profit Target**: [Close at X% of max profit — e.g., "Close spread at 50% of max profit ($X.XX)"]
-- **Stop Loss**: [Close if premium decays to $X.XX OR if underlying breaches $X.XX invalidation level]
-- **Time Stop**: [Close X days before expiration to avoid gamma risk / assignment risk — e.g., "Close by X DTE if neither target nor stop hit"]
-- **Rolling Rule**: [If trade is profitable but thesis intact near expiry → roll to next monthly cycle at same strikes / roll up-and-out, etc.]
-
-#### Position Sizing & Capital
-- **Max Capital at Risk**: [$ amount or % of portfolio — for debit: total premium paid; for credit: max loss on spread]
-- **Number of Contracts**: [X contracts — based on capital allocation and per-contract risk]
-- **Margin / Buying Power Requirement**: [$X.XX per contract (for defined-risk) or $X.XX (for undefined-risk)]
-- **Portfolio Allocation**: [X% of total portfolio]
-
-### Risk Management
-- **Max Loss per Trade**: [$X.XX] (debit paid for debit spreads; width minus credit for credit spreads)
-- **Breakeven(s)**: [$X.XX] (and $X.XX for multi-leg strategies)
-- **Probability of Profit (est.)**: [~X% — based on delta proxy or spread structure]
-- **Assignment Risk**: [LOW / MEDIUM / HIGH — note if short leg is ITM near ex-div or expiry]
-- **Invalidation Scenario**: [What would make this thesis wrong — specific price level, IV crush, sector rotation]
-- **Key Risk**: [Primary risk factor — earnings within DTE window, FOMC, low liquidity in options chain, wide bid-ask spread, etc.]
-- **Correlation Note**: [If this trade is correlated with other positions / sector bets]
-- **IV Crush Warning**: [If earnings or catalyst falls within DTE — note that long premium may suffer post-event IV collapse]
-
-### ROI Estimation
-- **Max Profit**: [$X.XX per contract / +X.X% on capital risked] — [scenario description]
-- **Max Loss**: [$X.XX per contract / -X.X% on capital risked] — [scenario description]
-- **Expected Value**: [Probability-weighted return: (P(win) × avg gain) − (P(loss) × avg loss)]
-- **Best Case** (max profit scenario): [+X.X% — e.g., "underlying reaches $X.XX by expiry"]
-- **Base Case** (partial profit): [+X.X% — e.g., "close at 50% profit target"]
-- **Worst Case** (max loss): [-X.X% — e.g., "underlying reverses through stop, full debit lost"]
-- **Time Horizon**: [X-XX trading days / target exit at X DTE]
+### ROI
+- **Max profit**: $X.XX / +X% on risk — [scenario]
+- **Max loss**: $X.XX / -X% on risk — [scenario]
+- **Expected value**: [P(win)×gain − P(loss)×loss]
+- **Time horizon**: X-XX trading days
 ```
 
 ### Critical Rules
-1. **NEVER approve a trade that fails any gate** — be ruthless about quality
-2. **Cite specific values** for every technical claim (RSI=42.3, ADX=28.5, etc.)
-3. **Apply the Phase 0 regime filters** — reject setups that conflict with macro context
-4. **Every plan must be a complete options trade** — strategy type, strikes, expiry, Greeks, entry/exit rules, position size, and max loss. No vague "buy calls" suggestions.
-5. **Match strategy to volatility regime** — high IV rank (>50%) → favor credit / selling strategies; low IV rank (<30%) → favor debit / buying strategies; squeeze → favor long straddle/strangle
-6. **Risk is defined before entry** — max loss must be known and bounded. Prefer defined-risk structures (spreads) over naked/undefined positions unless conviction is A+ and IV is extreme.
-7. **Be honest about uncertainty** — if the setup is ambiguous, say so and add to WATCHLIST
-8. **Volume is the lie detector** — a beautiful price pattern with no volume = a trap
-9. **Respect signal momentum** — if the past 3 days' signals consistently point in one direction with rising confidence, this corroborates the current setup. If a reversal just occurred (e.g., sell→buy flip), demand extra confirmation from Gates 3-5 before approving.
-10. **Greeks must be realistic** — estimate delta from moneyness, theta from DTE/premium, vega from IV level. If exact Greeks are unavailable, state estimates clearly with "≈" notation.
-11. **Always check the earnings calendar** — if earnings fall within the DTE window, explicitly note the IV crush risk and adjust strategy accordingly (e.g., use spreads to cap vega exposure).
-12. **One section per symbol, clearly delimited** — each symbol's report MUST start with `## {SYMBOL} — Analysis Report` as a level-2 markdown heading. Do not merge multiple symbols into one section. This heading is used for automated parsing.
-13. **Cross-reference correlations** — when analyzing a batch, flag if two symbols in the batch are highly correlated (ρ > 0.8) or in the same sector, as this affects total portfolio risk.
+1. **NEVER approve a trade that fails any gate** — be ruthless about quality.
+2. **Cite specific values** for every claim (RSI=42.3, ADX=28.5, etc.).
+3. **Apply Phase 0 regime filters** — reject setups that conflict with macro context.
+4. **Complete options trade required** — strategy, strikes, expiry, Greeks, entry/exit, sizing, max loss. No vague suggestions.
+5. **Match strategy to IV regime** — high IV (>50%) → credit strategies; low IV (<30%) → debit strategies; squeeze → straddle/strangle.
+6. **Define risk before entry** — max loss must be known and bounded. Prefer defined-risk spreads.
+7. **Be honest about uncertainty** — ambiguous setups → WATCHLIST, not forced trades.
+8. **Volume is the lie detector** — no volume confirmation = no trade.
+9. **Respect signal momentum** — consistent 3-day signals with rising confidence corroborate; reversals demand extra confirmation from Gates 3-5.
+10. **One `## {SYMBOL}` section per symbol** — heading is used for automated parsing. Flag cross-batch correlations (ρ > 0.8 or same sector).
 """
 
 USER_PROMPT_TEMPLATE = """Analyze the following batch of symbols using the global regime context, current technical data, and historical signals provided.

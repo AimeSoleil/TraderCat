@@ -67,8 +67,8 @@ Admin endpoints require admin-level API keys.
     pipeline_schedule_hour: int = Field(default=20, description="Hour to run pipeline (24h format)")
     pipeline_timezone: str = Field(default="America/New_York", description="Timezone for pipeline schedule")
     pipeline_max_concurrency: int = Field(default=5, description="Max concurrent workers")
-    pipeline_report_batch_size: int = Field(default=10, description="Number of symbols per LLM batch in Q2")
-    pipeline_llm_max_retries: int = Field(default=2, description="Max retries for LLM calls before skipping")
+    pipeline_report_batch_size: int = Field(default=5, description="Number of symbols per LLM batch in Q2")
+    pipeline_llm_max_retries: int = Field(default=1, description="Max retries for LLM calls before skipping")
     
     # AI/LLM
     default_llm_model: str = Field(default="claude-opus-4.6", description="Default LLM model")

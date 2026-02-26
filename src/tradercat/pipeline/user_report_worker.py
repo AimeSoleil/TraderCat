@@ -74,6 +74,8 @@ class UserReportWorker:
             "shaw": "options_strategist",
         }
         identity_key = identity_mapping.get(identity_key, "wyckoff")
+
+        logger.info(f"Q3: Generating briefing for user {user_id} with persona '{persona}' (identity={identity_key}, model={model})")
         
         for attempt in range(self.max_retries + 1):
             try:

@@ -112,7 +112,7 @@ class CopilotProvider(LLMProvider):
         model_id: str,
         system_prompt: str = None,
         temperature: float = 0.7,
-        max_tokens: int = 8192,
+        max_tokens: int = 16384,
         api_key: Optional[str] = None,
     ) -> str:
         """Single-shot generation via the Copilot SDK."""
@@ -143,7 +143,7 @@ class CopilotProvider(LLMProvider):
         messages: List[Dict[str, str]],
         model_id: str,
         temperature: float = 0.7,
-        max_tokens: int = 8192,
+        max_tokens: int = 16384,
         api_key: Optional[str] = None,
     ) -> str:
         """Multi-turn chat via the Copilot SDK.

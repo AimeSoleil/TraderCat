@@ -80,14 +80,16 @@ class AnalystRole(AIRole):
         )
         
         logger.info(f"Analyst: Starting global analysis for {run_date} "
-                     f"({len(signals_data)} signals, identity={self.identity.identity_key})")
+                     f"({len(signals_data)} signals, identity={self.identity.identity_key}, model={self.model_id}, provider={self.llm.get_provider_name()})")
+        logger.debug(f"System_prompt: {system_prompt}")
+        logger.debug(f"User_prompt: {user_prompt}")
         
         content = await self.llm.generate_thought(
             prompt=user_prompt,
             model_id=self.model_id,
             system_prompt=system_prompt,
             api_key=self.api_key,
-        )
+        )   
         
         return RoleOutput(
             role=RoleType.ANALYSIS,
@@ -124,7 +126,9 @@ class AnalystRole(AIRole):
         )
         
         logger.info(f"Analyst: Starting symbol analysis "
-                     f"(identity={self.identity.identity_key})")
+                     f"(identity={self.identity.identity_key}, model={self.model_id}, provider={self.llm.get_provider_name()})")
+        logger.debug(f"System_prompt: {system_prompt}")
+        logger.debug(f"User_prompt: {user_prompt}")
         
         content = await self.llm.generate_thought(
             prompt=user_prompt,

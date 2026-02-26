@@ -89,6 +89,8 @@ class GlobalReportWorker:
         """
         self._ensure_roles()
         model = model or self.model_id
+
+        logger.info(f"Q2: Generating macro summary for {run_date} with identity '{self.identity_key}' and model '{model}'")
         
         for attempt in range(self.max_retries + 1):
             try:
@@ -149,7 +151,7 @@ class GlobalReportWorker:
             batch_data.append({
                 "symbol": symbol,
                 "signals": symbol_signals,
-                "historical_signals": historical_signals,
+                #"historical_signals": historical_signals,
             })
         
         combined_json = json.dumps(batch_data, indent=2, default=str)
