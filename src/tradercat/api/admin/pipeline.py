@@ -1,7 +1,7 @@
 """Admin pipeline API endpoints."""
-from datetime import date
-from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import select
+from datetime import date, datetime
+from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy import select, update
 from pydantic import BaseModel
 
 from tradercat.api.deps import CurrentAdminUser, DatabaseSession
@@ -150,4 +150,63 @@ async def get_pipeline_status(
         started_at=pipeline_run.started_at.isoformat() if pipeline_run.started_at else None,
         completed_at=pipeline_run.completed_at.isoformat() if pipeline_run.completed_at else None,
         created_at=pipeline_run.created_at.isoformat()
+    )
+
+
+class PipelineCancelResponse(BaseModel):
+    """Response for pipeline cancel."""
+    message: str
+    run_id: str
+    run_date: date
+    previous_status: str
+    new_status: str
+
+
+@router.post("/cancel", response_model=PipelineCancelResponse)
+async def cancel_pipeline(
+    db: DatabaseSession,
+    admin: CurrentAdminUser,
+    run_date: date | None = Query(None, description="Date of the pipeline run to cancel (defaults to today)"),
+):
+    """
+    Force-cancel a stuck pipeline run by setting its status to FAILED.
+
+    Use this when a pipeline was interrupted externally (e.g. container restart,
+    OOM kill) and is still marked as RUNNING, which blocks re-triggering.
+
+    Admin-only endpoint.
+    """
+    target_date = run_date or datetime.utcnow().date()
+
+    result = await db.execute(
+        select(PipelineRun).where(
+            PipelineRun.run_date == target_date,
+            PipelineRun.status == PipelineStatus.RUNNING.value,
+        )
+    )
+    pipeline_run = result.scalars().first()
+
+    if not pipeline_run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No RUNNING pipeline found for {target_date}. "
+                   "Only RUNNING pipelines can be cancelled.",
+        )
+
+    previous_status = pipeline_run.status
+    pipeline_run.status = PipelineStatus.FAILED.value
+    pipeline_run.error_log = (
+        (pipeline_run.error_log or "")
+        + f"\n[admin-cancel] Force-cancelled by admin at {datetime.utcnow().isoformat()}Z"
+    ).strip()
+    pipeline_run.completed_at = datetime.utcnow()
+
+    await db.commit()
+
+    return PipelineCancelResponse(
+        message=f"Pipeline for {target_date} cancelled — you can now re-trigger it.",
+        run_id=str(pipeline_run.id),
+        run_date=pipeline_run.run_date,
+        previous_status=previous_status,
+        new_status=PipelineStatus.FAILED.value,
     )
