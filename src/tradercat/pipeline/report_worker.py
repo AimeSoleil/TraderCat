@@ -169,6 +169,7 @@ class GlobalReportWorker:
                         f"Q2: Batch LLM returned {len(combined_content)} chars "
                         f"for {len(batch_symbols)} symbols: {batch_symbols}"
                     )
+                    logger.debug(f"Batch LLM content:\n{combined_content}")
                     if not combined_content.strip():
                         raise ValueError(
                             f"LLM returned empty content for batch {batch_symbols}"
@@ -365,12 +366,12 @@ async def generate_global_reports_q2(
         "etf_signals": etf_signals,
     }
     
-    # --- Fetch past 3 trading days' signals for historical context ---
+    # --- Fetch past 1 trading days' signals for historical context ---
     historical_signals_by_symbol: Dict[str, List[Dict[str, Any]]] = {}
     try:
         past_dates: List[date] = []
         d = run_date
-        for _ in range(3):
+        for _ in range(1):
             d = get_previous_market_day(d)
             past_dates.append(d)
         
@@ -406,8 +407,8 @@ async def generate_global_reports_q2(
     
     signals_by_symbol: Dict[str, List[Dict[str, Any]]] = {}
     all_plan_symbols = []
-    # Keep only QQQ/SPY from global symbols; exclude other global ETFs from Step 2
-    keep_global = {"QQQ", "SPY"}
+    # Keep only QQQ/SPY/IWM from global symbols; exclude other macro/sector ETFs from Step 2
+    keep_global = {"QQQ", "SPY", "IWM"}
     excluded_global = set(global_symbols) - keep_global
     for sig in all_signals:
         sym = sig["symbol"]
