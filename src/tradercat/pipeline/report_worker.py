@@ -145,14 +145,31 @@ class GlobalReportWorker:
         model = model or self.model_id
         
         # --- Build combined symbol data for the entire batch ---
+        # Merge OHLCV (identical across strategies) and separate indicators
+        # per strategy to save tokens.
         batch_data = []
         for symbol in batch_symbols:
             symbol_signals = batch_context.get("signals_by_symbol", {}).get(symbol, [])
-            historical_signals = batch_context.get("historical_signals_by_symbol", {}).get(symbol, [])
+            # Extract shared OHLCV from the first signal (same for all strategies)
+            ohlcv = {}
+            for sig in symbol_signals:
+                if sig.get("ohlcv"):
+                    ohlcv = sig["ohlcv"]
+                    break
+            # Build per-strategy entries with signal + indicators only
+            strategies = []
+            for sig in symbol_signals:
+                strategies.append({
+                    "strategy": sig.get("strategy"),
+                    "signal": sig.get("signal"),
+                    "confidence": sig.get("confidence"),
+                    "reason": sig.get("reason"),
+                    "indicators": sig.get("indicators", {}),
+                })
             batch_data.append({
                 "symbol": symbol,
-                "signals": symbol_signals,
-                #"historical_signals": historical_signals,
+                "ohlcv": ohlcv,
+                "strategies": strategies,
             })
         
         combined_json = json.dumps(batch_data, indent=2, default=str)

@@ -151,8 +151,13 @@ USER_PROMPT_TEMPLATE = """Analyze the following batch of symbols using the globa
 ===BEGIN SYMBOL TECHNICAL DATA (BATCH)===
 Below is a JSON array of symbols. Each object contains:
 - `symbol`: ticker
-- `signals`: today's strategy signals for that symbol
-- `historical_signals`: signals from the past 3 trading sessions (sorted most-recent first)
+- `ohlcv`: shared market data (open, high, low, close, volume, avg_volume, rel_volume, vol_zscore, bar_change_pct) — identical across strategies for the same symbol
+- `strategies`: array of strategy results, each with:
+  - `strategy`: strategy name
+  - `signal`: direction (buy/sell/hold)
+  - `confidence`: score 0-1
+  - `reason`: explanation
+  - `indicators`: strategy-specific technical indicators
 
 {symbol_data_json}
 ===END SYMBOL TECHNICAL DATA===
