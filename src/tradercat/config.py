@@ -81,7 +81,7 @@ Admin endpoints require admin-level API keys.
     
     # Logging
     log_format: str = Field(default="json", description="Log format: json or text")
-    log_level: str = Field(default="INFO", description="Logging level")
+    log_level: str = Field(default="DEBUG", description="Logging level")
     
     # Run Mode
     run_mode: str = Field(
