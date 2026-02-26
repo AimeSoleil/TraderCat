@@ -27,7 +27,13 @@ from tradercat.core.strategy.momentum_strategy import MomentumTrendStrategy, mak
 from tradercat.core.strategy.backtest.backtest_engine import BacktestRunner
 from tradercat.core.strategy.backtest.sector_rotation_engine import run_sector_rotation_backtest
 
-logger = get_logger(__name__)
+import logging
+from tradercat.config import settings
+from tradercat.logger.logger import get_logger
+
+# Set up logger
+use_json = settings.log_format == "json"
+logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
 
 # ==========================================
 # 1. Configuration

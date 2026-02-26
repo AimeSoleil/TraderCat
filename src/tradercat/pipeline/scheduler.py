@@ -17,12 +17,16 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
 
+import logging
+
 from tradercat.logger.logger import get_logger
 from tradercat.config import settings
 from tradercat.pipeline.orchestrator import PipelineOrchestrator
 from tradercat.pipeline.holidays import is_market_day
 
-logger = get_logger(__name__)
+# Set up logger
+use_json = settings.log_format == "json"
+logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
 
 
 class PipelineScheduler:

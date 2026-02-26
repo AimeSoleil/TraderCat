@@ -15,11 +15,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tradercat.api.deps import DatabaseSession
+import logging
+
 from tradercat.config import settings
 from tradercat.models import User, ApiKey
 from tradercat.logger.logger import get_logger
 
-logger = get_logger(__name__)
+# Set up logger
+use_json = settings.log_format == "json"
+logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

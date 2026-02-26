@@ -29,11 +29,15 @@ import signal
 import sys
 from datetime import datetime
 
+import logging
+
 from tradercat.logger.logger import get_logger
 from tradercat.config import settings
 from tradercat.pipeline.scheduler import get_scheduler
 
-logger = get_logger(__name__)
+# Set up logger
+use_json = settings.log_format == "json"
+logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
 
 # Global flag for graceful shutdown
 shutdown_requested = False

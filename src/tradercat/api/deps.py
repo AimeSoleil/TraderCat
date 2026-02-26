@@ -9,8 +9,14 @@ from tradercat.database import get_db
 from tradercat.models import User, ApiKey
 from datetime import datetime
 
+import logging
+
 from tradercat.logger.logger import get_logger
-logger = get_logger(__name__)
+from tradercat.config import settings
+
+# Set up logger
+use_json = settings.log_format == "json"
+logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
 
 # Security schemes
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)

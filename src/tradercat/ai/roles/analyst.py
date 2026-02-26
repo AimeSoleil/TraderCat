@@ -19,7 +19,12 @@ from tradercat.ai.prompts.analysis.symbol_analysis import (
 )
 from tradercat.logger.logger import get_logger
 
-logger = get_logger(__name__)
+import logging
+from tradercat.config import settings
+
+# Set up logger
+use_json = settings.log_format == "json"
+logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
 
 
 class AnalystRole(AIRole):

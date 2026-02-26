@@ -30,7 +30,12 @@ except ImportError:
     _CopilotClient = None
     _copilot_available = False
 
-logger = get_logger(__name__)
+import logging
+from tradercat.config import settings
+
+# Set up logger
+use_json = settings.log_format == "json"
+logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
 
 
 @LLMFactory.register("copilot")

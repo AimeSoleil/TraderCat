@@ -11,13 +11,17 @@ from datetime import date
 from typing import List, Dict, Any, Optional
 from uuid import UUID
 
+import logging
+
 from tradercat.logger.logger import get_logger
 from tradercat.config import settings
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.ai.roles.identity import IdentityRole
 from tradercat.ai.roles.summarizer import SummarizerRole
 
-logger = get_logger(__name__)
+# Set up logger
+use_json = settings.log_format == "json"
+logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
 
 
 def _json_safe(obj: Any) -> Any:

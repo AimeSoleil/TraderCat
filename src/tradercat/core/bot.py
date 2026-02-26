@@ -32,7 +32,12 @@ from tradercat.core.strategy.momentum_strategy import (
     make_momentum_presets,
 )
 
-logger = get_logger(__name__)
+import logging
+from tradercat.config import settings
+
+# Set up logger
+use_json = settings.log_format == "json"
+logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
 
 # ── Strategy class registry ───────────────────────────────────
 STRATEGY_CLASS_MAP: Dict[str, type] = {
