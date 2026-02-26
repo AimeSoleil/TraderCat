@@ -8,8 +8,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Play, RefreshCw } from "lucide-react";
+import { Play, RefreshCw, StopCircle, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 const statusColor: Record<string, string> = {
@@ -40,7 +51,19 @@ export default function AdminPipelinePage() {
     onError: () => toast.error("Failed to trigger pipeline"),
   });
 
+  const cancelMut = useMutation({
+    mutationFn: () =>
+      adminPipelineApi.cancel(statusDate || undefined),
+    onSuccess: (res) => {
+      toast.success(res.message);
+      qc.invalidateQueries({ queryKey: ["admin", "pipeline-status"] });
+    },
+    onError: () =>
+      toast.error("Failed to cancel pipeline — is it still running?"),
+  });
+
   const run = statusQuery.data;
+  const isRunning = run?.status === "running";
 
   return (
     <>
@@ -110,6 +133,9 @@ export default function AdminPipelinePage() {
                   variant="secondary"
                   className={statusColor[run.status] ?? ""}
                 >
+                  {isRunning && (
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  )}
                   {run.status.toUpperCase()}
                 </Badge>
                 <span className="text-sm text-muted-foreground">
@@ -120,6 +146,43 @@ export default function AdminPipelinePage() {
                     Step: {run.step}
                   </span>
                 )}
+
+                {/* Cancel button — only shown when running */}
+                {isRunning && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={cancelMut.isPending}
+                      >
+                        <StopCircle className="mr-1.5 h-3.5 w-3.5" />
+                        {cancelMut.isPending ? "Cancelling…" : "Cancel"}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Cancel pipeline?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will mark the running pipeline for{" "}
+                          <strong>{run.run_date}</strong> as failed so you can
+                          re-trigger it. The in-flight LLM calls may still
+                          complete in the background, but their results will be
+                          overwritten on the next run.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Keep running</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => cancelMut.mutate()}
+                          className="bg-destructive text-white hover:bg-destructive/90"
+                        >
+                          Yes, cancel it
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -129,13 +192,15 @@ export default function AdminPipelinePage() {
                 <Stat label="Completed" value={run.completed_at ? new Date(run.completed_at).toLocaleTimeString() : "—"} />
               </div>
 
-              {run.error_log && Object.keys(run.error_log).length > 0 && (
+              {run.error_log && (
                 <div>
                   <p className="mb-1 text-sm font-medium text-destructive">
                     Errors
                   </p>
-                  <pre className="max-h-48 overflow-auto rounded bg-muted p-2 text-xs">
-                    {JSON.stringify(run.error_log, null, 2)}
+                  <pre className="max-h-48 overflow-auto rounded bg-muted p-2 text-xs whitespace-pre-wrap">
+                    {typeof run.error_log === "string"
+                      ? run.error_log
+                      : JSON.stringify(run.error_log, null, 2)}
                   </pre>
                 </div>
               )}

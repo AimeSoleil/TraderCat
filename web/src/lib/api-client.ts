@@ -171,6 +171,10 @@ export const adminPipelineApi = {
     const sp = runDate ? `?run_date=${runDate}` : "";
     return get<T.PipelineRunResponse>(`/api/admin/pipeline/status${sp}`);
   },
+  cancel: (runDate?: string) => {
+    const sp = runDate ? `?run_date=${runDate}` : "";
+    return post<T.PipelineCancelResponse>(`/api/admin/pipeline/cancel${sp}`);
+  },
 };
 
 export const adminLlmTokensApi = {

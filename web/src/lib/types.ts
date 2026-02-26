@@ -269,7 +269,7 @@ export interface PipelineRunResponse {
   processed_symbols: number;
   total_reports: number;
   processed_reports: number;
-  error_log: Record<string, unknown> | null;
+  error_log: string | null;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
@@ -279,4 +279,12 @@ export interface PipelineTriggerResponse {
   message: string;
   run_date: string;
   pipeline_run_id: string;
+}
+
+export interface PipelineCancelResponse {
+  message: string;
+  run_id: string;
+  run_date: string;
+  previous_status: string;
+  new_status: string;
 }
