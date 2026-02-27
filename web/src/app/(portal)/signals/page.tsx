@@ -217,8 +217,14 @@ function DetailsPanel({ row }: { row: Row<SignalResponse> }) {
   );
 }
 
+/** Return local today as YYYY-MM-DD */
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function SignalsPage() {
-  const [runDate, setRunDate] = useState("");
+  const [runDate, setRunDate] = useState(todayStr);
   const [symbolFilter, setSymbolFilter] = useState("");
   const [signalFilter, setSignalFilter] = useState<string>("all");
   const [sorting, setSorting] = useState<SortingState>([]);

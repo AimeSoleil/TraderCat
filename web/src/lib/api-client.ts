@@ -180,9 +180,10 @@ export const adminPipelineApi = {
     const sp = runDate ? `?run_date=${runDate}` : "";
     return post<T.PipelineTriggerResponse>(`/api/admin/pipeline/trigger${sp}`);
   },
-  list: (params?: { status?: string; limit?: number; offset?: number }) => {
+  list: (params?: { status?: string; run_date?: string; limit?: number; offset?: number }) => {
     const sp = new URLSearchParams();
     if (params?.status) sp.set("status", params.status);
+    if (params?.run_date) sp.set("run_date", params.run_date);
     if (params?.limit) sp.set("limit", String(params.limit));
     if (params?.offset) sp.set("offset", String(params.offset));
     const qs = sp.toString();

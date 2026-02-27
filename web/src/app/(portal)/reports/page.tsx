@@ -123,28 +123,38 @@ function SkeletonGrid({ count = 3 }: { count?: number }) {
 
 function PlanDetailContent({ plan }: { plan: SymbolExecutionPlanResponse }) {
   return (
-    <>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-lg font-semibold">{plan.symbol}</span>
-        <Badge variant="outline" className="text-xs font-normal">
-          {plan.run_date}
-        </Badge>
-        {plan.verdict && (
-          <Badge
-            variant={plan.verdict === "go" ? "default" : "secondary"}
-            className="text-xs font-normal"
-          >
-            {plan.verdict.toUpperCase()}
-          </Badge>
-        )}
-        {plan.model_used && (
-          <Badge variant="secondary" className="text-xs font-normal">
-            {plan.model_used}
-          </Badge>
-        )}
+    <div className="flex flex-col gap-5">
+      {/* ── Header: symbol + metadata ── */}
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-baseline gap-3">
+          <span className="text-2xl font-bold tracking-tight">{plan.symbol}</span>
+          {plan.verdict && (
+            <Badge
+              variant={plan.verdict === "go" ? "default" : "secondary"}
+              className="text-sm px-2.5 py-0.5"
+            >
+              {plan.verdict.toUpperCase()}
+            </Badge>
+          )}
+          {plan.setup_quality && (
+            <span className="text-sm text-muted-foreground">
+              Quality: <span className="font-medium text-foreground">{plan.setup_quality}</span>
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          <span>{plan.run_date}</span>
+          {plan.identity_used && <span>Persona: {plan.identity_used}</span>}
+          {plan.model_used && <span>Model: {plan.model_used}</span>}
+        </div>
       </div>
-      <MarkdownRenderer content={plan.content_md} />
-    </>
+
+      {/* ── Divider ── */}
+      <hr className="border-border" />
+
+      {/* ── Body: markdown content ── */}
+      <MarkdownRenderer content={plan.content_md} className="text-[0.95rem] leading-relaxed" />
+    </div>
   );
 }
 
@@ -259,7 +269,7 @@ function PlansTab({
       {/* ── Mobile: bottom sheet ── */}
       {isMobile ? (
         <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-          <SheetContent aria-describedby={undefined} side="bottom" className="h-[90dvh] overflow-y-auto rounded-t-xl px-4 pb-6">
+          <SheetContent aria-describedby={undefined} side="bottom" className="h-[90dvh] overflow-y-auto rounded-t-xl px-5 py-5 pb-8">
             <SheetHeader className="sr-only">
               <SheetTitle>{selected?.symbol ?? "Execution Plan"}</SheetTitle>
             </SheetHeader>
@@ -269,31 +279,13 @@ function PlansTab({
       ) : (
         /* ── Desktop: centered dialog ── */
         <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-          <DialogContent aria-describedby={undefined} className="max-w-6xl w-[90vw] max-h-[90vh] overflow-y-auto">
+          <DialogContent aria-describedby={undefined} className="max-w-[108rem] w-[95vw] max-h-[90vh] overflow-y-auto px-8 py-6">
             {selected && (
               <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <span>{selected.symbol}</span>
-                    {selected.verdict && (
-                      <Badge
-                        variant={selected.verdict === "go" ? "default" : "secondary"}
-                        className="text-xs font-normal"
-                      >
-                        {selected.verdict.toUpperCase()}
-                      </Badge>
-                    )}
-                    <Badge variant="outline" className="text-xs font-normal">
-                      {selected.run_date}
-                    </Badge>
-                    {selected.model_used && (
-                      <Badge variant="secondary" className="text-xs font-normal">
-                        {selected.model_used}
-                      </Badge>
-                    )}
-                  </DialogTitle>
+                <DialogHeader className="sr-only">
+                  <DialogTitle>{selected.symbol} Execution Plan</DialogTitle>
                 </DialogHeader>
-                <MarkdownRenderer content={selected.content_md} />
+                <PlanDetailContent plan={selected} />
               </>
             )}
           </DialogContent>
@@ -305,9 +297,15 @@ function PlansTab({
 
 /* ── Main page ── */
 
+/** Return local today as YYYY-MM-DD */
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function ReportsPage() {
   const [tab, setTab] = useState("my");
-  const [runDate, setRunDate] = useState("");
+  const [runDate, setRunDate] = useState(todayStr);
 
   const dateParam = runDate || undefined;
 

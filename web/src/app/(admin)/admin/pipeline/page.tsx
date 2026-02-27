@@ -166,18 +166,26 @@ function DetailRow({ run }: { run: PipelineRunResponse }) {
 }
 
 /* ── Main page ── */
+/** Return local today as YYYY-MM-DD */
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function AdminPipelinePage() {
   const qc = useQueryClient();
   const [triggerDate, setTriggerDate] = useState("");
-  const [statusFilter, setStatusFilter] = useState("running");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [runDateFilter, setRunDateFilter] = useState(todayStr);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const runsQuery = useQuery({
-    queryKey: ["admin", "pipeline-runs", statusFilter],
+    queryKey: ["admin", "pipeline-runs", statusFilter, runDateFilter],
     queryFn: () =>
       adminPipelineApi.list({
         limit: 50,
         status: statusFilter === "all" ? undefined : statusFilter,
+        run_date: runDateFilter || undefined,
       }),
     refetchInterval: 10_000,
   });
@@ -260,6 +268,12 @@ export default function AdminPipelinePage() {
                 ))}
               </SelectContent>
             </Select>
+            <Input
+              type="date"
+              value={runDateFilter}
+              onChange={(e) => setRunDateFilter(e.target.value)}
+              className="w-40 h-8 text-xs"
+            />
             <Button
               variant="outline"
               size="icon"

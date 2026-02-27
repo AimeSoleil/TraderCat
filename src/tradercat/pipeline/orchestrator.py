@@ -35,7 +35,6 @@ from tradercat.models import (
     WatchlistItem,
     GlobalSymbol,
     Strategy,
-    StrategyPreset,
     LlmToken,
 )
 from tradercat.pipeline.signal_worker import process_symbols_p1

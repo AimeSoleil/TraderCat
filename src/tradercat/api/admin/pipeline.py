@@ -122,17 +122,21 @@ async def list_pipeline_runs(
     db: DatabaseSession,
     admin: CurrentAdminUser,
     status_filter: str | None = Query(None, alias="status", description="Filter by status (running, completed, failed, pending)"),
+    run_date: str | None = Query(None, description="Filter by run_date (YYYY-MM-DD)"),
     limit: int = Query(20, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
     """
     List pipeline runs ordered by run_date descending.
-    Optionally filter by status.  Admin-only endpoint.
+    Optionally filter by status and/or run_date.  Admin-only endpoint.
     """
     query = select(PipelineRun)
 
     if status_filter:
         query = query.where(PipelineRun.status == status_filter.lower())
+
+    if run_date:
+        query = query.where(PipelineRun.run_date == run_date)
 
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar() or 0
