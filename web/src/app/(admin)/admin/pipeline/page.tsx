@@ -43,7 +43,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { PipelineRunResponse } from "@/lib/types";
 
 const STATUS_OPTIONS = [
@@ -301,9 +301,8 @@ export default function AdminPipelinePage() {
                     const isRunning = run.status === "running";
                     const isExpanded = expanded.has(run.id);
                     return (
-                      <>
+                      <Fragment key={run.id}>
                         <TableRow
-                          key={run.id}
                           className="cursor-pointer transition-colors hover:bg-muted/50"
                           onClick={() => toggleExpand(run.id)}
                         >
@@ -349,7 +348,7 @@ export default function AdminPipelinePage() {
                         {isExpanded && (
                           <DetailRow key={`${run.id}-detail`} run={run} />
                         )}
-                      </>
+                      </Fragment>
                     );
                   })}
                 </TableBody>
