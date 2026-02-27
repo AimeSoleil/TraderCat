@@ -123,26 +123,26 @@ function SkeletonGrid({ count = 3 }: { count?: number }) {
 
 function PlanDetailContent({ plan }: { plan: SymbolExecutionPlanResponse }) {
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-3">
       {/* ── Header: symbol + metadata ── */}
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-baseline gap-3">
-          <span className="text-2xl font-bold tracking-tight">{plan.symbol}</span>
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-baseline gap-2">
+          <span className="text-base font-bold tracking-tight">{plan.symbol}</span>
           {plan.verdict && (
             <Badge
               variant={plan.verdict === "go" ? "default" : "secondary"}
-              className="text-sm px-2.5 py-0.5"
+              className="text-[0.65rem] px-1.5 py-px"
             >
               {plan.verdict.toUpperCase()}
             </Badge>
           )}
           {plan.setup_quality && (
-            <span className="text-sm text-muted-foreground">
+            <span className="text-[0.65rem] text-muted-foreground">
               Quality: <span className="font-medium text-foreground">{plan.setup_quality}</span>
             </span>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-[0.6rem] text-muted-foreground">
           <span>{plan.run_date}</span>
           {plan.identity_used && <span>Persona: {plan.identity_used}</span>}
           {plan.model_used && <span>Model: {plan.model_used}</span>}
@@ -153,7 +153,7 @@ function PlanDetailContent({ plan }: { plan: SymbolExecutionPlanResponse }) {
       <hr className="border-border" />
 
       {/* ── Body: markdown content ── */}
-      <MarkdownRenderer content={plan.content_md} className="text-[0.95rem] leading-relaxed" />
+      <MarkdownRenderer content={plan.content_md} className="text-[0.475rem] leading-relaxed" />
     </div>
   );
 }
@@ -279,7 +279,7 @@ function PlansTab({
       ) : (
         /* ── Desktop: centered dialog ── */
         <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-          <DialogContent aria-describedby={undefined} className="max-w-[108rem] w-[95vw] max-h-[90vh] overflow-y-auto px-8 py-6">
+          <DialogContent aria-describedby={undefined} className="max-w-[162rem] w-[98vw] max-h-[90vh] overflow-y-auto px-10 py-8">
             {selected && (
               <>
                 <DialogHeader className="sr-only">
