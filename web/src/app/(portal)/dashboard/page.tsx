@@ -22,13 +22,13 @@ export default function DashboardPage() {
   });
 
   const reports = useQuery({
-    queryKey: ["reports", "user", "latest"],
-    queryFn: () => reportsApi.listUser({ limit: 5 }),
+    queryKey: ["reports", "briefings", "latest"],
+    queryFn: () => reportsApi.listBriefings({ limit: 5 }),
   });
 
-  const globalReports = useQuery({
-    queryKey: ["reports", "global", "latest"],
-    queryFn: () => reportsApi.listGlobal({ limit: 5 }),
+  const macroReports = useQuery({
+    queryKey: ["reports", "macro", "latest"],
+    queryFn: () => reportsApi.listMacro({ limit: 5 }),
   });
 
   const stats = [
@@ -43,13 +43,13 @@ export default function DashboardPage() {
       icon: BarChart3,
     },
     {
-      title: "User Reports",
+      title: "Briefings",
       value: reports.data?.total ?? "—",
       icon: FileText,
     },
     {
-      title: "Global Reports",
-      value: globalReports.data?.total ?? "—",
+      title: "Macro Reports",
+      value: macroReports.data?.total ?? "—",
       icon: TrendingUp,
     },
   ];
@@ -141,7 +141,7 @@ export default function DashboardPage() {
                     key={r.id}
                     className="flex items-center justify-between text-sm"
                   >
-                    <span className="font-medium">{r.report_type}</span>
+                    <span className="font-medium">Briefing</span>
                     <span className="text-muted-foreground">{r.run_date}</span>
                     <span className="text-xs text-muted-foreground">
                       {r.identity_used ?? "—"}

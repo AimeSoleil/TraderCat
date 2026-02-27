@@ -1,7 +1,9 @@
-"""Report API endpoints.
+"""Report API endpoints — Pipeline v2.
 
-Serves user-specific reports (from user_reports table) and
-read-only access to global reports (from global_reports table).
+Serves:
+  - User briefings (from user_briefings table) — tenant-isolated
+  - Macro regime contexts (from macro_regime_contexts) — read-only, all authenticated users
+  - Symbol execution plans (from symbol_execution_plans) — read-only, all authenticated users
 """
 from datetime import date
 from uuid import UUID
@@ -9,139 +11,188 @@ from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func
 
 from tradercat.api.deps import CurrentUser, DatabaseSession
-from tradercat.models import GlobalReport, UserReport
+from tradercat.models import MacroRegimeContext, SymbolExecutionPlan, UserBriefing
 from tradercat.schemas.report import (
-    GlobalReportResponse,
-    GlobalReportDetail,
-    GlobalReportList,
-    UserReportResponse,
-    UserReportDetail,
-    UserReportList,
+    MacroRegimeContextResponse,
+    MacroRegimeContextDetail,
+    MacroRegimeContextList,
+    SymbolExecutionPlanResponse,
+    SymbolExecutionPlanDetail,
+    SymbolExecutionPlanList,
+    UserBriefingResponse,
+    UserBriefingDetail,
+    UserBriefingList,
 )
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 
-# --- User Reports ---
+# --- User Briefings ---
 
-@router.get("", response_model=UserReportList)
-async def list_user_reports(
+@router.get("", response_model=UserBriefingList)
+async def list_user_briefings(
     db: DatabaseSession,
     current_user: CurrentUser,
     run_date: date | None = Query(None, description="Filter by run date"),
-    report_type: str | None = Query(None, max_length=50, description="Filter by report type"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0)
 ):
     """
-    List personalized reports for the current user.
-    Tenant-isolated: users can only see their own reports.
+    List personalized briefings for the current user.
+    Tenant-isolated: users can only see their own briefings.
     """
-    query = select(UserReport).where(UserReport.user_id == current_user.id)
-    
+    query = select(UserBriefing).where(UserBriefing.user_id == current_user.id)
+
     if run_date:
-        query = query.where(UserReport.run_date == run_date)
-    if report_type:
-        query = query.where(UserReport.report_type == report_type)
-    
+        query = query.where(UserBriefing.run_date == run_date)
+
     count_query = select(func.count()).select_from(query.subquery())
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
-    
-    query = query.order_by(UserReport.run_date.desc(), UserReport.created_at.desc())
+
+    query = query.order_by(UserBriefing.run_date.desc(), UserBriefing.created_at.desc())
     query = query.offset(offset).limit(limit)
     result = await db.execute(query)
     reports = result.scalars().all()
-    
-    return UserReportList(reports=reports, total=total)
+
+    return UserBriefingList(reports=reports, total=total)
 
 
-# --- Global Reports (read-only, available to all authenticated users) ---
-# NOTE: /global routes MUST be defined before /{report_id} to avoid path conflicts
+# --- Macro Regime Contexts (read-only) ---
+# NOTE: /macro routes MUST be defined before /{report_id} to avoid path conflicts
 
-@router.get("/global", response_model=GlobalReportList)
-async def list_global_reports(
+@router.get("/macro", response_model=MacroRegimeContextList)
+async def list_macro_regime_contexts(
+    db: DatabaseSession,
+    current_user: CurrentUser,
+    run_date: date | None = Query(None, description="Filter by run date"),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0)
+):
+    """
+    List macro regime context reports.
+    Available to all authenticated users (read-only).
+    """
+    query = select(MacroRegimeContext)
+
+    if run_date:
+        query = query.where(MacroRegimeContext.run_date == run_date)
+
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    query = query.order_by(MacroRegimeContext.run_date.desc(), MacroRegimeContext.created_at.desc())
+    query = query.offset(offset).limit(limit)
+    result = await db.execute(query)
+    reports = result.scalars().all()
+
+    return MacroRegimeContextList(reports=reports, total=total)
+
+
+@router.get("/macro/{report_id}", response_model=MacroRegimeContextDetail)
+async def get_macro_regime_context(
+    report_id: UUID,
+    db: DatabaseSession,
+    current_user: CurrentUser
+):
+    """Get full macro regime context details."""
+    result = await db.execute(
+        select(MacroRegimeContext).where(MacroRegimeContext.id == report_id)
+    )
+    report = result.scalars().first()
+
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Macro regime context not found"
+        )
+
+    return report
+
+
+# --- Symbol Execution Plans (read-only) ---
+
+@router.get("/plans", response_model=SymbolExecutionPlanList)
+async def list_execution_plans(
     db: DatabaseSession,
     current_user: CurrentUser,
     run_date: date | None = Query(None, description="Filter by run date"),
     symbol: str | None = Query(None, max_length=20, description="Filter by symbol"),
-    report_type: str | None = Query(None, max_length=50, description="Filter by report type"),
+    verdict: str | None = Query(None, max_length=20, description="Filter by verdict"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0)
 ):
     """
-    List global reports (macro summaries and execution plans).
+    List symbol execution plans.
     Available to all authenticated users (read-only).
     """
-    query = select(GlobalReport)
-    
+    query = select(SymbolExecutionPlan)
+
     if run_date:
-        query = query.where(GlobalReport.run_date == run_date)
+        query = query.where(SymbolExecutionPlan.run_date == run_date)
     if symbol:
-        query = query.where(GlobalReport.symbol == symbol.upper())
-    if report_type:
-        query = query.where(GlobalReport.report_type == report_type)
-    
+        query = query.where(SymbolExecutionPlan.symbol == symbol.upper())
+    if verdict:
+        query = query.where(SymbolExecutionPlan.verdict == verdict.lower())
+
     count_query = select(func.count()).select_from(query.subquery())
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
-    
-    query = query.order_by(GlobalReport.run_date.desc(), GlobalReport.created_at.desc())
+
+    query = query.order_by(SymbolExecutionPlan.run_date.desc(), SymbolExecutionPlan.created_at.desc())
     query = query.offset(offset).limit(limit)
     result = await db.execute(query)
     reports = result.scalars().all()
-    
-    return GlobalReportList(reports=reports, total=total)
+
+    return SymbolExecutionPlanList(reports=reports, total=total)
 
 
-@router.get("/global/{report_id}", response_model=GlobalReportDetail)
-async def get_global_report(
+@router.get("/plans/{report_id}", response_model=SymbolExecutionPlanDetail)
+async def get_execution_plan(
     report_id: UUID,
     db: DatabaseSession,
     current_user: CurrentUser
 ):
-    """
-    Get full global report details including input context.
-    Available to all authenticated users.
-    """
+    """Get full execution plan details."""
     result = await db.execute(
-        select(GlobalReport).where(GlobalReport.id == report_id)
+        select(SymbolExecutionPlan).where(SymbolExecutionPlan.id == report_id)
     )
     report = result.scalars().first()
-    
+
     if not report:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Global report not found"
+            detail="Execution plan not found"
         )
-    
+
     return report
 
 
-# --- User Report by ID (must be after /global to avoid path conflicts) ---
+# --- User Briefing by ID (must be after /macro and /plans to avoid path conflicts) ---
 
-@router.get("/{report_id}", response_model=UserReportDetail)
-async def get_user_report(
+@router.get("/{report_id}", response_model=UserBriefingDetail)
+async def get_user_briefing(
     report_id: UUID,
     db: DatabaseSession,
     current_user: CurrentUser
 ):
     """
-    Get full user report details including input context.
-    Tenant-isolated: users can only access their own reports.
+    Get full user briefing details.
+    Tenant-isolated: users can only access their own briefings.
     """
     result = await db.execute(
-        select(UserReport).where(
-            UserReport.id == report_id,
-            UserReport.user_id == current_user.id
+        select(UserBriefing).where(
+            UserBriefing.id == report_id,
+            UserBriefing.user_id == current_user.id
         )
     )
     report = result.scalars().first()
-    
+
     if not report:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report not found"
+            detail="Briefing not found"
         )
-    
+
     return report

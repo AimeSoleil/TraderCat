@@ -10,18 +10,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft } from "lucide-react";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 
-export default function GlobalReportDetailPage() {
+export default function MacroRegimeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["report", "global", id],
-    queryFn: () => reportsApi.getGlobal(id),
+    queryKey: ["report", "macro", id],
+    queryFn: () => reportsApi.getMacro(id),
     enabled: !!id,
   });
 
   if (isLoading) return <Skeleton className="h-96" />;
-  if (!data) return <p>Report not found.</p>;
+  if (!data) return <p>Macro regime report not found.</p>;
 
   return (
     <>
@@ -36,8 +36,8 @@ export default function GlobalReportDetailPage() {
       </Button>
 
       <PageHeader
-        title={data.report_type}
-        description={`Run date: ${data.run_date} · Symbol: ${data.symbol ?? "N/A"}`}
+        title={data.regime_label ?? "Macro Regime Context"}
+        description={`Run date: ${data.run_date}${data.regime_score != null ? ` · Score: ${data.regime_score.toFixed(1)}` : ""}`}
         actions={
           <div className="flex gap-2">
             {data.identity_used && (

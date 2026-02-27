@@ -137,27 +137,40 @@ export const signalsApi = {
 };
 
 export const reportsApi = {
-  listUser: (params?: { run_date?: string; report_type?: string; limit?: number; offset?: number }) => {
+  // User briefings (P4)
+  listBriefings: (params?: { run_date?: string; limit?: number; offset?: number }) => {
     const sp = new URLSearchParams();
     if (params?.run_date) sp.set("run_date", params.run_date);
-    if (params?.report_type) sp.set("report_type", params.report_type);
     if (params?.limit) sp.set("limit", String(params.limit));
     if (params?.offset) sp.set("offset", String(params.offset));
     const qs = sp.toString();
-    return get<T.UserReportList>(`/api/v1/reports${qs ? `?${qs}` : ""}`);
+    return get<T.UserBriefingList>(`/api/v1/reports${qs ? `?${qs}` : ""}`);
   },
-  getUser: (id: string) => get<T.UserReportDetail>(`/api/v1/reports/${id}`),
-  listGlobal: (params?: { run_date?: string; symbol?: string; report_type?: string; limit?: number; offset?: number }) => {
+  getBriefing: (id: string) => get<T.UserBriefingDetail>(`/api/v1/reports/${id}`),
+
+  // Macro regime contexts (P2)
+  listMacro: (params?: { run_date?: string; limit?: number; offset?: number }) => {
+    const sp = new URLSearchParams();
+    if (params?.run_date) sp.set("run_date", params.run_date);
+    if (params?.limit) sp.set("limit", String(params.limit));
+    if (params?.offset) sp.set("offset", String(params.offset));
+    const qs = sp.toString();
+    return get<T.MacroRegimeContextList>(`/api/v1/reports/macro${qs ? `?${qs}` : ""}`);
+  },
+  getMacro: (id: string) => get<T.MacroRegimeContextDetail>(`/api/v1/reports/macro/${id}`),
+
+  // Symbol execution plans (P3)
+  listPlans: (params?: { run_date?: string; symbol?: string; verdict?: string; limit?: number; offset?: number }) => {
     const sp = new URLSearchParams();
     if (params?.run_date) sp.set("run_date", params.run_date);
     if (params?.symbol) sp.set("symbol", params.symbol);
-    if (params?.report_type) sp.set("report_type", params.report_type);
+    if (params?.verdict) sp.set("verdict", params.verdict);
     if (params?.limit) sp.set("limit", String(params.limit));
     if (params?.offset) sp.set("offset", String(params.offset));
     const qs = sp.toString();
-    return get<T.GlobalReportList>(`/api/v1/reports/global${qs ? `?${qs}` : ""}`);
+    return get<T.SymbolExecutionPlanList>(`/api/v1/reports/plans${qs ? `?${qs}` : ""}`);
   },
-  getGlobal: (id: string) => get<T.GlobalReportDetail>(`/api/v1/reports/global/${id}`),
+  getPlan: (id: string) => get<T.SymbolExecutionPlanDetail>(`/api/v1/reports/plans/${id}`),
 };
 
 // ── Admin APIs ──

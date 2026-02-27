@@ -65,13 +65,12 @@ Public endpoints: `/`, `/api/admin/system/health`, `/api/v1/auth/login`
     pipeline_schedule_hour: int = Field(default=20, description="Hour to run pipeline (24h format)")
     pipeline_timezone: str = Field(default="America/New_York", description="Timezone for pipeline schedule")
     pipeline_max_concurrency: int = Field(default=5, description="Max concurrent workers")
-    pipeline_report_batch_size: int = Field(default=5, description="Number of symbols per LLM batch in Q2")
+    pipeline_report_batch_size: int = Field(default=5, description="Number of symbols per LLM batch in P3")
     pipeline_llm_max_retries: int = Field(default=1, description="Max retries for LLM calls before skipping")
     
     # AI/LLM
     default_llm_model: str = Field(default="claude-opus-4.6", description="Default LLM model")
-    default_persona: str = Field(default="options_strategist", description="Default analyst persona")
-    default_identity: str = Field(default="options_strategist", description="Default analysis identity (wyckoff, options_strategist)")
+    default_identity: str = Field(default="wyckoff", description="Default analysis identity (wyckoff, options_strategist, summarizer)")
     default_llm_provider: str = Field(default="copilot", description="Default LLM provider (litellm, copilot, copilot-azure, mock)")
     
     # Limits

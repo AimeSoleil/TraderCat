@@ -10,18 +10,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft } from "lucide-react";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 
-export default function UserReportDetailPage() {
+export default function UserBriefingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["report", "user", id],
-    queryFn: () => reportsApi.getUser(id),
+    queryKey: ["report", "briefing", id],
+    queryFn: () => reportsApi.getBriefing(id),
     enabled: !!id,
   });
 
   if (isLoading) return <Skeleton className="h-96" />;
-  if (!data) return <p>Report not found.</p>;
+  if (!data) return <p>Briefing not found.</p>;
 
   return (
     <>
@@ -36,7 +36,7 @@ export default function UserReportDetailPage() {
       </Button>
 
       <PageHeader
-        title={data.report_type}
+        title="Portfolio Briefing"
         description={`Run date: ${data.run_date}`}
         actions={
           <div className="flex gap-2">

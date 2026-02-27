@@ -14,7 +14,6 @@ class UserCreate(UserBase):
     """Schema for creating a user."""
     role: str = Field(default="user", pattern="^(admin|user)$")
     max_symbols: int = Field(default=50, ge=1, le=1000)
-    preferred_persona: str | None = Field(None, max_length=50, description="Preferred AI persona (e.g. wyckoff, livermore)")
     preferred_lang: str | None = Field(None, max_length=10, description="Preferred language (e.g. en, zh)")
 
 
@@ -24,7 +23,6 @@ class UserUpdate(BaseModel):
     role: str | None = Field(None, pattern="^(admin|user)$")
     is_active: bool | None = None
     max_symbols: int | None = Field(None, ge=1, le=1000)
-    preferred_persona: str | None = Field(None, max_length=50)
     preferred_lang: str | None = Field(None, max_length=10)
 
 
@@ -34,7 +32,6 @@ class UserResponse(UserBase):
     role: str
     is_active: bool
     max_symbols: int
-    preferred_persona: str | None = None
     preferred_lang: str | None = None
     created_at: datetime
     updated_at: datetime

@@ -24,7 +24,6 @@ class User(Base):
     role = Column(String(20), default="user", nullable=False)  # "admin" | "user"
     is_active = Column(Boolean, default=True, nullable=False)
     max_symbols = Column(Integer, default=50, nullable=False)
-    preferred_persona = Column(String(50), nullable=True)  # e.g. "wyckoff", "livermore"
     preferred_lang = Column(String(10), nullable=True)  # e.g. "en", "zh"
     created_at = Column(DateTime, default=utcnow, nullable=False)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
@@ -32,7 +31,7 @@ class User(Base):
     # Relationships
     tokens = relationship("PersonalAccessToken", back_populates="user", cascade="all, delete-orphan")
     watchlist = relationship("WatchlistItem", back_populates="user", cascade="all, delete-orphan")
-    user_reports = relationship("UserReport", back_populates="user", cascade="all, delete-orphan")
+    user_briefings = relationship("UserBriefing", back_populates="user", cascade="all, delete-orphan")
     llm_tokens = relationship("LlmToken", back_populates="user", cascade="all, delete-orphan")
 
 

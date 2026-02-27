@@ -1,4 +1,8 @@
-"""User report models - personalized reports generated in Q3 pipeline phase."""
+"""User briefing models — P4 pipeline output.
+
+Stores personalized portfolio briefings produced by SummarizerRole
+with a fixed summarizer identity. One record per (user_id, run_date).
+"""
 from datetime import datetime, date, timezone
 from uuid import uuid4
 from sqlalchemy import Column, String, Text, Date, DateTime, ForeignKey, Index, UniqueConstraint
@@ -13,35 +17,31 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-class UserReport(Base):
+class UserBriefing(Base):
     """
-    User report - LLM-generated personalized reports from Q3 pipeline phase.
-    
-    Combines the global macro summary + relevant symbol execution plans,
-    then re-processed by LLM with the user's preferred persona.
-    
-    report_type values:
-        - "personalized_briefing": Per-user daily briefing
+    User briefing — LLM-generated personalized portfolio report from P4.
+
+    Combines the macro regime context (P2) + relevant symbol execution plans (P3)
+    re-processed by LLM with a fixed summarizer identity.
     """
-    __tablename__ = "user_reports"
+    __tablename__ = "user_briefings"
     __table_args__ = (
-        UniqueConstraint("user_id", "run_date", "report_type", name="uq_user_report_user_run_date_type"),
-        Index("ix_user_report_user_run_date", "user_id", "run_date"),
+        UniqueConstraint("user_id", "run_date", name="uq_user_briefing_user_run_date"),
+        Index("ix_user_briefing_user_run_date", "user_id", "run_date"),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     run_date = Column(Date, nullable=False, index=True)
-    report_type = Column(String(50), default="personalized_briefing", nullable=False)
     content_md = Column(Text, nullable=False)  # LLM-generated markdown
     model_used = Column(String(100), nullable=True)
     identity_used = Column(String(50), nullable=True)
     input_context = Column(
         JSONB().with_variant(JSON, "sqlite"),
         nullable=True,
-    )  # Snapshot: summary + symbol plans used
+    )  # Snapshot: regime summary + symbol plans used
     pipeline_run_id = Column(UUID(as_uuid=True), nullable=True)
     created_at = Column(DateTime, default=utcnow, nullable=False)
 
     # Relationships
-    user = relationship("User", back_populates="user_reports")
+    user = relationship("User", back_populates="user_briefings")

@@ -1,6 +1,6 @@
-"""Signal generation worker for pipeline (Q1).
+"""Signal generation worker for pipeline (P1).
 
-Q1 processes all unique symbols (global + user watchlist) in a single pass.
+P1 processes all unique symbols (global + user watchlist) in a single pass.
 Scope is assigned by metadata: symbols in global_symbols list → 'global', others → 'user'.
 """
 import asyncio
@@ -70,20 +70,20 @@ class SignalWorker:
                         "pipeline_run_id": pipeline_run_id,
                     })
                 
-                logger.info(f"Q1: Generated {len(signal_records)} signals for {symbol} (scope={scope})")
+                logger.info(f"P1: Generated {len(signal_records)} signals for {symbol} (scope={scope})")
                 return signal_records
                 
             except Exception as e:
                 if attempt < self.max_retries:
-                    logger.warning(f"Q1: Retry {attempt + 1}/{self.max_retries} for {symbol}: {e}")
+                    logger.warning(f"P1: Retry {attempt + 1}/{self.max_retries} for {symbol}: {e}")
                     await asyncio.sleep(2 ** attempt)
                 else:
-                    logger.error(f"Q1: Failed to process {symbol} after {self.max_retries + 1} attempts: {e}")
+                    logger.error(f"P1: Failed to process {symbol} after {self.max_retries + 1} attempts: {e}")
                     return []
         
         return []
 
-async def process_symbols_q1(
+async def process_symbols_p1(
     symbols: List[str],
     run_date: date,
     pipeline_run_id: UUID,
@@ -91,7 +91,7 @@ async def process_symbols_q1(
     strategy_configs: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Q1: Process all unique symbols concurrently.
+    P1: Process all unique symbols concurrently.
     
     Symbols are deduped before this call by the orchestrator.
     Scope is auto-resolved per symbol (global vs user).
@@ -133,5 +133,5 @@ async def process_symbols_q1(
     for result_list in worker_results:
         results.extend(result_list)
     
-    logger.info(f"Q1 complete: {len(results)} total signals from {len(symbols)} symbols")
+    logger.info(f"P1 complete: {len(results)} total signals from {len(symbols)} symbols")
     return results

@@ -1,13 +1,19 @@
-"""Pipeline orchestrator — 3-phase queue pipeline.
+"""Pipeline orchestrator — 4-phase pipeline.
 
-Phase 1 (Q1): Signal generation for all unique symbols (global + watchlist).
-Phase 2 (Q2): Global reports - macro summary + batched execution plans.
-Phase 3 (Q3): User reports - personalized briefings per user with preferred persona.
+Phase 1 (P1): Signal generation for all unique symbols (global + watchlist).
+Phase 2 (P2): Macro regime analysis — single global regime context.
+Phase 3 (P3): Per-symbol execution plans — batched, concurrent.
+Phase 4 (P4): User briefings — personalized, concurrent.
 
 Each phase waits for the previous to complete (barrier pattern).
+
+Token optimization applied at every phase:
+  - P2: Compressed OHLCV and indicators (only essential keys).
+  - P3: Downstream filters only from P2 (not full markdown); OHLCV de-duped.
+  - P4: Compressed regime + condensed execution plan summaries.
 """
 import asyncio
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 from typing import List, Dict, Any
 from uuid import UUID
 from sqlalchemy import select, text
@@ -22,8 +28,9 @@ from tradercat.models import (
     PipelineStatus,
     SignalRecord,
     SignalScope,
-    GlobalReport,
-    UserReport,
+    MacroRegimeContext,
+    SymbolExecutionPlan,
+    UserBriefing,
     User,
     WatchlistItem,
     GlobalSymbol,
@@ -31,20 +38,26 @@ from tradercat.models import (
     StrategyPreset,
     LlmToken,
 )
-from tradercat.pipeline.signal_worker import process_symbols_q1
-from tradercat.pipeline.report_worker import generate_global_reports_q2
-from tradercat.pipeline.user_report_worker import generate_user_reports_q3
+from tradercat.pipeline.signal_worker import process_symbols_p1
+from tradercat.pipeline.macro_regime_worker import generate_macro_regime_p2
+from tradercat.pipeline.execution_plan_worker import generate_execution_plans_p3
+from tradercat.pipeline.briefing_worker import (
+    generate_user_briefings_p4,
+    compress_regime_for_briefing,
+    compress_plan_for_briefing,
+)
 from tradercat.pipeline.holidays import is_market_day
 
 logger = get_logger(__name__)
 
+
 class PipelineOrchestrator:
-    """Orchestrates the 3-phase pipeline execution."""
-    
+    """Orchestrates the 4-phase pipeline execution."""
+
     def __init__(self):
         self.max_concurrency = settings.pipeline_max_concurrency
         self.batch_size = settings.pipeline_report_batch_size
-    
+
     async def run_pipeline(
         self, run_date: date | None = None, *, force: bool = False
     ) -> bool:
@@ -54,42 +67,34 @@ class PipelineOrchestrator:
         Args:
             run_date: Target date (defaults to today).
             force: When True, reset a previous COMPLETED / FAILED run to
-                   PENDING so it can be re-executed.  Data produced by the
-                   pipeline (signals, reports) is upserted, so stale rows
-                   are overwritten automatically.
+                   PENDING so it can be re-executed.
 
-        Flow: Q1 (signals) → Q2 (global reports) → Q3 (user reports)
+        Flow: P1 (signals) → P2 (macro regime) → P3 (execution plans) → P4 (user briefings)
         """
         run_date = run_date or datetime.utcnow().date()
-        
+
         if not is_market_day(run_date):
             logger.info(f"Skipping pipeline for {run_date} - not a market day")
             return False
-        
+
         async with AsyncSessionLocal() as db:
             try:
-                # Check / create pipeline run
-                pipeline_run = await self._get_or_create_pipeline_run(
-                    db, run_date, force=force
-                )
+                pipeline_run = await self._get_or_create_pipeline_run(db, run_date, force=force)
                 if pipeline_run is None:
                     return False
-                
-                # Start pipeline
+
                 pipeline_run.status = PipelineStatus.RUNNING.value
                 pipeline_run.started_at = datetime.utcnow()
                 await db.commit()
-                
-                # Execute 3-phase pipeline
+
                 success = await self._execute_pipeline(db, pipeline_run)
-                
-                # Finalize
+
                 pipeline_run.status = PipelineStatus.COMPLETED.value if success else PipelineStatus.FAILED.value
                 pipeline_run.completed_at = datetime.utcnow()
                 await db.commit()
-                
+
                 return success
-                
+
             except Exception as e:
                 logger.error(f"Pipeline failed: {e}", exc_info=True)
                 if pipeline_run:
@@ -97,16 +102,10 @@ class PipelineOrchestrator:
                     pipeline_run.error_log = str(e)
                     await db.commit()
                 return False
-    
+
     async def _get_or_create_pipeline_run(
         self, db: AsyncSession, run_date: date, *, force: bool = False
     ) -> PipelineRun | None:
-        """Get existing or create new pipeline run.
-
-        When *force* is ``True``, a COMPLETED or FAILED run is reset to
-        PENDING so the pipeline can overwrite its output.  A RUNNING run
-        is never reset — the caller should reject the request in that case.
-        """
         result = await db.execute(
             select(PipelineRun).where(PipelineRun.run_date == run_date)
         )
@@ -121,9 +120,10 @@ class PipelineOrchestrator:
                 logger.info(f"Pipeline already completed for {run_date} (use force=True to re-run)")
                 return None
 
-            # force=True  OR  status is FAILED / PENDING → reset and re-use
-            logger.info(f"Resetting pipeline run for {run_date} "
-                        f"(previous status={pipeline_run.status}) — force={force}")
+            logger.info(
+                f"Resetting pipeline run for {run_date} "
+                f"(previous status={pipeline_run.status}) — force={force}"
+            )
             pipeline_run.status = PipelineStatus.PENDING.value
             pipeline_run.step = None
             pipeline_run.error_log = None
@@ -147,11 +147,11 @@ class PipelineOrchestrator:
             await db.refresh(pipeline_run)
 
         return pipeline_run
-    
+
     async def _execute_pipeline(
         self, db: AsyncSession, pipeline_run: PipelineRun
     ) -> bool:
-        """Execute the 3-phase pipeline."""
+        """Execute the 4-phase pipeline."""
         try:
             # =============================================
             # PRE-FLIGHT: Load active LLM token
@@ -168,19 +168,21 @@ class PipelineOrchestrator:
                 return False
 
             llm_api_key = active_token.token
-            logger.info(f"Pipeline: Using LLM token from user={active_token.user_id} "
-                        f"provider={active_token.provider_name}")
+            logger.info(
+                f"Pipeline: Using LLM token from user={active_token.user_id} "
+                f"provider={active_token.provider_name}"
+            )
 
             # =============================================
-            # PHASE 1 (Q1): Signal Generation
+            # PHASE 1 (P1): Signal Generation
             # =============================================
             logger.info("=" * 60)
-            logger.info("PHASE 1 (Q1): Signal Generation")
+            logger.info("PHASE 1 (P1): Signal Generation")
             logger.info("=" * 60)
-            pipeline_run.step = "q1_signals"
+            pipeline_run.step = "p1_signals"
             await db.commit()
-            
-            # ── Load active strategies + presets from DB ──
+
+            # Load active strategies + presets
             from sqlalchemy.orm import selectinload
             strat_result = await db.execute(
                 select(Strategy)
@@ -201,60 +203,56 @@ class PipelineOrchestrator:
                         "strategy_class": strat.strategy_class,
                         "parameters": params,
                     })
-                logger.info(f"Q1: Loaded {len(strategy_configs)} active strategies from DB")
+                logger.info(f"P1: Loaded {len(strategy_configs)} active strategies from DB")
             else:
-                logger.warning("Q1: No active strategies in DB — will use hardcoded fallback")
+                logger.warning("P1: No active strategies in DB — will use hardcoded fallback")
 
-            # Collect global symbols from database
+            # Collect global symbols
             result = await db.execute(
                 select(GlobalSymbol.symbol).order_by(GlobalSymbol.symbol_type, GlobalSymbol.symbol)
             )
             global_symbols = [row[0] for row in result.all()]
 
             if not global_symbols:
-                logger.warning("No global symbols configured in database — "
-                               "falling back to config default")
+                logger.warning("No global symbols configured — falling back to config default")
                 global_symbols = settings.global_symbols
 
             # Collect all unique symbols: global + all watchlists
             result = await db.execute(select(WatchlistItem.symbol).distinct())
             watchlist_symbols = [row[0] for row in result.all()]
-            
-            all_symbols = list(dict.fromkeys(
-                global_symbols + watchlist_symbols
-            ))  # Preserves order, deduplicates
-            
-            # ── Skip symbols that already have signals for this run_date ──
+
+            all_symbols = list(dict.fromkeys(global_symbols + watchlist_symbols))
+
+            # Skip symbols with existing signals
             existing_result = await db.execute(
                 select(SignalRecord.symbol)
                 .where(SignalRecord.run_date == pipeline_run.run_date)
                 .distinct()
             )
             existing_symbols = {row[0] for row in existing_result.all()}
-
             symbols_to_process = [s for s in all_symbols if s not in existing_symbols]
             skipped_count = len(all_symbols) - len(symbols_to_process)
             if skipped_count:
-                logger.info(f"Q1: Skipping {skipped_count} symbols with existing signals "
-                            f"for {pipeline_run.run_date}")
+                logger.info(f"P1: Skipping {skipped_count} symbols with existing signals")
 
             pipeline_run.total_symbols = len(all_symbols)
             await db.commit()
-            
-            logger.info(f"Q1: Processing {len(symbols_to_process)}/{len(all_symbols)} symbols "
-                        f"({len(global_symbols)} global + "
-                        f"{len(watchlist_symbols)} watchlist, deduped, "
-                        f"{skipped_count} skipped)")
-            
-            all_signals = await process_symbols_q1(
+
+            logger.info(
+                f"P1: Processing {len(symbols_to_process)}/{len(all_symbols)} symbols "
+                f"({len(global_symbols)} global + {len(watchlist_symbols)} watchlist, "
+                f"deduped, {skipped_count} skipped)"
+            )
+
+            all_signals = await process_symbols_p1(
                 symbols=symbols_to_process,
                 run_date=pipeline_run.run_date,
                 pipeline_run_id=pipeline_run.id,
                 max_concurrency=self.max_concurrency,
                 strategy_configs=strategy_configs,
             )
-            
-            # Save signals to DB (upsert: on conflict update)
+
+            # Save signals (upsert)
             for signal_data in all_signals:
                 stmt = pg_insert(SignalRecord).values(**signal_data)
                 stmt = stmt.on_conflict_do_update(
@@ -271,19 +269,15 @@ class PipelineOrchestrator:
                     },
                 )
                 await db.execute(stmt)
-            
+
             pipeline_run.processed_symbols = len(all_symbols)
             await db.commit()
-            logger.info(f"Q1 DONE: {len(all_signals)} new signals saved "
-                        f"({skipped_count} symbols skipped with existing data)")
+            logger.info(f"P1 DONE: {len(all_signals)} new signals saved ({skipped_count} skipped)")
 
-            # Reload ALL signals for this run_date (including previously-saved
-            # ones for skipped symbols) so Q2/Q3 have the full picture.
+            # Reload ALL signals for this run_date
             if skipped_count:
                 existing_rows = await db.execute(
-                    select(SignalRecord).where(
-                        SignalRecord.run_date == pipeline_run.run_date
-                    )
+                    select(SignalRecord).where(SignalRecord.run_date == pipeline_run.run_date)
                 )
                 all_signals_for_reports = [
                     {
@@ -300,41 +294,93 @@ class PipelineOrchestrator:
                     }
                     for r in existing_rows.scalars().all()
                 ]
-                logger.info(f"Q2 input: {len(all_signals_for_reports)} total signals "
-                            f"(including {skipped_count} previously-saved)")
+                logger.info(f"P2 input: {len(all_signals_for_reports)} total signals")
             else:
                 all_signals_for_reports = all_signals
-            
+
             # =============================================
-            # PHASE 2 (Q2): Global Reports
+            # PHASE 2 (P2): Macro Regime Analysis
             # =============================================
             logger.info("=" * 60)
-            logger.info("PHASE 2 (Q2): Global Reports")
+            logger.info("PHASE 2 (P2): Macro Regime Analysis")
             logger.info("=" * 60)
-            pipeline_run.step = "q2_global_reports"
+            pipeline_run.step = "p2_macro_regime"
             await db.commit()
-            
-            global_report_records = await generate_global_reports_q2(
+
+            regime_record = await generate_macro_regime_p2(
                 run_date=pipeline_run.run_date,
                 all_signals=all_signals_for_reports,
                 pipeline_run_id=pipeline_run.id,
                 global_symbols=global_symbols,
+                identity_key=settings.default_identity,
+                api_key=llm_api_key,
+            )
+
+            regime_context_md = ""
+            regime_label = None
+            regime_score = None
+
+            if regime_record:
+                # Upsert macro regime context
+                stmt = pg_insert(MacroRegimeContext).values(**regime_record)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=[MacroRegimeContext.run_date],
+                    set_={
+                        "regime_label": stmt.excluded.regime_label,
+                        "regime_score": stmt.excluded.regime_score,
+                        "content_md": stmt.excluded.content_md,
+                        "downstream_filters": stmt.excluded.downstream_filters,
+                        "model_used": stmt.excluded.model_used,
+                        "identity_used": stmt.excluded.identity_used,
+                        "input_context": stmt.excluded.input_context,
+                        "pipeline_run_id": stmt.excluded.pipeline_run_id,
+                        "created_at": stmt.excluded.created_at,
+                    },
+                )
+                await db.execute(stmt)
+                await db.commit()
+
+                regime_context_md = regime_record["content_md"]
+                regime_label = regime_record.get("regime_label")
+                regime_score = regime_record.get("regime_score")
+                logger.info(
+                    f"P2 DONE: regime={regime_label}, score={regime_score}, "
+                    f"{len(regime_context_md)} chars"
+                )
+            else:
+                logger.warning("P2: No regime context generated — proceeding with empty context")
+                await db.commit()
+
+            # =============================================
+            # PHASE 3 (P3): Per-Symbol Execution Plans
+            # =============================================
+            logger.info("=" * 60)
+            logger.info("PHASE 3 (P3): Per-Symbol Execution Plans")
+            logger.info("=" * 60)
+            pipeline_run.step = "p3_execution_plans"
+            await db.commit()
+
+            exec_plan_records = await generate_execution_plans_p3(
+                run_date=pipeline_run.run_date,
+                all_signals=all_signals_for_reports,
+                pipeline_run_id=pipeline_run.id,
+                global_symbols=global_symbols,
+                regime_context_md=regime_context_md,
                 batch_size=self.batch_size,
                 max_concurrency=self.max_concurrency,
                 identity_key=settings.default_identity,
                 api_key=llm_api_key,
             )
-            
-            # Save global reports to DB (upsert: on conflict update)
-            for report_data in global_report_records:
-                stmt = pg_insert(GlobalReport).values(**report_data)
+
+            # Upsert execution plans
+            symbol_plans_md: Dict[str, str] = {}
+            for plan_data in exec_plan_records:
+                stmt = pg_insert(SymbolExecutionPlan).values(**plan_data)
                 stmt = stmt.on_conflict_do_update(
-                    index_elements=[
-                        GlobalReport.run_date,
-                        GlobalReport.report_type,
-                        text("COALESCE(symbol, '')"),
-                    ],
+                    constraint="uq_exec_plan_run_date_symbol",
                     set_={
+                        "verdict": stmt.excluded.verdict,
+                        "setup_quality": stmt.excluded.setup_quality,
                         "content_md": stmt.excluded.content_md,
                         "model_used": stmt.excluded.model_used,
                         "identity_used": stmt.excluded.identity_used,
@@ -344,84 +390,74 @@ class PipelineOrchestrator:
                     },
                 )
                 await db.execute(stmt)
+                if plan_data.get("symbol"):
+                    symbol_plans_md[plan_data["symbol"]] = plan_data["content_md"]
+
             await db.commit()
-            
-            # Build lookup for Q3
-            summary_report_md = ""
-            symbol_plans: Dict[str, str] = {}
-            for rec in global_report_records:
-                if rec["report_type"] == "macro_summary":
-                    summary_report_md = rec["content_md"]
-                elif rec["report_type"] == "symbol_execution_plan" and rec.get("symbol"):
-                    symbol_plans[rec["symbol"]] = rec["content_md"]
-            
-            logger.info(f"Q2 DONE: 1 macro summary + {len(symbol_plans)} execution plans saved")
-            
+            logger.info(f"P3 DONE: {len(symbol_plans_md)} execution plans saved")
+
             # =============================================
-            # PHASE 3 (Q3): User Reports
+            # PHASE 4 (P4): User Briefings
             # =============================================
             logger.info("=" * 60)
-            logger.info("PHASE 3 (Q3): User Reports")
+            logger.info("PHASE 4 (P4): User Briefings")
             logger.info("=" * 60)
-            pipeline_run.step = "q3_user_reports"
+            pipeline_run.step = "p4_user_briefings"
             await db.commit()
-            
-            # Get all active users with their watchlists
+
+            # Build compressed regime summary for P4
+            regime_summary = compress_regime_for_briefing(
+                regime_context_md,
+                regime_label=regime_label,
+                regime_score=regime_score,
+            )
+
+            # Get active users with watchlists
             result = await db.execute(
                 select(User).where(User.is_active == True)
             )
             active_users = result.scalars().all()
-            
+
             user_tasks = []
             for user in active_users:
-                # Get user's watchlist symbols
                 result = await db.execute(
-                    select(WatchlistItem.symbol).where(
-                        WatchlistItem.user_id == user.id
-                    )
+                    select(WatchlistItem.symbol).where(WatchlistItem.user_id == user.id)
                 )
                 user_symbols = [row[0] for row in result.all()]
-                
+
                 if not user_symbols:
-                    logger.info(f"Q3: Skipping user {user.username} - empty watchlist")
+                    logger.info(f"P4: Skipping user {user.username} — empty watchlist")
                     continue
-                
-                # Filter symbol plans to user's watchlist
-                user_symbol_plans = {
-                    sym: symbol_plans[sym]
-                    for sym in user_symbols
-                    if sym in symbol_plans
-                }
-                
-                # Resolve persona: user preference > default
-                persona = user.preferred_persona or settings.default_persona
-                lang = user.preferred_lang
-                
+
+                # Filter and compress symbol plans for this user's watchlist
+                user_symbol_plans = {}
+                for sym in user_symbols:
+                    if sym in symbol_plans_md:
+                        user_symbol_plans[sym] = compress_plan_for_briefing(symbol_plans_md[sym])
+
                 user_tasks.append({
                     "user_id": user.id,
                     "run_date": pipeline_run.run_date,
-                    "summary_report_md": summary_report_md,
+                    "regime_summary": regime_summary,
                     "symbol_plans": user_symbol_plans,
-                    "persona": persona,
-                    "lang": lang,
                     "pipeline_run_id": pipeline_run.id,
                 })
-            
+
             pipeline_run.total_reports = len(user_tasks)
             await db.commit()
-            logger.info(f"Q3: Generating reports for {len(user_tasks)} users")
-            
+            logger.info(f"P4: Generating briefings for {len(user_tasks)} users")
+
             if user_tasks:
-                user_report_records = await generate_user_reports_q3(
+                briefing_records = await generate_user_briefings_p4(
                     user_tasks=user_tasks,
                     max_concurrency=self.max_concurrency,
                     api_key=llm_api_key,
                 )
-                
-                for report_data in user_report_records:
-                    stmt = pg_insert(UserReport).values(**report_data)
+
+                for briefing_data in briefing_records:
+                    stmt = pg_insert(UserBriefing).values(**briefing_data)
                     stmt = stmt.on_conflict_do_update(
-                        constraint="uq_user_report_user_run_date_type",
+                        constraint="uq_user_briefing_user_run_date",
                         set_={
                             "content_md": stmt.excluded.content_md,
                             "model_used": stmt.excluded.model_used,
@@ -432,26 +468,27 @@ class PipelineOrchestrator:
                         },
                     )
                     await db.execute(stmt)
-                
-                pipeline_run.processed_reports = len(user_report_records)
+
+                pipeline_run.processed_reports = len(briefing_records)
                 await db.commit()
-                logger.info(f"Q3 DONE: {len(user_report_records)} user reports saved")
-            
+                logger.info(f"P4 DONE: {len(briefing_records)} user briefings saved")
+
             # =============================================
             # COMPLETE
             # =============================================
             pipeline_run.step = "completed"
             await db.commit()
-            
+
             logger.info("=" * 60)
             logger.info("PIPELINE COMPLETE")
-            logger.info(f"  Signals: {len(all_signals)}")
-            logger.info(f"  Global reports: {len(global_report_records)}")
-            logger.info(f"  User reports: {pipeline_run.processed_reports}")
+            logger.info(f"  P1 Signals: {len(all_signals)}")
+            logger.info(f"  P2 Regime: {regime_label or 'N/A'} (score={regime_score})")
+            logger.info(f"  P3 Execution Plans: {len(exec_plan_records)}")
+            logger.info(f"  P4 User Briefings: {pipeline_run.processed_reports}")
             logger.info("=" * 60)
-            
+
             return True
-            
+
         except Exception as e:
             logger.error(f"Pipeline step '{pipeline_run.step}' failed: {e}", exc_info=True)
             pipeline_run.error_log = f"[{pipeline_run.step}] {str(e)}"

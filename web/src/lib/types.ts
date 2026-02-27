@@ -27,7 +27,6 @@ export interface UserResponse {
   role: "admin" | "user";
   is_active: boolean;
   max_symbols: number;
-  preferred_persona: string | null;
   preferred_lang: string | null;
   created_at: string;
   updated_at: string;
@@ -38,7 +37,6 @@ export interface UserCreate {
   email: string;
   role?: "admin" | "user";
   max_symbols?: number;
-  preferred_persona?: string | null;
   preferred_lang?: string | null;
 }
 
@@ -47,7 +45,6 @@ export interface UserUpdate {
   role?: "admin" | "user" | null;
   is_active?: boolean | null;
   max_symbols?: number | null;
-  preferred_persona?: string | null;
   preferred_lang?: string | null;
 }
 
@@ -147,44 +144,66 @@ export interface SignalQuery {
   offset?: number;
 }
 
-// ── Reports ──
-export interface GlobalReportResponse {
+// ── Reports (Pipeline v2) ──
+
+export interface MacroRegimeContextResponse {
   id: string;
   run_date: string;
-  symbol: string | null;
-  report_type: string;
+  regime_label: string | null;
+  regime_score: number | null;
   content_md: string;
   model_used: string | null;
   identity_used: string | null;
   created_at: string;
 }
 
-export interface GlobalReportDetail extends GlobalReportResponse {
+export interface MacroRegimeContextDetail extends MacroRegimeContextResponse {
+  downstream_filters: Record<string, unknown> | null;
   input_context: Record<string, unknown> | null;
 }
 
-export interface GlobalReportList {
-  reports: GlobalReportResponse[];
+export interface MacroRegimeContextList {
+  reports: MacroRegimeContextResponse[];
   total: number;
 }
 
-export interface UserReportResponse {
+export interface SymbolExecutionPlanResponse {
   id: string;
-  user_id: string;
   run_date: string;
-  report_type: string;
+  symbol: string;
+  verdict: string | null;
+  setup_quality: string | null;
   content_md: string;
   model_used: string | null;
   identity_used: string | null;
   created_at: string;
 }
 
-export interface UserReportDetail extends UserReportResponse {
+export interface SymbolExecutionPlanDetail extends SymbolExecutionPlanResponse {
   input_context: Record<string, unknown> | null;
 }
 
-export interface UserReportList {
-  reports: UserReportResponse[];
+export interface SymbolExecutionPlanList {
+  reports: SymbolExecutionPlanResponse[];
+  total: number;
+}
+
+export interface UserBriefingResponse {
+  id: string;
+  user_id: string;
+  run_date: string;
+  content_md: string;
+  model_used: string | null;
+  identity_used: string | null;
+  created_at: string;
+}
+
+export interface UserBriefingDetail extends UserBriefingResponse {
+  input_context: Record<string, unknown> | null;
+}
+
+export interface UserBriefingList {
+  reports: UserBriefingResponse[];
   total: number;
 }
 

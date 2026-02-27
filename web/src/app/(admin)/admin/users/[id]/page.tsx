@@ -57,7 +57,6 @@ export default function AdminUserDetailPage() {
         role: user.role,
         is_active: user.is_active,
         max_symbols: user.max_symbols,
-        preferred_persona: user.preferred_persona,
         preferred_lang: user.preferred_lang,
       });
     }
@@ -321,19 +320,6 @@ export default function AdminUserDetailPage() {
                     max_symbols: Number(e.target.value),
                   }))
                 }
-              />
-            </div>
-            <div>
-              <Label>Preferred Persona</Label>
-              <Input
-                value={editForm.preferred_persona ?? ""}
-                onChange={(e) =>
-                  setEditForm((f) => ({
-                    ...f,
-                    preferred_persona: e.target.value || null,
-                  }))
-                }
-                placeholder="e.g. wyckoff, livermore"
               />
             </div>
             <div>

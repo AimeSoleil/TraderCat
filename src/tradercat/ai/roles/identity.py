@@ -22,6 +22,7 @@ def _load_identity(identity_key: str) -> str:
     identity_map = {
         "wyckoff": "tradercat.ai.prompts.identities.wyckoff",
         "options_strategist": "tradercat.ai.prompts.identities.options_strategist",
+        "summarizer": "tradercat.ai.prompts.identities.summarizer",
     }
     
     key_lower = identity_key.lower()
@@ -39,7 +40,7 @@ def _load_identity(identity_key: str) -> str:
 
 def list_identities() -> list[str]:
     """Return all available identity keys."""
-    return ["wyckoff", "options_strategist"]
+    return ["wyckoff", "options_strategist", "summarizer"]
 
 class IdentityRole(AIRole):
     """

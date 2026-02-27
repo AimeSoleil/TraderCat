@@ -5,4 +5,5 @@ from typing import Dict
 IDENTITY_REGISTRY: Dict[str, str] = {
     "wyckoff": "tradercat.ai.prompts.identities.wyckoff",
     "options_strategist": "tradercat.ai.prompts.identities.options_strategist",
+    "summarizer": "tradercat.ai.prompts.identities.summarizer",
 }

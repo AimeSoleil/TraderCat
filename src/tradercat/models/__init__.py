@@ -2,8 +2,9 @@
 from tradercat.models.user import User, PersonalAccessToken, ApiKey
 from tradercat.models.symbol import WatchlistItem, GlobalSymbol
 from tradercat.models.signal import SignalRecord, SignalScope
-from tradercat.models.global_report import GlobalReport
-from tradercat.models.user_report import UserReport
+from tradercat.models.macro_regime_context import MacroRegimeContext
+from tradercat.models.symbol_execution_plan import SymbolExecutionPlan
+from tradercat.models.user_briefing import UserBriefing
 from tradercat.models.strategy import Strategy, StrategyPreset
 from tradercat.models.pipeline import PipelineRun, PipelineStatus
 from tradercat.models.llm_token import LlmToken
@@ -16,8 +17,9 @@ __all__ = [
     "GlobalSymbol",
     "SignalRecord",
     "SignalScope",
-    "GlobalReport",
-    "UserReport",
+    "MacroRegimeContext",
+    "SymbolExecutionPlan",
+    "UserBriefing",
     "Strategy",
     "StrategyPreset",
     "PipelineRun",
