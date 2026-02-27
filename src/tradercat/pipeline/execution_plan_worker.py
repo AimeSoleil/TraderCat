@@ -66,15 +66,16 @@ def _extract_quality(content: str) -> Optional[str]:
 class ExecutionPlanWorker:
     """Worker for generating per-symbol execution plans (P3)."""
 
+    # Fixed identity for P3 — always "options_strategist"
+    _P3_IDENTITY = "options_strategist"
+
     def __init__(
         self,
         max_retries: int | None = None,
-        identity_key: str | None = None,
         model_id: str | None = None,
         api_key: str | None = None,
     ):
         self.max_retries = max_retries if max_retries is not None else settings.pipeline_llm_max_retries
-        self.identity_key = identity_key or settings.default_identity
         self.model_id = model_id or settings.default_llm_model
         self.api_key = api_key
 
@@ -90,7 +91,7 @@ class ExecutionPlanWorker:
             logger.warning(f"P3: Failed to init LLM provider: {e}. Will use fallback.")
             self._provider = None
             return
-        identity = IdentityRole(self.identity_key)
+        identity = IdentityRole(self._P3_IDENTITY)
         self._strategist = OptionsStrategistRole(
             self._provider, identity, self.model_id, api_key=self.api_key
         )
@@ -195,7 +196,7 @@ class ExecutionPlanWorker:
                     "setup_quality": _extract_quality(content),
                     "content_md": content,
                     "model_used": self.model_id,
-                    "identity_used": self.identity_key,
+                    "identity_used": self._P3_IDENTITY,
                     "input_context": _json_safe({"batch_symbols": batch_symbols, "symbol": symbol}),
                     "pipeline_run_id": pipeline_run_id,
                 })
@@ -207,7 +208,7 @@ class ExecutionPlanWorker:
                 "setup_quality": _extract_quality(combined_content),
                 "content_md": combined_content,
                 "model_used": self.model_id,
-                "identity_used": self.identity_key,
+                "identity_used": self._P3_IDENTITY,
                 "input_context": _json_safe({"batch_symbols": batch_symbols, "symbol": batch_symbols[0]}),
                 "pipeline_run_id": pipeline_run_id,
             })
@@ -220,7 +221,7 @@ class ExecutionPlanWorker:
                     "setup_quality": None,
                     "content_md": combined_content,
                     "model_used": self.model_id,
-                    "identity_used": self.identity_key,
+                    "identity_used": self._P3_IDENTITY,
                     "input_context": _json_safe({"batch_symbols": batch_symbols, "symbol": symbol, "note": "batch_unsplit"}),
                     "pipeline_run_id": pipeline_run_id,
                 })
@@ -249,7 +250,6 @@ async def generate_execution_plans_p3(
     regime_context_md: str,
     batch_size: int = 5,
     max_concurrency: int = 3,
-    identity_key: str | None = None,
     api_key: str | None = None,
 ) -> List[Dict[str, Any]]:
     """
@@ -318,7 +318,7 @@ async def generate_execution_plans_p3(
 
     async def batch_worker_fn():
         results = []
-        worker = ExecutionPlanWorker(identity_key=identity_key, api_key=api_key)
+        worker = ExecutionPlanWorker(api_key=api_key)
         while True:
             try:
                 batch_symbols = batch_queue.get_nowait()

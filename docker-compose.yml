@@ -55,8 +55,6 @@ services:
       PIPELINE_TIMEZONE: ${PIPELINE_TIMEZONE:-America/New_York}
       PIPELINE_MAX_CONCURRENCY: ${PIPELINE_MAX_CONCURRENCY:-5}
       DEFAULT_LLM_MODEL: ${DEFAULT_LLM_MODEL:-claude-opus-4.6}
-      DEFAULT_PERSONA: ${DEFAULT_PERSONA:-options_strategist}
-      DEFAULT_IDENTITY: ${DEFAULT_IDENTITY:-options_strategist}
       DEFAULT_LLM_PROVIDER: ${DEFAULT_LLM_PROVIDER:-copilot}
     depends_on:
       postgres:

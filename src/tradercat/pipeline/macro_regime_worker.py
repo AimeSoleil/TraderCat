@@ -86,15 +86,16 @@ def _extract_downstream_filters_json(content_md: str) -> Optional[Dict[str, Any]
 class MacroRegimeWorker:
     """Worker for generating the macro regime context (P2)."""
 
+    # Fixed identity for P2 — always "options_strategist"
+    _P2_IDENTITY = "options_strategist"
+
     def __init__(
         self,
         max_retries: int | None = None,
-        identity_key: str | None = None,
         model_id: str | None = None,
         api_key: str | None = None,
     ):
         self.max_retries = max_retries if max_retries is not None else settings.pipeline_llm_max_retries
-        self.identity_key = identity_key or settings.default_identity
         self.model_id = model_id or settings.default_llm_model
         self.api_key = api_key
 
@@ -110,7 +111,7 @@ class MacroRegimeWorker:
             logger.warning(f"P2: Failed to init LLM provider: {e}. Will use fallback.")
             self._provider = None
             return
-        identity = IdentityRole(self.identity_key)
+        identity = IdentityRole(self._P2_IDENTITY)
         self._analyst = MacroAnalystRole(self._provider, identity, self.model_id, api_key=self.api_key)
 
     async def generate(
@@ -128,7 +129,7 @@ class MacroRegimeWorker:
 
         logger.info(
             f"P2: Generating macro regime context for {run_date} "
-            f"({len(etf_signals)} ETF signals, identity={self.identity_key}, model={self.model_id})"
+            f"({len(etf_signals)} ETF signals, identity={self._P2_IDENTITY}, model={self.model_id})"
         )
 
         for attempt in range(self.max_retries + 1):
@@ -149,7 +150,7 @@ class MacroRegimeWorker:
                     "content_md": content,
                     "downstream_filters": _extract_downstream_filters_json(content),
                     "model_used": self.model_id,
-                    "identity_used": self.identity_key,
+                    "identity_used": self._P2_IDENTITY,
                     "input_context": _json_safe({"etf_signals": etf_signals}),
                     "pipeline_run_id": pipeline_run_id,
                 }
@@ -189,7 +190,6 @@ async def generate_macro_regime_p2(
     all_signals: List[Dict[str, Any]],
     pipeline_run_id: UUID,
     global_symbols: List[str],
-    identity_key: str | None = None,
     api_key: str | None = None,
 ) -> Optional[Dict[str, Any]]:
     """
@@ -201,7 +201,7 @@ async def generate_macro_regime_p2(
         f"P2: {len(etf_signals)} ETF signals from {len(global_symbols)} global symbols"
     )
 
-    worker = MacroRegimeWorker(identity_key=identity_key, api_key=api_key)
+    worker = MacroRegimeWorker(api_key=api_key)
     return await worker.generate(
         run_date=run_date,
         etf_signals=etf_signals,

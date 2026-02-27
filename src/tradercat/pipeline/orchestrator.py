@@ -312,7 +312,6 @@ class PipelineOrchestrator:
                 all_signals=all_signals_for_reports,
                 pipeline_run_id=pipeline_run.id,
                 global_symbols=global_symbols,
-                identity_key=settings.default_identity,
                 api_key=llm_api_key,
             )
 
@@ -368,7 +367,6 @@ class PipelineOrchestrator:
                 regime_context_md=regime_context_md,
                 batch_size=self.batch_size,
                 max_concurrency=self.max_concurrency,
-                identity_key=settings.default_identity,
                 api_key=llm_api_key,
             )
 
