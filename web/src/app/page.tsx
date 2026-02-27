@@ -14,12 +14,6 @@ import { ThemeToggle } from "@/components/theme-toggle";
 
 const features = [
   {
-    icon: Brain,
-    title: "AI-Powered Analysis",
-    description:
-      "Multiple AI personas — Wyckoff, Livermore, Simons — analyze every symbol from distinct perspectives.",
-  },
-  {
     icon: BarChart3,
     title: "Multi-Strategy Signals",
     description:

@@ -31,9 +31,9 @@
 - **Idempotent**: Safe to retry failed runs without duplication
 
 ### 🧠 AI Analysis (LLM Integration)
-- **Persona-Based Analysis**: Choose from multiple analyst personas (Wyckoff, Buffett, etc.)
-- **Context-Aware Reports**: Includes today's signals, past 3 days, and global market context
-- **Model Selection**: Configurable LLM models (GPT-4o default)
+- **Role-Based Pipeline**: Internal functional identities (Options Strategist, Summarizer) drive each pipeline phase
+- **Context-Aware Reports**: Includes today's signals, macro regime context, and execution plans
+- **Model Selection**: Configurable LLM models (Claude Opus default)
 
 ---
 

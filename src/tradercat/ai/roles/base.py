@@ -16,7 +16,7 @@ class RoleType(str, Enum):
 class RoleOutput:
     """Standard output from any role execution."""
     role: RoleType
-    identity: str  # e.g., "wyckoff", "options_strategist"
+    identity: str  # e.g., "options_strategist"
     content: str  # The LLM-generated markdown output
     model_used: str
     metadata: Dict[str, Any]  # Extra context (symbols, run_date, etc.)

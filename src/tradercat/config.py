@@ -70,7 +70,7 @@ Public endpoints: `/`, `/api/admin/system/health`, `/api/v1/auth/login`
     
     # AI/LLM
     default_llm_model: str = Field(default="claude-opus-4.6", description="Default LLM model")
-    default_identity: str = Field(default="wyckoff", description="Default analysis identity (wyckoff, options_strategist, summarizer)")
+    default_identity: str = Field(default="options_strategist", description="Default analysis identity (options_strategist, summarizer)")
     default_llm_provider: str = Field(default="copilot", description="Default LLM provider (litellm, copilot, copilot-azure, mock)")
     
     # Limits
