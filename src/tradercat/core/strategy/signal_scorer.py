@@ -2,14 +2,9 @@ from dataclasses import dataclass
 from typing import List, Literal, Optional
 from enum import Enum
 
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 
-import logging
-from tradercat.config import settings
-
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
+logger = get_logger(__name__)
 
 EPS = 1e-9
 
@@ -48,7 +43,6 @@ class FactorName(Enum):
     CONFLUENCE_BONUS = "confluence_bonus"
     VOLATILITY_OK = "volatility_ok"  # Gatekeeper factor
 
-
 # ---------------- DATA CLASSES ----------------
 @dataclass
 class ScoringResult:
@@ -70,14 +64,12 @@ class ScoringResult:
         for r in self.reasons:
             logger.info(f" - {r}")
 
-
 @dataclass
 class Factor:
     name: FactorName
     description: str
     weight: float
     condition: bool
-
 
 # ---------------- SCORING ENGINE ----------------
 class ScoringEngine:

@@ -79,7 +79,7 @@ function del<T = void>(path: string) {
   return request<T>(path, { method: "DELETE" });
 }
 
-// ── Auth API (uses X-API-Key, no Bearer) ──
+// ── Auth API (login sends personal access token in body, no Bearer needed) ──
 
 import type * as T from "./types";
 
@@ -87,7 +87,7 @@ export const authApi = {
   login: (apiKey: string) =>
     request<T.LoginResponse>("/api/v1/auth/login", {
       method: "POST",
-      body: JSON.stringify({ api_key: apiKey }),
+      body: JSON.stringify({ token: apiKey }),
     }),
   me: () => get<T.UserInfo>("/api/v1/auth/me"),
 };
@@ -96,17 +96,17 @@ export const authApi = {
 
 export const usersApi = {
   list: () => get<T.UserResponse[]>("/api/v1/users"),
-  get: (id: string) => get<T.UserWithKeys>(`/api/v1/users/${id}`),
-  create: (data: T.UserCreate) => post<T.ApiKeyCreated>("/api/v1/users", data),
+  get: (id: string) => get<T.UserWithTokens>(`/api/v1/users/${id}`),
+  create: (data: T.UserCreate) => post<T.TokenCreated>("/api/v1/users", data),
   update: (id: string, data: T.UserUpdate) =>
     patch<T.UserResponse>(`/api/v1/users/${id}`, data),
   remove: (id: string) => del(`/api/v1/users/${id}`),
-  createApiKey: (userId: string, name?: string) =>
-    post<T.ApiKeyCreated>(`/api/v1/users/${userId}/api-keys`, { name: name ?? "default" }),
-  toggleApiKey: (userId: string, keyId: string) =>
-    patch<T.ApiKeyResponse>(`/api/v1/users/${userId}/api-keys/${keyId}`, {}),
-  removeApiKey: (userId: string, keyId: string) =>
-    del(`/api/v1/users/${userId}/api-keys/${keyId}`),
+  createToken: (userId: string, name?: string) =>
+    post<T.TokenCreated>(`/api/v1/users/${userId}/tokens`, { name: name ?? "default" }),
+  toggleToken: (userId: string, tokenId: string) =>
+    patch<T.TokenResponse>(`/api/v1/users/${userId}/tokens/${tokenId}`, {}),
+  removeToken: (userId: string, tokenId: string) =>
+    del(`/api/v1/users/${userId}/tokens/${tokenId}`),
 };
 
 export const watchlistApi = {

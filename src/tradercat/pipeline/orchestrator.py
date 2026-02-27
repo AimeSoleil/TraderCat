@@ -7,7 +7,6 @@ Phase 3 (Q3): User reports - personalized briefings per user with preferred pers
 Each phase waits for the previous to complete (barrier pattern).
 """
 import asyncio
-import logging
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Any
 from uuid import UUID
@@ -15,7 +14,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 from tradercat.config import settings
 from tradercat.database import AsyncSessionLocal
 from tradercat.models import (
@@ -37,10 +36,7 @@ from tradercat.pipeline.report_worker import generate_global_reports_q2
 from tradercat.pipeline.user_report_worker import generate_user_reports_q3
 from tradercat.pipeline.holidays import is_market_day
 
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
-
+logger = get_logger(__name__)
 
 class PipelineOrchestrator:
     """Orchestrates the 3-phase pipeline execution."""

@@ -66,8 +66,8 @@ export default function AdminUsersPage() {
       qc.invalidateQueries({ queryKey: ["admin", "users"] });
       setOpen(false);
       setForm({ username: "", email: "", role: "user", max_symbols: 50 });
-      if (res.api_key) {
-        setNewKeyDialog(res.api_key);
+      if (res.token) {
+        setNewKeyDialog(res.token);
       }
     },
     onError: () => toast.error("Failed to create user"),
@@ -195,7 +195,7 @@ export default function AdminUsersPage() {
     <>
       <PageHeader
         title="Users"
-        description="Manage portal users and API keys"
+        description="Manage portal users and access tokens"
         actions={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -287,9 +287,9 @@ export default function AdminUsersPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>API Key Created</DialogTitle>
+            <DialogTitle>Token Created</DialogTitle>
             <DialogDescription>
-              Copy the key below. It will not be shown again.
+              Copy the token below. It will not be shown again.
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-md border bg-muted p-3">
@@ -302,7 +302,7 @@ export default function AdminUsersPage() {
             }}
           >
             <Copy className="mr-2 h-4 w-4" />
-            Copy Key
+            Copy Token
           </Button>
         </DialogContent>
       </Dialog>

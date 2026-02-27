@@ -4,15 +4,9 @@ import numpy as np
 import pandas as pd
 from openbb import obb
 from tradercat.core.data.market_data_provider import MarketDataProvider
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 
-import logging
-from tradercat.config import settings
-
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
-
+logger = get_logger(__name__)
 
 class OpenBBProvider(MarketDataProvider):
 
@@ -529,7 +523,6 @@ class OpenBBProvider(MarketDataProvider):
         except Exception as e:
             logger.error(f"Error getting metadata for {symbol}: {traceback.format_exc()}")
             return None
-
 
 if __name__ == "__main__":
     provider = OpenBBProvider()

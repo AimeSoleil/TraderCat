@@ -1,29 +1,24 @@
-"""JWT-based authentication for the web portal.
+"""JWT-based authentication.
 
 Flow:
-1. User submits API key via POST /api/v1/auth/login
-2. Backend validates the key and returns a signed JWT
-3. Frontend stores the JWT and sends it via Authorization: Bearer <token>
+1. User submits personal access token (PAT) via POST /api/v1/auth/login
+2. Backend validates the token and returns a signed JWT
+3. All subsequent requests use Authorization: Bearer <token>
 4. Protected endpoints verify the JWT to identify the user
 """
 import jwt
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, HTTPException, Depends, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from tradercat.api.deps import DatabaseSession
-import logging
+from tradercat.api.deps import CurrentUser, DatabaseSession
 
 from tradercat.config import settings
-from tradercat.models import User, ApiKey
-from tradercat.logger.logger import get_logger
+from tradercat.models import User, PersonalAccessToken
+from tradercat.logger import get_logger
 
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -32,16 +27,11 @@ JWT_SECRET = settings.jwt_secret
 JWT_ALGORITHM = settings.jwt_algorithm
 JWT_EXPIRY_MINUTES = settings.jwt_expire_minutes
 
-# Bearer token security scheme for Swagger UI
-bearer_scheme = HTTPBearer(auto_error=False)
-
-
 # ── Schemas ───────────────────────────────────────────────────
 
 class LoginRequest(BaseModel):
-    """Login with an API key."""
-    api_key: str
-
+    """Login with a personal access token."""
+    token: str
 
 class LoginResponse(BaseModel):
     """JWT token response."""
@@ -50,14 +40,12 @@ class LoginResponse(BaseModel):
     expires_in: int  # seconds
     user: "UserInfo"
 
-
 class UserInfo(BaseModel):
     """Minimal user info returned on login."""
     id: str
     username: str
     email: str
     role: str
-
 
 # ── Helpers ───────────────────────────────────────────────────
 
@@ -77,7 +65,6 @@ def create_jwt(user: User) -> tuple[str, int]:
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
     return token, expires_in
 
-
 def decode_jwt(token: str) -> dict:
     """Decode and verify a JWT. Raises on invalid/expired."""
     try:
@@ -87,55 +74,33 @@ def decode_jwt(token: str) -> dict:
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-
-# ── Dependency: get user from JWT ─────────────────────────────
-
-async def get_current_user_from_jwt(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    db: AsyncSession = Depends(DatabaseSession),
-) -> User:
-    """Resolve user from a Bearer JWT token."""
-    if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-
-    payload = decode_jwt(credentials.credentials)
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
-
-    result = await db.execute(
-        select(User).where(User.id == user_id, User.is_active == True)
-    )
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
-    return user
-
-
 # ── Endpoints ─────────────────────────────────────────────────
 
 @router.post("/login", response_model=LoginResponse)
 async def login(body: LoginRequest, db: DatabaseSession):
     """
-    Authenticate with an API key and receive a JWT token.
+    Authenticate with a personal access token and receive a JWT.
 
-    The returned token should be sent as `Authorization: Bearer <token>`
-    in subsequent requests to the web portal API.
+    The returned JWT should be sent as `Authorization: Bearer <token>`
+    in subsequent requests.
     """
-    key_hash = ApiKey.hash_key(body.api_key)
+    key_hash = PersonalAccessToken.hash_key(body.token)
 
     result = await db.execute(
-        select(ApiKey).where(ApiKey.key_hash == key_hash, ApiKey.is_active == True)
+        select(PersonalAccessToken).where(
+            PersonalAccessToken.key_hash == key_hash,
+            PersonalAccessToken.is_active == True,
+        )
     )
-    api_key = result.scalars().first()
-    if not api_key:
+    pat = result.scalars().first()
+    if not pat:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or inactive API key",
+            detail="Invalid or inactive token",
         )
 
     result = await db.execute(
-        select(User).where(User.id == api_key.user_id, User.is_active == True)
+        select(User).where(User.id == pat.user_id, User.is_active == True)
     )
     user = result.scalars().first()
     if not user:
@@ -158,29 +123,12 @@ async def login(body: LoginRequest, db: DatabaseSession):
         ),
     )
 
-
 @router.get("/me", response_model=UserInfo)
-async def get_me(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    db: DatabaseSession = None,
-):
+async def get_me(current_user: CurrentUser):
     """Return current user info from JWT. Used by the portal to validate sessions."""
-    if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-
-    payload = decode_jwt(credentials.credentials)
-    user_id = payload.get("sub")
-
-    result = await db.execute(
-        select(User).where(User.id == user_id, User.is_active == True)
-    )
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-
     return UserInfo(
-        id=str(user.id),
-        username=user.username,
-        email=user.email,
-        role=user.role,
+        id=str(current_user.id),
+        username=current_user.username,
+        email=current_user.email,
+        role=current_user.role,
     )

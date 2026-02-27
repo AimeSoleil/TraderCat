@@ -7,15 +7,10 @@ from tradercat.core.strategy.backtest.performance_report import PerformanceRepor
 from tradercat.core.strategy.backtest.trader_tracker import TradeTracker
 from tradercat.core.strategy.backtest.visualizer import BacktestVisualizer
 from tradercat.core.strategy.signal_model import SignalModel
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 from tradercat.utils.spinner import LoadingSpinner
 
-import logging
-from tradercat.config import settings
-
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
+logger = get_logger(__name__)
 
 class SingleSymbolEngine:
     """

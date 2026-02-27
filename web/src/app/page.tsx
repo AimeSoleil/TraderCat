@@ -35,7 +35,7 @@ const features = [
     icon: Shield,
     title: "Role-Based Access",
     description:
-      "Admin controls for users, API keys, LLM tokens, and strategies. User-scoped watchlists and reports.",
+      "Admin controls for users, access tokens, LLM tokens, and strategies. User-scoped watchlists and reports.",
   },
   {
     icon: TrendingUp,
@@ -147,7 +147,7 @@ export default function LandingPage() {
             Ready to get started?
           </h2>
           <p className="mt-4 text-base text-muted-foreground">
-            Sign in with your API key to access your personalized trading dashboard,
+            Sign in with your personal access token to access your personalized trading dashboard,
             signals, and reports.
           </p>
           <Button asChild size="lg" className="mt-8 gap-2">

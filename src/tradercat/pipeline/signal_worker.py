@@ -8,18 +8,13 @@ from datetime import datetime, date
 from typing import List, Optional, Dict, Any, Set
 from uuid import UUID
 
-import logging
-
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 from tradercat.core.bot import TraderBot
 from tradercat.core.data.openbb_provider import OpenBBProvider
 from tradercat.models import SignalScope
 from tradercat.config import settings
 
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
-
+logger = get_logger(__name__)
 
 class SignalWorker:
     """Worker for processing symbols and generating signals."""
@@ -87,7 +82,6 @@ class SignalWorker:
                     return []
         
         return []
-
 
 async def process_symbols_q1(
     symbols: List[str],

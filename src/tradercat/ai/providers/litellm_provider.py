@@ -4,7 +4,7 @@ import asyncio
 from typing import List, Dict, Optional
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.ai.llm_provider_factory import LLMFactory
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 
 try:
     import litellm
@@ -12,13 +12,7 @@ try:
 except ImportError:
     litellm = None
 
-import logging
-from tradercat.config import settings
-
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
-
+logger = get_logger(__name__)
 
 @LLMFactory.register("litellm")
 class LiteLLMProvider(LLMProvider):

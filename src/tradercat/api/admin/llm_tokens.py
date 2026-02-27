@@ -16,17 +16,11 @@ from tradercat.schemas.llm_token import (
     LlmTokenResponse,
     LlmTokenListResponse,
 )
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 
-import logging
-from tradercat.config import settings
-
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/llm-tokens", tags=["admin-llm-tokens"])
-
 
 # ── Helpers ───────────────────────────────────────────────────
 
@@ -35,7 +29,6 @@ def _mask_token(token: str) -> str:
     if len(token) <= 8:
         return token[:2] + "****"
     return token[:4] + "****" + token[-4:]
-
 
 def _to_response(t: LlmToken) -> LlmTokenResponse:
     return LlmTokenResponse(
@@ -47,7 +40,6 @@ def _to_response(t: LlmToken) -> LlmTokenResponse:
         created_at=t.created_at,
         updated_at=t.updated_at,
     )
-
 
 # ── Endpoints ─────────────────────────────────────────────────
 
@@ -67,7 +59,6 @@ async def list_tokens(
         items=[_to_response(t) for t in tokens],
         total=len(tokens),
     )
-
 
 @router.post("", response_model=LlmTokenResponse, status_code=status.HTTP_201_CREATED)
 async def add_token(
@@ -100,7 +91,6 @@ async def add_token(
 
     logger.info(f"Admin {admin.username} added LLM token for {body.provider_name}")
     return _to_response(token)
-
 
 @router.patch("/{token_id}", response_model=LlmTokenResponse)
 async def update_token(
@@ -136,7 +126,6 @@ async def update_token(
     await db.commit()
     await db.refresh(token)
     return _to_response(token)
-
 
 @router.delete("/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_token(

@@ -29,19 +29,14 @@ import signal
 import sys
 from datetime import datetime
 
-import logging
-
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 from tradercat.config import settings
 from tradercat.pipeline.scheduler import get_scheduler
 
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
+logger = get_logger(__name__)
 
 # Global flag for graceful shutdown
 shutdown_requested = False
-
 
 def signal_handler(signum, frame):
     """Handle shutdown signals gracefully."""
@@ -49,7 +44,6 @@ def signal_handler(signum, frame):
     sig_name = signal.Signals(signum).name
     logger.info(f"Received {sig_name} signal, initiating graceful shutdown...")
     shutdown_requested = True
-
 
 async def run_pipeline_worker():
     """
@@ -93,7 +87,6 @@ async def run_pipeline_worker():
         logger.error(f"Fatal error in pipeline worker: {e}", exc_info=True)
         return 1
 
-
 def main():
     """Main entry point for the pipeline worker."""
     # Validate run mode
@@ -114,7 +107,6 @@ def main():
     except Exception as e:
         logger.error(f"Unexpected error: {e}", exc_info=True)
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

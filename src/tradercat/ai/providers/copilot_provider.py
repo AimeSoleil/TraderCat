@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from tradercat.ai.llm_provider_factory import LLMFactory
 from tradercat.ai.providers.llm_interface import LLMProvider
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 
 if TYPE_CHECKING:
     from copilot import CopilotClient
@@ -30,13 +30,7 @@ except ImportError:
     _CopilotClient = None
     _copilot_available = False
 
-import logging
-from tradercat.config import settings
-
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
-
+logger = get_logger(__name__)
 
 @LLMFactory.register("copilot")
 class CopilotProvider(LLMProvider):

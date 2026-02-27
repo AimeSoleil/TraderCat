@@ -6,18 +6,12 @@ The Identity role does not call the LLM itself. It provides the system prompt
 from typing import Dict, Optional
 
 from tradercat.ai.roles.base import AIRole, RoleType, RoleOutput
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 
-import logging
-from tradercat.config import settings
-
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
+logger = get_logger(__name__)
 
 # Lazy-load identity prompts
 _IDENTITY_CACHE: Dict[str, str] = {}
-
 
 def _load_identity(identity_key: str) -> str:
     """Load and cache an identity prompt by key."""
@@ -43,11 +37,9 @@ def _load_identity(identity_key: str) -> str:
     _IDENTITY_CACHE[key_lower] = prompt
     return prompt
 
-
 def list_identities() -> list[str]:
     """Return all available identity keys."""
     return ["wyckoff", "options_strategist"]
-
 
 class IdentityRole(AIRole):
     """

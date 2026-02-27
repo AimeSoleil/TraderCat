@@ -183,7 +183,7 @@ Even with `RUN_MODE=api-only`, you can manually trigger the pipeline via API:
 
 ```bash
 curl -X POST http://localhost:8000/api/admin/pipeline/trigger \
-  -H "X-API-Key: your_admin_api_key"
+  -H "Authorization: Bearer <jwt>"
 ```
 
 ## Monitoring

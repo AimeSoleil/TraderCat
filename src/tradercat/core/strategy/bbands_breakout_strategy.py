@@ -4,14 +4,9 @@ from tradercat.core.strategy.exit_planner import ExitPlanner
 from tradercat.core.strategy.signal_scorer import Factor, FactorName, ScoringEngine
 from tradercat.core.strategy.trading_strategy import TradingStrategy
 from tradercat.core.strategy.signal_model import SignalModel
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 
-import logging
-from tradercat.config import settings
-
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
+logger = get_logger(__name__)
 
 class BollingerBreakoutStrategy(TradingStrategy):
 

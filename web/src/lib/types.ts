@@ -2,7 +2,7 @@
 
 // ── Auth ──
 export interface LoginRequest {
-  api_key: string;
+  token: string;
 }
 
 export interface LoginResponse {
@@ -51,7 +51,7 @@ export interface UserUpdate {
   preferred_lang?: string | null;
 }
 
-export interface ApiKeyResponse {
+export interface TokenResponse {
   id: string;
   key_prefix: string;
   name: string;
@@ -60,20 +60,26 @@ export interface ApiKeyResponse {
   last_used_at: string | null;
 }
 
-export interface ApiKeyCreate {
+export interface TokenCreate {
   name?: string;
 }
 
-export interface ApiKeyCreated {
-  api_key: string;
+export interface TokenCreated {
+  token: string;
   key_prefix: string;
   name: string;
   created_at: string;
 }
 
-export interface UserWithKeys extends UserResponse {
-  api_keys: ApiKeyResponse[];
+export interface UserWithTokens extends UserResponse {
+  tokens: TokenResponse[];
 }
+
+// Backward-compatible aliases
+export type ApiKeyResponse = TokenResponse;
+export type ApiKeyCreate = TokenCreate;
+export type ApiKeyCreated = TokenCreated;
+export type UserWithKeys = UserWithTokens;
 
 // ── Watchlist ──
 export interface WatchlistItemResponse {

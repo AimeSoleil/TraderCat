@@ -19,19 +19,19 @@ import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const [apiKey, setApiKey] = useState("");
+  const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [showKey, setShowKey] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!apiKey.trim()) return;
+    if (!token.trim()) return;
     setLoading(true);
     try {
-      await login(apiKey.trim());
+      await login(token.trim());
       toast.success("Logged in successfully");
     } catch {
-      toast.error("Invalid or inactive API key");
+      toast.error("Invalid or inactive token");
     } finally {
       setLoading(false);
     }
@@ -61,22 +61,22 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-xl font-semibold">Welcome back</CardTitle>
           <CardDescription className="text-sm">
-            Enter your API key to access TraderCat
+            Enter your personal access token to access TraderCat
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="api-key" className="text-sm font-medium">
-                API Key
+              <Label htmlFor="pat" className="text-sm font-medium">
+                Personal Access Token
               </Label>
               <div className="relative">
                 <Input
-                  id="api-key"
+                  id="pat"
                   type={showKey ? "text" : "password"}
                   placeholder="tc_..."
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
                   className="pr-10"
                   autoFocus
                   autoComplete="off"
@@ -101,7 +101,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               className="w-full"
-              disabled={loading || !apiKey.trim()}
+              disabled={loading || !token.trim()}
             >
               {loading ? (
                 <span className="flex items-center gap-2">
@@ -115,7 +115,7 @@ export default function LoginPage() {
           </form>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            Don&apos;t have an API key? Contact your administrator.
+            Don&apos;t have a token? Contact your administrator.
           </p>
         </CardContent>
       </Card>

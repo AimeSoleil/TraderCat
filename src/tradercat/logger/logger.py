@@ -68,30 +68,44 @@ def _is_same_file_handler(handler, path):
         return False
 
 def get_logger(name: str,
-                level=logging.INFO,
+                level: Optional[int] = None,
                 log_file: Optional[str] = None,
                 max_bytes: int = 10 * 1024 * 1024,
                 backup_count: int = 5,
                 timed: bool = False,
                 when: str = "midnight",
                 interval: int = 1,
-                use_json: bool = False):
+                use_json: Optional[bool] = None):
     """
     Return a named logger.
 
+    When ``level`` or ``use_json`` are not provided they are read
+    automatically from ``tradercat.config.settings`` (log_level /
+    log_format).  This allows callers to simply write::
+
+        from tradercat.logger import get_logger
+        logger = get_logger(__name__)
+
     Parameters:
     - name: logger name
-    - level: desired logging level
+    - level: desired logging level (default: from settings.log_level)
     - log_file: if provided, add a file handler (rotating or timed)
     - max_bytes, backup_count: for RotatingFileHandler
     - timed, when, interval, backup_count: for TimedRotatingFileHandler
-    - use_json: if True, use JSON formatting for console output
+    - use_json: if True, use JSON formatting (default: from settings.log_format)
 
     Behavior:
     - Keeps existing behavior: if logger has no handlers, add colored console handler.
     - If log_file is given, add a file handler for that path (idempotent).
     - Avoids adding duplicate handlers on repeated calls.
     """
+    # Lazy-import settings to avoid circular imports
+    if level is None or use_json is None:
+        from tradercat.config import settings as _settings
+        if level is None:
+            level = getattr(logging, _settings.log_level, logging.INFO)
+        if use_json is None:
+            use_json = _settings.log_format == "json"
     logger = logging.getLogger(name)
     logger.setLevel(level)
     logger.propagate = False  # prevent double logging via root handlers

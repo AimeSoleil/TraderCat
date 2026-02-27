@@ -2,7 +2,7 @@
 import traceback
 from typing import List, Optional, Dict, Any
 from tradercat.core.data.openbb_provider import OpenBBProvider
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 from tradercat.core.strategy.chart_pattern_strategy import ChartPatternStrategy, make_chart_pattern_presets
 from tradercat.core.strategy.signal_model import SignalModel
 
@@ -32,12 +32,7 @@ from tradercat.core.strategy.momentum_strategy import (
     make_momentum_presets,
 )
 
-import logging
-from tradercat.config import settings
-
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
+logger = get_logger(__name__)
 
 # ── Strategy class registry ───────────────────────────────────
 STRATEGY_CLASS_MAP: Dict[str, type] = {
@@ -88,7 +83,6 @@ _FALLBACK_DEFAULTS: Dict[str, Dict[str, Any]] = {
         "default_preset": "swing_momentum",
     },
 }
-
 
 class StrategyFactory:
     """
@@ -153,7 +147,6 @@ class StrategyFactory:
             params = presets[meta["default_preset"]].copy()
             strategies.append(cls(data_provider=data_provider, **params))
         return strategies
-
 
 class TraderBot:
     """

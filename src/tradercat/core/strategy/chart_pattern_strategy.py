@@ -3,7 +3,7 @@ from tradercat.core.strategy.trading_strategy import TradingStrategy
 from tradercat.core.strategy.signal_model import SignalModel
 from tradercat.core.strategy.exit_planner import ExitPlanner
 from tradercat.core.strategy.signal_scorer import Factor, FactorName, ScoringEngine
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 
 from tradercat.core.strategy.chart_pattern.pivot_utils import PivotFinder
 from tradercat.core.strategy.chart_pattern.reversal import (
@@ -20,13 +20,7 @@ from tradercat.core.strategy.chart_pattern.continuation import (
 )
 from tradercat.core.strategy.chart_pattern.base_detector import ChartData, PatternResult
 
-import logging
-from tradercat.config import settings
-
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
-
+logger = get_logger(__name__)
 
 class ChartPatternStrategy(TradingStrategy):
     """
@@ -325,7 +319,6 @@ class ChartPatternStrategy(TradingStrategy):
             ohlcv=ohlcv,
             indicators=indicators
         )
-
 
 def make_chart_pattern_presets() -> Dict[str, Dict[str, Any]]:
     """

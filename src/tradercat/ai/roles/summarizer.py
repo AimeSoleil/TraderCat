@@ -13,15 +13,9 @@ from tradercat.ai.prompts.summary.portfolio_summary import (
     SYSTEM_PROMPT as SUMMARY_SYSTEM,
     USER_PROMPT_TEMPLATE as SUMMARY_USER,
 )
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 
-import logging
-from tradercat.config import settings
-
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
-
+logger = get_logger(__name__)
 
 class SummarizerRole(AIRole):
     """

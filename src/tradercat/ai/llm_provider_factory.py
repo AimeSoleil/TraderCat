@@ -1,6 +1,6 @@
 from typing import Dict, Type, Tuple, List, Union
 from tradercat.ai.providers.llm_interface import LLMProvider
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 
 # Optional: Output formatting
 try:
@@ -8,12 +8,7 @@ try:
 except ImportError:
     tabulate = None
 
-import logging
-from tradercat.config import settings
-
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
+logger = get_logger(__name__)
 
 class LLMFactory:
     """

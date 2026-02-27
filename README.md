@@ -10,7 +10,7 @@
 ## 🚀 Key Features
 
 ### 🏗️ Multi-Tenant Architecture
-- **User Management**: Admin-controlled user provisioning with API key authentication
+- **User Management**: Admin-controlled user provisioning with personal access token (PAT) authentication
 - **Per-User Watchlists**: Track up to 50 symbols per user (configurable)
 - **Custom Strategy Parameters**: Users can override default strategy configurations
 - **Tenant-Isolated Reports**: Each user gets personalized LLM analysis
@@ -47,7 +47,7 @@ TraderCat/
 │   ├── database.py             # SQLAlchemy async setup
 │   │
 │   ├── models/                 # Database models
-│   │   ├── user.py             # User, ApiKey
+│   │   ├── user.py             # User, PersonalAccessToken
 │   │   ├── symbol.py           # WatchlistItem
 │   │   ├── signal.py           # SignalRecord
 │   │   ├── report.py           # Report
@@ -146,7 +146,7 @@ The API will be available at `http://localhost:8000`
 
 ## 🔐 API Authentication
 
-All endpoints (except `/api/admin/system/health`) require API key authentication via the `X-API-Key` header.
+All endpoints (except `/api/admin/system/health`) require JWT Bearer authentication. Authenticate by posting your personal access token (PAT) to `/api/v1/auth/login`, then use the returned JWT in the `Authorization` header for all requests.
 
 ### Initial Admin Setup
 
@@ -162,9 +162,9 @@ This will:
    - Username: `admin` (configurable via `ADMIN_USERNAME`)
    - Email: `admin@tradercat.com` (configurable via `ADMIN_EMAIL`)
    - Role: `admin`
-3. Generate and display an API key (shown only once)
+3. Generate and display a personal access token (shown only once)
 
-**Important**: Save the API key displayed during migration! It cannot be retrieved later.
+**Important**: Save the personal access token displayed during migration! It cannot be retrieved later.
 
 **Customizing Admin User**: Set environment variables before running migrations:
 ```bash
@@ -179,8 +179,13 @@ alembic upgrade head
 Only admins can create users via the API:
 
 ```bash
+# First, obtain a JWT by logging in with your admin PAT:
+# curl -X POST http://localhost:8000/api/v1/auth/login \
+#   -H "Content-Type: application/json" \
+#   -d '{"token": "tc_your_admin_pat"}'
+
 curl -X POST http://localhost:8000/api/v1/users \
-  -H "X-API-Key: your_admin_api_key" \
+  -H "Authorization: Bearer <jwt>" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "trader1",
@@ -190,14 +195,14 @@ curl -X POST http://localhost:8000/api/v1/users \
   }'
 ```
 
-The response will include a generated API key for the new user.
+The response will include a generated personal access token for the new user.
 
 ---
 
 ## 📖 API Endpoints
 
 ### User Management (Admin Only)
-- `POST /api/v1/users` - Create user + generate API key
+- `POST /api/v1/users` - Create user + generate personal access token
 - `GET /api/v1/users` - List users
 - `GET /api/v1/users/{id}` - Get user details
 - `PATCH /api/v1/users/{id}` - Update user
@@ -244,7 +249,7 @@ The pipeline runs automatically at **8:00 PM Eastern Time** on market days (Mond
 ### Manual Trigger
 ```bash
 curl -X POST http://localhost:8000/api/admin/pipeline/trigger \
-  -H "X-API-Key: your_admin_api_key"
+  -H "Authorization: Bearer <jwt>"
 ```
 Note: The pipeline requires at least one active LLM token. Add one via `/api/admin/llm-tokens`.
 
@@ -332,7 +337,7 @@ Key environment variables (see `.env.example`):
 
 ### Core Tables
 - **users**: User accounts with role-based access
-- **api_keys**: SHA-256 hashed API keys
+- **personal_access_tokens**: SHA-256 hashed personal access tokens
 - **watchlist_items**: Per-user symbol tracking
 - **signal_records**: Generated trading signals (GLOBAL/USER scope)
 - **reports**: LLM-generated analysis reports

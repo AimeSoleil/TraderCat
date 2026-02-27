@@ -33,7 +33,7 @@ export default function SettingsPage() {
       </Card>
 
       <p className="mt-4 text-sm text-muted-foreground">
-        Contact your admin to update account settings or generate new API keys.
+        Contact your admin to update account settings or generate new access tokens.
       </p>
     </>
   );

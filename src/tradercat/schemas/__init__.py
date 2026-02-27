@@ -3,10 +3,14 @@ from tradercat.schemas.user import (
     UserCreate,
     UserUpdate,
     UserResponse,
-    UserWithKeys,
-    ApiKeyResponse,
-    ApiKeyCreate,
-    ApiKeyCreated,
+    UserWithTokens,
+    UserWithKeys,  # backward-compatible alias
+    TokenResponse,
+    TokenCreate,
+    TokenCreated,
+    ApiKeyResponse,  # backward-compatible alias
+    ApiKeyCreate,  # backward-compatible alias
+    ApiKeyCreated,  # backward-compatible alias
 )
 from tradercat.schemas.symbol import (
     WatchlistItemCreate,
@@ -48,7 +52,11 @@ __all__ = [
     "UserCreate",
     "UserUpdate",
     "UserResponse",
+    "UserWithTokens",
     "UserWithKeys",
+    "TokenResponse",
+    "TokenCreate",
+    "TokenCreated",
     "ApiKeyResponse",
     "ApiKeyCreate",
     "ApiKeyCreated",

@@ -17,17 +17,12 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
 
-import logging
-
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 from tradercat.config import settings
 from tradercat.pipeline.orchestrator import PipelineOrchestrator
 from tradercat.pipeline.holidays import is_market_day
 
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
-
+logger = get_logger(__name__)
 
 class PipelineScheduler:
     """Scheduler for nightly pipeline execution."""
@@ -92,10 +87,8 @@ class PipelineScheduler:
             return job.next_run_time
         return None
 
-
 # Global scheduler instance
 _scheduler: PipelineScheduler | None = None
-
 
 def get_scheduler() -> PipelineScheduler:
     """Get or create the global scheduler instance."""
@@ -104,12 +97,10 @@ def get_scheduler() -> PipelineScheduler:
         _scheduler = PipelineScheduler()
     return _scheduler
 
-
 def start_scheduler():
     """Start the global scheduler."""
     scheduler = get_scheduler()
     scheduler.start()
-
 
 def stop_scheduler():
     """Stop the global scheduler."""

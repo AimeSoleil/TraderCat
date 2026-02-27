@@ -18,24 +18,18 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import logging
-
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 from tradercat.config import settings
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.ai.roles.identity import IdentityRole
 from tradercat.ai.roles.analyst import AnalystRole
 from tradercat.pipeline.holidays import get_previous_market_day
 
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
-
+logger = get_logger(__name__)
 
 def _json_safe(obj: Any) -> Any:
     """Round-trip through JSON so every value is JSON-serializable (date → str, etc.)."""
     return json.loads(json.dumps(obj, default=str))
-
 
 def _get_llm_provider(model_id: str = None) -> LLMProvider:
     """Get LLM provider from the factory."""
@@ -44,7 +38,6 @@ def _get_llm_provider(model_id: str = None) -> LLMProvider:
     provider_key = settings.default_llm_provider
     provider, resolved_model = LLMFactory.create_provider(f"{provider_key}_{model_id}")
     return provider, resolved_model
-
 
 class GlobalReportWorker:
     """Worker for generating global LLM reports (Q2) using role-based AI."""

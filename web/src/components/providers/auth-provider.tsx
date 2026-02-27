@@ -24,7 +24,7 @@ interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
-  login: (apiKey: string) => Promise<void>;
+  login: (token: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -59,8 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(
-    async (apiKey: string) => {
-      const res = await authApi.login(apiKey);
+    async (token: string) => {
+      const res = await authApi.login(token);
       saveSession(res);
       setUser(res.user);
       router.push("/dashboard");

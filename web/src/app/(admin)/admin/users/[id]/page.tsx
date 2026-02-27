@@ -29,7 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { ArrowLeft, Copy, Key, Plus, Power, Trash2 } from "lucide-react";
 import { useState } from "react";
-import type { ApiKeyResponse, UserUpdate, UserWithKeys } from "@/lib/types";
+import type { TokenResponse, UserUpdate } from "@/lib/types";
 
 export default function AdminUserDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -86,32 +86,32 @@ export default function AdminUserDetailPage() {
   });
 
   const addKeyMut = useMutation({
-    mutationFn: () => usersApi.createApiKey(id, newKeyName),
+    mutationFn: () => usersApi.createToken(id, newKeyName),
     onSuccess: (res) => {
-      setNewKeyDialog(res.api_key);
+      setNewKeyDialog(res.token);
       qc.invalidateQueries({ queryKey: ["admin", "users", id] });
       setAddKeyOpen(false);
       setNewKeyName("default");
     },
-    onError: () => toast.error("Failed to create API key"),
+    onError: () => toast.error("Failed to create token"),
   });
 
   const toggleKeyMut = useMutation({
-    mutationFn: (keyId: string) => usersApi.toggleApiKey(id, keyId),
+    mutationFn: (tokenId: string) => usersApi.toggleToken(id, tokenId),
     onSuccess: () => {
-      toast.success("API key toggled");
+      toast.success("Token toggled");
       qc.invalidateQueries({ queryKey: ["admin", "users", id] });
     },
-    onError: () => toast.error("Failed to toggle key"),
+    onError: () => toast.error("Failed to toggle token"),
   });
 
   const removeKeyMut = useMutation({
-    mutationFn: (keyId: string) => usersApi.removeApiKey(id, keyId),
+    mutationFn: (tokenId: string) => usersApi.removeToken(id, tokenId),
     onSuccess: () => {
-      toast.success("API key deleted");
+      toast.success("Token deleted");
       qc.invalidateQueries({ queryKey: ["admin", "users", id] });
     },
-    onError: () => toast.error("Failed to delete key"),
+    onError: () => toast.error("Failed to delete token"),
   });
 
   if (isLoading) return <Skeleton className="h-96" />;
@@ -175,13 +175,13 @@ export default function AdminUserDetailPage() {
         </InfoCard>
       </div>
 
-      {/* API Keys section */}
+      {/* Access Tokens section */}
       <div className="mt-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
               <Key className="h-4 w-4" />
-              API Keys ({user.api_keys.length})
+              Access Tokens ({user.tokens.length})
             </CardTitle>
             <Dialog open={addKeyOpen} onOpenChange={setAddKeyOpen}>
               <DialogTrigger asChild>
@@ -192,7 +192,7 @@ export default function AdminUserDetailPage() {
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Generate API Key</DialogTitle>
+                  <DialogTitle>Generate Token</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3">
                   <div>
@@ -214,18 +214,18 @@ export default function AdminUserDetailPage() {
             </Dialog>
           </CardHeader>
           <CardContent className="space-y-3">
-            {user.api_keys.length === 0 ? (
+            {user.tokens.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No API keys. Create one to allow this user to authenticate.
+                No tokens. Create one to allow this user to authenticate.
               </p>
             ) : (
-              user.api_keys.map((k) => (
-                <ApiKeyRow
+              user.tokens.map((k) => (
+                <TokenRow
                   key={k.id}
-                  apiKey={k}
+                  token={k}
                   onToggle={() => toggleKeyMut.mutate(k.id)}
                   onRemove={() => {
-                    if (confirm("Delete this API key?")) {
+                    if (confirm("Delete this token?")) {
                       removeKeyMut.mutate(k.id);
                     }
                   }}
@@ -245,9 +245,9 @@ export default function AdminUserDetailPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>API Key Created</DialogTitle>
+            <DialogTitle>Token Created</DialogTitle>
             <DialogDescription>
-              Copy the key below. It will not be shown again.
+              Copy the token below. It will not be shown again.
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-md border bg-muted p-3">
@@ -260,7 +260,7 @@ export default function AdminUserDetailPage() {
             }}
           >
             <Copy className="mr-2 h-4 w-4" />
-            Copy Key
+            Copy Token
           </Button>
         </DialogContent>
       </Dialog>
@@ -376,12 +376,12 @@ function InfoCard({
   );
 }
 
-function ApiKeyRow({
-  apiKey,
+function TokenRow({
+  token,
   onToggle,
   onRemove,
 }: {
-  apiKey: ApiKeyResponse;
+  token: TokenResponse;
   onToggle: () => void;
   onRemove: () => void;
 }) {
@@ -389,22 +389,22 @@ function ApiKeyRow({
     <div className="flex items-center justify-between rounded-md border p-3">
       <div>
         <div className="flex items-center gap-2">
-          <code className="text-sm">{apiKey.key_prefix}…</code>
+          <code className="text-sm">{token.key_prefix}…</code>
           <Badge variant="outline" className="text-[10px]">
-            {apiKey.name}
+            {token.name}
           </Badge>
           <Badge
-            variant={apiKey.is_active ? "default" : "destructive"}
+            variant={token.is_active ? "default" : "destructive"}
             className="text-[10px]"
           >
-            {apiKey.is_active ? "Active" : "Inactive"}
+            {token.is_active ? "Active" : "Inactive"}
           </Badge>
         </div>
         <p className="text-xs text-muted-foreground">
-          Created: {new Date(apiKey.created_at).toLocaleDateString()}
-          {apiKey.last_used_at &&
+          Created: {new Date(token.created_at).toLocaleDateString()}
+          {token.last_used_at &&
             ` · Last used: ${new Date(
-              apiKey.last_used_at
+              token.last_used_at
             ).toLocaleDateString()}`}
         </p>
       </div>
@@ -420,7 +420,7 @@ function ApiKeyRow({
         <Button
           variant="ghost"
           size="icon"
-          title="Delete key"
+          title="Delete token"
           onClick={onRemove}
         >
           <Trash2 className="h-4 w-4 text-destructive" />

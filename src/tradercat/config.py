@@ -22,29 +22,27 @@ A production-ready multi-tenant API for trading signal generation and LLM-powere
 
 ### Features
 
-* 🔐 **API Key Authentication** - Secure access with SHA-256 hashed keys
+* 🔐 **JWT Authentication** - Personal access token (PAT) login → Bearer token for all requests
 * 👥 **Multi-Tenant** - User-level watchlists and reports
 * 📊 **8 Trading Strategies** - Technical analysis with customizable parameters
-* 🤖 **AI Reports** - LLM-powered market analysis (GPT-4)
+* 🤖 **AI Reports** - LLM-powered market analysis
 * 📅 **Scheduled Pipeline** - Automatic nightly signal generation
 * 🎯 **Smart Deduplication** - Global + user-specific signals
 
 ### Authentication
 
-All endpoints (except `/` and `/api/admin/system/health`) require API key authentication:
+1. **Login**: `POST /api/v1/auth/login` with `{ "token": "tc_..." }` → returns a JWT
+2. **All other requests**: `Authorization: Bearer <jwt_token>`
 
-```
-X-API-Key: tc_your_api_key_here
-```
-
-Admin endpoints require admin-level API keys.
+Public endpoints: `/`, `/api/admin/system/health`, `/api/v1/auth/login`
 
 ### Getting Started
 
-1. **Admin creates user**: `POST /api/v1/users` (returns API key)
-2. **Add watchlist symbols**: `POST /api/v1/watchlist`
-3. **View signals**: `GET /api/v1/signals`
-4. **Read reports**: `GET /api/v1/reports`
+1. **Admin creates user**: `POST /api/v1/users` (returns personal access token)
+2. **Login**: `POST /api/v1/auth/login` with the token to get a JWT
+3. **Add watchlist symbols**: `POST /api/v1/watchlist`
+4. **View signals**: `GET /api/v1/signals`
+5. **Read reports**: `GET /api/v1/reports`
 
 ### Architecture
 
@@ -91,7 +89,7 @@ Admin endpoints require admin-level API keys.
     
     # Global symbols (fallback only — primary source is global_symbols DB table)
     global_symbols: list[str] = Field(
-        default=["SPY", "QQQ", "DIA", "IWM", "TLT", "XLK", "XLF", "XLY", "XLV", "XLE", "XLI", "XLP"],
+        default=["SPY", "QQQ", "DIA", "IWM", "TLT"],
         description="Fallback global symbols if database table is empty"
     )
     

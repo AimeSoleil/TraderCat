@@ -41,7 +41,7 @@ The TraderCat pipeline has been **completely separated** from the API service, c
         │            PostgreSQL Database                    │
         ├──────────────────────────────────────────────────┤
         │  Shared Data:                                    │
-        │   ├─ Users & API Keys                            │
+        │   ├─ Users & Personal Access Tokens              │
         │   ├─ Watchlists                                  │
         │   ├─ Signal Records                              │
         │   ├─ Reports                                     │

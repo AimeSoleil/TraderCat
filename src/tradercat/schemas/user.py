@@ -42,8 +42,8 @@ class UserResponse(UserBase):
     model_config = {"from_attributes": True}
 
 
-class ApiKeyResponse(BaseModel):
-    """Schema for API key response."""
+class TokenResponse(BaseModel):
+    """Schema for personal access token response."""
     id: UUID
     key_prefix: str
     name: str
@@ -54,21 +54,28 @@ class ApiKeyResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ApiKeyCreate(BaseModel):
-    """Schema for creating an API key."""
+class TokenCreate(BaseModel):
+    """Schema for creating a personal access token."""
     name: str = Field(default="default", max_length=100)
 
 
-class ApiKeyCreated(BaseModel):
-    """Schema for newly created API key (includes plaintext key)."""
-    api_key: str = Field(..., description="Plaintext API key - save it, won't be shown again")
+class TokenCreated(BaseModel):
+    """Schema for newly created token (includes plaintext token)."""
+    token: str = Field(..., description="Plaintext personal access token - save it, won't be shown again")
     key_prefix: str
     name: str
     created_at: datetime
 
 
-class UserWithKeys(UserResponse):
-    """User response with API keys."""
-    api_keys: list[ApiKeyResponse] = []
+class UserWithTokens(UserResponse):
+    """User response with personal access tokens."""
+    tokens: list[TokenResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+# Backward-compatible aliases
+ApiKeyResponse = TokenResponse
+ApiKeyCreate = TokenCreate
+ApiKeyCreated = TokenCreated
+UserWithKeys = UserWithTokens

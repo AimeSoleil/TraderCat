@@ -1,5 +1,4 @@
 """FastAPI application entry point."""
-import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
@@ -9,7 +8,7 @@ from fastapi.openapi.utils import get_openapi
 
 from tradercat.config import settings
 from tradercat.database import init_db
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 
 # Import routers
 from tradercat.api.v1 import auth, users, watchlist, signals, reports
@@ -18,10 +17,7 @@ from tradercat.api.admin import global_symbols as admin_global_symbols
 from tradercat.api.admin import strategies as admin_strategies
 from tradercat.api.admin import llm_tokens as admin_llm_tokens
 
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
-
+logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -78,7 +74,6 @@ async def lifespan(app: FastAPI):
         except Exception:
             pass
 
-
 # Create FastAPI application
 app = FastAPI(
     title=settings.api_title,
@@ -101,7 +96,7 @@ app = FastAPI(
     openapi_tags=[
         {
             "name": "users",
-            "description": "User management operations (Admin only). Create users and manage API keys.",
+            "description": "User management operations (Admin only). Create users and manage personal access tokens.",
         },
         {
             "name": "watchlist",
@@ -138,7 +133,6 @@ app = FastAPI(
     ],
 )
 
-
 def custom_openapi():
     """Customize OpenAPI schema with security schemes."""
     if app.openapi_schema:
@@ -154,23 +148,19 @@ def custom_openapi():
         tags=app.openapi_tags,
     )
     
-    # Update API Key security scheme description
+    # Set up security schemes — JWT Bearer only
     schemes = openapi_schema.setdefault("components", {}).setdefault("securitySchemes", {})
-    if "ApiKeyHeader" in schemes:
-        schemes["ApiKeyHeader"]["description"] = (
-            "API Key authentication. Click 'Authorize' button above and enter your API key. "
-            "Get your key from admin by creating a user."
-        )
+    # Remove legacy API-Key scheme if FastAPI auto-generated it
+    schemes.pop("ApiKeyHeader", None)
 
-    # Add Bearer JWT scheme for web portal auth
     schemes["HTTPBearer"] = {
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
         "description": (
-            "JWT authentication for the web portal. "
+            "JWT authentication. "
             "First call POST /api/v1/auth/login with your API key to get a token, "
-            "then paste it here."
+            "then click 'Authorize' and paste the token here."
         ),
     }
     
@@ -185,7 +175,6 @@ def custom_openapi():
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
-
 app.openapi = custom_openapi
 
 # Add CORS middleware
@@ -198,7 +187,6 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-
 # Exception handlers
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -208,7 +196,6 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "Internal server error"}
     )
-
 
 # Register routers
 app.include_router(auth.router, prefix="/api/v1")
@@ -221,7 +208,6 @@ app.include_router(pipeline.router, prefix="/api/admin")
 app.include_router(system.router, prefix="/api/admin")
 app.include_router(admin_global_symbols.router, prefix="/api/admin")
 app.include_router(admin_strategies.router, prefix="/api/admin")
-
 
 @app.get("/", tags=["root"], dependencies=[])
 async def root():
@@ -248,9 +234,8 @@ async def root():
             "signals": "/api/v1/signals",
             "reports": "/api/v1/reports"
         },
-        "authentication": "X-API-Key header required (except for / and /api/admin/system/health)"
+        "authentication": "JWT Bearer token required. Login via POST /api/v1/auth/login with your API key to obtain a token."
     }
-
 
 def run_api():
     """Run the FastAPI application with uvicorn."""
@@ -262,7 +247,6 @@ def run_api():
         reload=False,
         log_config=None,  # Use our custom logger
     )
-
 
 if __name__ == "__main__":
     run_api()

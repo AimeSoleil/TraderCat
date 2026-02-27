@@ -11,7 +11,7 @@ from tabulate import tabulate
 # Add project root
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 from tradercat.core.data.openbb_provider import OpenBBProvider
 
 # --- Import Strategies ---
@@ -27,13 +27,7 @@ from tradercat.core.strategy.momentum_strategy import MomentumTrendStrategy, mak
 from tradercat.core.strategy.backtest.backtest_engine import BacktestRunner
 from tradercat.core.strategy.backtest.sector_rotation_engine import run_sector_rotation_backtest
 
-import logging
-from tradercat.config import settings
-from tradercat.logger.logger import get_logger
-
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
+logger = get_logger(__name__)
 
 # ==========================================
 # 1. Configuration

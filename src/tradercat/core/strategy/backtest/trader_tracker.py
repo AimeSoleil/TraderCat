@@ -1,14 +1,9 @@
 from datetime import datetime
 import pandas as pd
-from tradercat.logger.logger import get_logger
+from tradercat.logger import get_logger
 from tradercat.core.strategy.signal_model import SignalModel
 
-import logging
-from tradercat.config import settings
-
-# Set up logger
-use_json = settings.log_format == "json"
-logger = get_logger(__name__, level=getattr(logging, settings.log_level), use_json=use_json)
+logger = get_logger(__name__)
 
 class TradeTracker:
     def __init__(self, symbol, initial_cash=100000, commission_rate=0.001):

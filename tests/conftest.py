@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.pool import StaticPool
 
 from tradercat.database import Base
-from tradercat.models import User, ApiKey
+from tradercat.models import User, PersonalAccessToken
 
 # Test database URL (in-memory SQLite)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -76,16 +76,16 @@ async def test_admin(db_session: AsyncSession) -> User:
 
 
 @pytest_asyncio.fixture
-async def test_api_key(db_session: AsyncSession, test_user: User) -> tuple[str, ApiKey]:
-    """Create a test API key."""
-    plaintext, key_hash = ApiKey.generate_key()
-    api_key = ApiKey(
+async def test_api_key(db_session: AsyncSession, test_user: User) -> tuple[str, PersonalAccessToken]:
+    """Create a test personal access token."""
+    plaintext, key_hash = PersonalAccessToken.generate_key()
+    pat = PersonalAccessToken(
         user_id=test_user.id,
         key_hash=key_hash,
-        key_prefix=ApiKey.get_key_prefix(plaintext),
+        key_prefix=PersonalAccessToken.get_key_prefix(plaintext),
         name="test_key",
     )
-    db_session.add(api_key)
+    db_session.add(pat)
     await db_session.commit()
-    await db_session.refresh(api_key)
-    return plaintext, api_key
+    await db_session.refresh(pat)
+    return plaintext, pat

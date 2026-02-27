@@ -5,28 +5,28 @@ from sqlalchemy import select, func
 from datetime import datetime
 
 from tradercat.api.deps import CurrentAdminUser, DatabaseSession
-from tradercat.models import User, ApiKey
+from tradercat.models import User, PersonalAccessToken
 from tradercat.schemas.user import (
     UserCreate,
     UserUpdate,
     UserResponse,
-    UserWithKeys,
-    ApiKeyCreated,
-    ApiKeyCreate,
-    ApiKeyResponse,
+    UserWithTokens,
+    TokenCreated,
+    TokenCreate,
+    TokenResponse,
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-@router.post("", response_model=ApiKeyCreated, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TokenCreated, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user_data: UserCreate,
     db: DatabaseSession,
     admin: CurrentAdminUser
 ):
     """
-    Create a new user and generate an API key.
+    Create a new user and generate a personal access token.
     Admin-only endpoint.
     """
     # Check if username or email already exists
@@ -53,22 +53,22 @@ async def create_user(
     db.add(new_user)
     await db.flush()  # Get the user ID
     
-    # Generate API key
-    plaintext_key, key_hash = ApiKey.generate_key()
-    api_key = ApiKey(
+    # Generate personal access token
+    plaintext, key_hash = PersonalAccessToken.generate_key()
+    pat = PersonalAccessToken(
         user_id=new_user.id,
         key_hash=key_hash,
-        key_prefix=ApiKey.get_key_prefix(plaintext_key),
+        key_prefix=PersonalAccessToken.get_key_prefix(plaintext),
         name="default",
     )
-    db.add(api_key)
+    db.add(pat)
     await db.commit()
     
-    return ApiKeyCreated(
-        api_key=plaintext_key,
-        key_prefix=api_key.key_prefix,
-        name=api_key.name,
-        created_at=api_key.created_at,
+    return TokenCreated(
+        token=plaintext,
+        key_prefix=pat.key_prefix,
+        name=pat.name,
+        created_at=pat.created_at,
     )
 
 
@@ -90,14 +90,14 @@ async def list_users(
     return users
 
 
-@router.get("/{user_id}", response_model=UserWithKeys)
+@router.get("/{user_id}", response_model=UserWithTokens)
 async def get_user(
     user_id: UUID,
     db: DatabaseSession,
     admin: CurrentAdminUser
 ):
     """
-    Get user details including API keys.
+    Get user details including personal access tokens.
     Admin-only endpoint.
     """
     result = await db.execute(
@@ -111,13 +111,13 @@ async def get_user(
             detail="User not found"
         )
     
-    # Load API keys
+    # Load tokens
     result = await db.execute(
-        select(ApiKey).where(ApiKey.user_id == user_id)
+        select(PersonalAccessToken).where(PersonalAccessToken.user_id == user_id)
     )
-    api_keys = result.scalars().all()
+    tokens = result.scalars().all()
     
-    return UserWithKeys(
+    return UserWithTokens(
         id=user.id,
         username=user.username,
         email=user.email,
@@ -126,7 +126,7 @@ async def get_user(
         max_symbols=user.max_symbols,
         created_at=user.created_at,
         updated_at=user.updated_at,
-        api_keys=api_keys
+        tokens=tokens
     )
 
 
@@ -178,82 +178,82 @@ async def delete_user(
     if user.id == admin.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete yourself")
 
-    # Delete API keys first
-    keys_result = await db.execute(select(ApiKey).where(ApiKey.user_id == user_id))
+    # Delete tokens first
+    keys_result = await db.execute(select(PersonalAccessToken).where(PersonalAccessToken.user_id == user_id))
     for key in keys_result.scalars().all():
         await db.delete(key)
     await db.delete(user)
     await db.commit()
 
 
-# ── API Key management ────────────────────────────────────────
+# ── Token management ──────────────────────────────────────────
 
-@router.post("/{user_id}/api-keys", response_model=ApiKeyCreated, status_code=status.HTTP_201_CREATED)
-async def create_api_key(
+@router.post("/{user_id}/tokens", response_model=TokenCreated, status_code=status.HTTP_201_CREATED)
+async def create_token(
     user_id: UUID,
-    body: ApiKeyCreate,
+    body: TokenCreate,
     db: DatabaseSession,
     admin: CurrentAdminUser,
 ):
-    """Generate a new API key for a user. Admin-only."""
+    """Generate a new personal access token for a user. Admin-only."""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalars().first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    plaintext_key, key_hash = ApiKey.generate_key()
-    api_key = ApiKey(
+    plaintext, key_hash = PersonalAccessToken.generate_key()
+    pat = PersonalAccessToken(
         user_id=user.id,
         key_hash=key_hash,
-        key_prefix=ApiKey.get_key_prefix(plaintext_key),
+        key_prefix=PersonalAccessToken.get_key_prefix(plaintext),
         name=body.name,
     )
-    db.add(api_key)
+    db.add(pat)
     await db.commit()
 
-    return ApiKeyCreated(
-        api_key=plaintext_key,
-        key_prefix=api_key.key_prefix,
-        name=api_key.name,
-        created_at=api_key.created_at,
+    return TokenCreated(
+        token=plaintext,
+        key_prefix=pat.key_prefix,
+        name=pat.name,
+        created_at=pat.created_at,
     )
 
 
-@router.patch("/{user_id}/api-keys/{key_id}", response_model=ApiKeyResponse)
-async def update_api_key(
+@router.patch("/{user_id}/tokens/{token_id}", response_model=TokenResponse)
+async def toggle_token(
     user_id: UUID,
-    key_id: UUID,
+    token_id: UUID,
     db: DatabaseSession,
     admin: CurrentAdminUser,
 ):
-    """Toggle an API key active/inactive. Admin-only."""
+    """Toggle a personal access token active/inactive. Admin-only."""
     result = await db.execute(
-        select(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == user_id)
+        select(PersonalAccessToken).where(PersonalAccessToken.id == token_id, PersonalAccessToken.user_id == user_id)
     )
-    api_key = result.scalars().first()
-    if not api_key:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+    pat = result.scalars().first()
+    if not pat:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found")
 
-    api_key.is_active = not api_key.is_active
+    pat.is_active = not pat.is_active
     await db.commit()
-    await db.refresh(api_key)
-    return api_key
+    await db.refresh(pat)
+    return pat
 
 
-@router.delete("/{user_id}/api-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_api_key(
+@router.delete("/{user_id}/tokens/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_token(
     user_id: UUID,
-    key_id: UUID,
+    token_id: UUID,
     db: DatabaseSession,
     admin: CurrentAdminUser,
 ):
-    """Delete an API key. Admin-only."""
+    """Delete a personal access token. Admin-only."""
     result = await db.execute(
-        select(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == user_id)
+        select(PersonalAccessToken).where(PersonalAccessToken.id == token_id, PersonalAccessToken.user_id == user_id)
     )
-    api_key = result.scalars().first()
-    if not api_key:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+    pat = result.scalars().first()
+    if not pat:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found")
 
-    await db.delete(api_key)
+    await db.delete(pat)
     await db.commit()

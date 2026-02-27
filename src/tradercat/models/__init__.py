@@ -1,5 +1,5 @@
 """Database models package."""
-from tradercat.models.user import User, ApiKey
+from tradercat.models.user import User, PersonalAccessToken, ApiKey
 from tradercat.models.symbol import WatchlistItem, GlobalSymbol
 from tradercat.models.signal import SignalRecord, SignalScope
 from tradercat.models.global_report import GlobalReport
@@ -10,7 +10,8 @@ from tradercat.models.llm_token import LlmToken
 
 __all__ = [
     "User",
-    "ApiKey",
+    "PersonalAccessToken",
+    "ApiKey",  # backward-compatible alias
     "WatchlistItem",
     "GlobalSymbol",
     "SignalRecord",
