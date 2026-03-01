@@ -134,6 +134,17 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Drop all tables in reverse order of foreign key dependencies
     # First drop tables that reference others, then drop the referenced tables
+
+    # Clean up any orphan tables from later migrations that may not have been
+    # downgraded (e.g. server was at rev 011, revs 012-013 never applied,
+    # so their downgrade never ran and their tables still exist).
+    orphan_tables = [
+        "user_briefings",
+        "symbol_execution_plans",
+        "macro_regime_contexts",
+    ]
+    for t in orphan_tables:
+        op.execute(f'DROP TABLE IF EXISTS "{t}" CASCADE')
     
     op.drop_index(op.f('ix_pipeline_runs_run_date'), table_name='pipeline_runs')
     op.drop_table('pipeline_runs')
