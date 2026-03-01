@@ -127,31 +127,31 @@ def downgrade() -> None:
     
     user_id = admin_user[0]
     
-    # Check which tables exist and delete dependent records
-    infoResult = connection.execute(
+    # Dynamically find ALL tables with a FK column referencing users.id
+    # so we never break on tables added by future migrations.
+    fk_rows = connection.execute(
         sa.text("""
-            SELECT table_name FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name IN ('user_reports', 'watchlist_items', 'strategy_configs', 'global_reports')
+            SELECT kcu.table_name, kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+              ON tc.constraint_name = kcu.constraint_name
+              AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage ccu
+              ON tc.constraint_name = ccu.constraint_name
+              AND tc.table_schema = ccu.table_schema
+            WHERE tc.constraint_type = 'FOREIGN KEY'
+              AND ccu.table_name = 'users'
+              AND ccu.column_name = 'id'
+              AND tc.table_schema = 'public'
         """)
-    )
-    existing_tables = [row[0] for row in infoResult.fetchall()]
-    
-    # Delete from tables that exist
-    for table in existing_tables:
-        if table == 'global_reports':
-            # global_reports doesn't have user_id, skip it
-            continue
+    ).fetchall()
+
+    # Delete dependent rows from every referencing table
+    for table_name, column_name in fk_rows:
         connection.execute(
-            sa.text(f"DELETE FROM {table} WHERE user_id = :user_id"),
-            {"user_id": user_id}
+            sa.text(f'DELETE FROM "{table_name}" WHERE "{column_name}" = :uid'),
+            {"uid": user_id},
         )
-    
-    # Delete API keys
-    connection.execute(
-        sa.text("DELETE FROM api_keys WHERE user_id = :user_id"),
-        {"user_id": user_id}
-    )
     
     # Finally delete the user
     connection.execute(
