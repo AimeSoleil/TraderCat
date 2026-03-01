@@ -30,7 +30,8 @@ import {
 } from "@/components/ui/table";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import type {
   MacroRegimeContextResponse,
@@ -122,6 +123,12 @@ function SkeletonGrid({ count = 3 }: { count?: number }) {
 /* ── Execution plans table with click-to-open modal ── */
 
 function PlanDetailContent({ plan }: { plan: SymbolExecutionPlanResponse }) {
+  // Strip the redundant title heading (e.g. "## AAPL — Analysis Report")
+  // since the modal header already displays the symbol + metadata.
+  const strippedContent = plan.content_md
+    .replace(/^##?\s+.*(?:Analysis Report|—).*\n*/i, "")
+    .trimStart();
+
   return (
     <div className="flex flex-col gap-3">
       {/* ── Header: symbol + metadata ── */}
@@ -153,7 +160,7 @@ function PlanDetailContent({ plan }: { plan: SymbolExecutionPlanResponse }) {
       <hr className="border-border" />
 
       {/* ── Body: markdown content ── */}
-      <MarkdownRenderer content={plan.content_md} className="text-[0.475rem] leading-relaxed" />
+      <MarkdownRenderer content={strippedContent} className="text-[0.475rem] leading-relaxed" />
     </div>
   );
 }
@@ -304,8 +311,31 @@ function todayStr() {
 }
 
 export default function ReportsPage() {
-  const [tab, setTab] = useState("my");
-  const [runDate, setRunDate] = useState(todayStr);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const [tab, setTab] = useState(() => searchParams.get("tab") || "my");
+  const [runDate, setRunDate] = useState(() => searchParams.get("date") || todayStr());
+
+  // Sync date + tab to URL so navigating back preserves selection
+  const updateParam = useCallback(
+    (key: string, value: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set(key, value);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [searchParams, router],
+  );
+
+  const handleDateChange = (value: string) => {
+    setRunDate(value);
+    updateParam("date", value);
+  };
+
+  const handleTabChange = (value: string) => {
+    setTab(value);
+    updateParam("tab", value);
+  };
 
   const dateParam = runDate || undefined;
 
@@ -335,12 +365,15 @@ export default function ReportsPage() {
         <Input
           type="date"
           value={runDate}
-          onChange={(e) => setRunDate(e.target.value)}
+          onChange={(e) => handleDateChange(e.target.value)}
           className="w-40"
         />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Select a US market trading day (no weekends or holidays)
+        </p>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={handleTabChange}>
         <TabsList>
           <TabsTrigger value="my">
             My Briefing ({briefings.data?.total ?? "…"})
