@@ -61,8 +61,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Drop constraints
-    op.drop_constraint("uq_user_report_user_run_date_type", "user_reports", type_="unique")
+    # Drop constraints (IF EXISTS — table may have been recreated without them by 012 downgrade)
+    op.execute("ALTER TABLE user_reports DROP CONSTRAINT IF EXISTS uq_user_report_user_run_date_type")
     op.execute("DROP INDEX IF EXISTS uq_global_report_composite")
 
     # Rename back

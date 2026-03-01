@@ -107,14 +107,18 @@ def downgrade() -> None:
     """)
 
     # --- 3. Drop new tables ---
-    op.drop_index('ix_user_report_user_run_date', table_name='user_reports')
-    op.drop_index(op.f('ix_user_reports_run_date'), table_name='user_reports')
-    op.drop_index(op.f('ix_user_reports_user_id'), table_name='user_reports')
+    # Use IF EXISTS — table may have been recreated with different index names by 012 downgrade
+    op.execute("DROP INDEX IF EXISTS ix_user_report_user_run_date")
+    op.execute("DROP INDEX IF EXISTS ix_user_reports_run_date")
+    op.execute("DROP INDEX IF EXISTS ix_user_report_run_date")
+    op.execute("DROP INDEX IF EXISTS ix_user_reports_user_id")
+    op.execute("DROP INDEX IF EXISTS ix_user_report_user_id")
     op.drop_table('user_reports')
 
-    op.drop_index('ix_global_report_run_date_symbol', table_name='global_reports')
-    op.drop_index('ix_global_report_run_date_type', table_name='global_reports')
-    op.drop_index(op.f('ix_global_reports_run_date'), table_name='global_reports')
+    op.execute("DROP INDEX IF EXISTS ix_global_report_run_date_symbol")
+    op.execute("DROP INDEX IF EXISTS ix_global_report_run_date_type")
+    op.execute("DROP INDEX IF EXISTS ix_global_reports_run_date")
+    op.execute("DROP INDEX IF EXISTS ix_global_report_run_date")
     op.drop_table('global_reports')
 
     # --- 4. Remove user preference columns ---

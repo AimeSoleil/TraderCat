@@ -20,10 +20,14 @@ def upgrade() -> None:
     inspector = inspect(conn)
     tables = inspector.get_table_names()
 
-    if "api_keys" in tables and "personal_access_tokens" not in tables:
-        # Normal path: rename the table
+    has_old = "api_keys" in tables
+    has_new = "personal_access_tokens" in tables
+
+    if has_old and not has_new:
         op.rename_table("api_keys", "personal_access_tokens")
-    # else: already renamed or personal_access_tokens already exists — skip
+    elif has_old and has_new:
+        # Inconsistent state: both exist — drop the old one
+        op.drop_table("api_keys")
 
     # Rename index (PostgreSQL auto-renames PK constraints but not custom indexes)
     op.execute(
@@ -35,4 +39,16 @@ def downgrade() -> None:
     op.execute(
         "ALTER INDEX IF EXISTS ix_personal_access_tokens_user_id RENAME TO ix_api_keys_user_id"
     )
-    op.rename_table("personal_access_tokens", "api_keys")
+
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    tables = inspector.get_table_names()
+
+    has_old = "api_keys" in tables
+    has_new = "personal_access_tokens" in tables
+
+    if has_new and not has_old:
+        op.rename_table("personal_access_tokens", "api_keys")
+    elif has_new and has_old:
+        # Inconsistent state: both exist — drop the new one
+        op.drop_table("personal_access_tokens")
