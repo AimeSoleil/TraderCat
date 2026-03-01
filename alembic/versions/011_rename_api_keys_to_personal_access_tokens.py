@@ -6,6 +6,7 @@ Create Date: 2025-07-24 12:00:00.000000
 
 """
 from alembic import op
+from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision = "011"
@@ -15,8 +16,14 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Rename table
-    op.rename_table("api_keys", "personal_access_tokens")
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    tables = inspector.get_table_names()
+
+    if "api_keys" in tables and "personal_access_tokens" not in tables:
+        # Normal path: rename the table
+        op.rename_table("api_keys", "personal_access_tokens")
+    # else: already renamed or personal_access_tokens already exists — skip
 
     # Rename index (PostgreSQL auto-renames PK constraints but not custom indexes)
     op.execute(
