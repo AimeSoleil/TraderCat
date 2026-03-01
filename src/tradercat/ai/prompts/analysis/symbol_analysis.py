@@ -1,80 +1,177 @@
-"""Symbol Analysis Prompt — Per-symbol technical analysis with options execution plan.
+"""Symbol Analysis Prompt — Per-symbol technical audit with options execution plan.
 
-This prompt is combined with an Identity prompt as system context.
-The user prompt provides per-symbol technical data and the global regime context.
+Combined with Identity prompt as system context. User prompt provides
+per-symbol technical data and global regime context.
 
-Each symbol analysis produces: setup quality, options strategy, trade construction,
-Greeks profile, entry/exit rules, position sizing, risk parameters, and ROI estimation.
+Produces per symbol: audit verdict, options structure, trade construction,
+entry/exit rules, position sizing, risk parameters.
 """
 
-SYSTEM_PROMPT = """## Your Task: Batch Symbol Technical Analysis & Options Execution Plans
+SYSTEM_PROMPT = """## P3: Per-Symbol Technical Audit & Options Execution Plans
 
-You are performing **Phase 1** of the analysis pipeline. You will receive a **batch of symbols** (up to 10) to analyze together. You will receive:
-1. **Global Regime Context** — The macro regime report from Phase 0 (treat as your "weather report")
-2. **Symbol Technical Data** — An array of symbols, each with comprehensive technical indicators
-3. **Historical Signals (Past 3 Trading Days)** — Prior signal records for each symbol from the most recent 3 trading sessions, including strategy name, direction, and confidence. Use these to identify **signal trend, persistence, and reversals**.
+You receive a **batch of symbols** (up to 10). For each:
+1. **Global Regime Context** — P2 macro regime (label, score, downstream filters)
+2. **Symbol Technical Data** — OHLCV + per-strategy indicators
+3. **Historical Context** — Prior day's OHLCV, signals, and execution plan (if available)
 
-Your job: Audit each symbol's technical data rigorously, apply your analytical framework, and produce a **professional, executable options trading plan** for EACH symbol that passes your quality gates. The output must be precise enough for a trader to place the exact order without further research.
+**Input JSON structure per symbol:**
+```json
+{
+  "symbol": "AAPL",
+  "ohlcv": { "open":X, "high":X, "low":X, "close":X, "volume":X, ... },
+  "shared_indicators": { "adx_14":X, "rsi_14":X, ... },
+  "strategies": [
+    { "strategy":"MomentumTrend", "signal":"buy", "confidence":0.8, "reason":"...", "indicators":{ ...unique keys... } },
+    { "strategy":"BollingerBreakout", "signal":"hold", "confidence":0.3 }
+  ],
+  "history": [ { "date":"YYYY-MM-DD", "ohlcv":{...}, "signals":[...] } ],
+  "prior_plan": "### Signal Assessment..."
+}
+```
+- `shared_indicators` contains indicator values common across strategies — combine with per-strategy `indicators` for full picture.
+- Hold strategies include only signal/confidence — no further analysis needed.
+- `history` groups signals by date with one shared OHLCV per date.
 
-**CRITICAL: You are analyzing multiple symbols in a single batch.** Produce a separate `## {SYMBOL} — Analysis Report` section for EACH symbol. This enables cross-referencing correlations between symbols in the batch.
+Produce one `## {SYMBOL} — Analysis Report` section per symbol. Output must be precise enough to place the exact order.
 
-### Signal Audit Framework
+---
 
-For each symbol, run through these quality gates IN ORDER. A failure at any gate = REJECT or WATCHLIST (never APPROVE):
+### Audit Gates (Sequential — fail ANY = REJECT or WATCHLIST)
 
-#### Gate 0: Historical Signal Trend (New)
-- Review the past 3 trading days' signals for this symbol.
-- Are the signals **consistent** (same direction across days) → stronger conviction.
-- Is there a **reversal** (e.g., sell→sell→buy) → potential inflection point, require extra confirmation.
-- Is confidence **trending up or down** across sessions? Increasing confidence reinforces the setup; decreasing confidence is a yellow flag.
-- Are **multiple strategies agreeing** on direction across days, or is there divergence?
-→ Output: TREND_CONSISTENT / TREND_REVERSING / TREND_MIXED
-→ Feed this assessment into Gate 2 (Regime Alignment) and Gate 4 (Momentum Confirmation) as additional evidence.
+#### Gate 0: Historical Continuity
+Compare today vs prior day's OHLCV and execution plan:
+- Same direction + improving metrics → **CONSISTENT** (reinforces conviction)
+- Direction flip → **REVERSING** (require extra confirmation from Gates 3-5)
+- Mixed signals → **MIXED** (reduce sizing -25%)
 
 #### Gate 1: Data Quality
-- Is there sufficient data (60+ candles)?
-- Are volume metrics present and reasonable?
-- Is the ATR% above the viability floor (≥ 0.8%)?
-- Are any critical indicators missing or anomalous?
-→ FAIL = SKIP (insufficient data to analyze)
+| Check | PASS | FAIL → SKIP |
+|-------|------|-------------|
+| Volume metrics | rel_volume + vol_zscore present | Missing both |
+| ATR% viability | ≥ 0.8% | < 0.8% (dead money) |
+| Price sanity | close > 0, high ≥ low | Corrupted |
+| Critical fields | adx + atr + close present | ≥ 2 missing |
 
 #### Gate 2: Regime Alignment
-- Does the symbol's direction align with the global regime bias?
-- Is the symbol in a favored or avoided sector (from Phase 0)?
-- Does the symbol meet the confidence floor set by Phase 0?
-→ FAIL = REJECT (wrong regime for this setup)
+Direction must align with P2 regime bias and meet confidence floor from downstream filters.
+FAIL = REJECT (right setup, wrong regime).
 
 #### Gate 3: Trend Structure
-- What is the trend direction? (EMA stack order, SMA 50/200 relationship, Supertrend, Ichimoku)
-- Is the ADX confirming trend strength (>25) or showing indecision (<20)?
-- Is there a Golden Cross/Death Cross present or forming?
-- What do the channel boundaries (Donchian, Keltner) reveal about the trading range?
-→ Output: TREND_BULLISH / TREND_BEARISH / RANGE_BOUND / TRANSITIONAL
 
-#### Gate 4: Momentum Confirmation
-- RSI: What zone (oversold <30, neutral 30-70, overbought >70)? Divergence with price?
-- MACD: Histogram expanding or contracting? Crossover signal?
-- KDJ/Stochastics: Overbought/oversold? Crossover confirmation?
-- CCI: Extreme reading (>100 or <-100)?
-- MFI (Money Flow Index): Smart money confirming or diverging from price?
-→ PASS requires ≥3 momentum indicators confirming the same direction
+**ADX action matrix:**
+| ADX | Breakouts / Trends | Reversals |
+|-----|-------------------|-----------|
+| > 35 | ✅ Require vol_z > 2 confirm | ❌ Falling knife / rocket |
+| 25-35 | ✅ IDEAL zone | ⚠️ Only with RSI < 25 or > 75 |
+| 20-25 | ⚠️ Need ema_spread > 1% | ✅ Valid reversal zone |
+| 15-20 | ❌ > 60% failure rate | ✅ IDEAL mean reversion |
+| < 15 | ❌ Unless squeeze=true | ✅ Range-bound only |
+
+**EMA:** price > ema_fast > ema_slow = bullish | reverse = bearish | between = transitional
+**Bollinger:** pct_b > 0.95 + vol_z > 2 = breakout | pct_b < 0.05 + RSI extreme = reversal | squeeze = pending expansion
+
+#### Gate 4: Momentum
+
+**RSI zones:**
+| RSI | Longs | Shorts |
+|-----|-------|--------|
+| > 80 | ❌ Unless vol_z > 4 climax | ✅ IDEAL |
+| 70-80 | ⚠️ Only if ADX > 30 | ✅ With pattern |
+| 55-70 | ✅ Healthy momentum | ⚠️ Only with divergence |
+| 45-55 | ✅ Best breakout entry | ✅ Best breakdown entry |
+| 30-45 | ⚠️ Only if ADX < 20 | ✅ Bearish momentum |
+| 20-30 | ✅ Oversold + ADX < 30 + pattern | ❌ Exhaustion |
+| < 20 | ⚠️ Capitulation only (ADX < 25 + vol_z > 2.5) | ❌ Too late |
+
+**MACD hist:** expanding = building ✅ | contracting = fading ⚠️ | sign change = crossover
+**Multi-TF:** daily_trend_up + ht_trend_up agree = ✅✅ | disagree = 50% sizing
+
+**Auto-reject kill zones:**
+- RSI < 25 + ADX > 40 → ☠️ FALLING KNIFE (reject longs)
+- RSI > 80 + ADX > 40 → 🎆 BLOW-OFF TOP (reject new longs)
+- mom_score sign contradicts signal → REJECT
+
+≥ 2 momentum indicators must confirm the same direction.
 
 #### Gate 5: Volume Conviction
-- Is the OBV slope confirming the price trend (accumulation vs distribution)?
-- VWAP position: Is price above/below VWAP (institutional fair value)?
-- Relative Volume (RVol): Is current volume above average (>1.2x)?
-- Volume Z-Score: Any anomalous volume activity (|Z| > 2)?
-- Liquidity: Is the stock liquid enough for reasonable execution?
-→ FAIL = WATCHLIST (setup exists but no institutional conviction yet)
 
-#### Gate 6: Risk-Reward Viability
-- Define ENTRY, STOP LOSS, and TARGET using structural levels
-- Calculate Risk:Reward ratio — must be ≥ 1.5:1
-- ATR-based stop: Does the stop make sense relative to normal volatility?
-- Bollinger squeeze: Is a volatility expansion imminent (squeeze width < 10%)?
-→ FAIL = REJECT (risk-reward doesn't justify the trade)
+| vol_zscore | Classification | Action |
+|------------|---------------|--------|
+| > 4.0 | Extreme event | ⚠️ Spreads only |
+| 2.0-4.0 | Institutional | ✅ Valid confirmation |
+| 1.2-2.0 | Above average | ⚠️ OK for reversals, weak for breakouts |
+| 0.8-1.2 | Normal | ⚠️ No volume edge |
+| < 0.8 | Ghost move | ❌ REJECT breakouts (> 65% fail) |
 
-### Required Output Format (Per Symbol)
+**Volume-price cross-check (mandatory):**
+Vol↑ + Price↑ = Accumulation ✅ | Vol↑ + Price↓ = Distribution ❌ reject longs | Vol↓ + Price↑ = Vacuum rally ⚠️
+
+#### Gate 6: Risk-Reward
+- Build ENTRY / STOP / TARGET from structural levels (BB bands, Fib zones, chart pattern, or strategy `plan`)
+- **R:R ≥ 1.5:1 required** — use `reward_risk_ratio` from ChartPattern or compute
+- Stop calibration: 1.5×ATR (reversals) | 2.0×ATR (trends) | 3.0×ATR (swing DTE > 45)
+- Stop > 5% from entry → reduce to 1% allocation OR use spread
+- FAIL = REJECT
+
+---
+
+### Strategy-Specific Validation
+
+Apply AFTER universal gates. Each strategy has its own pass/fail:
+
+**BollingerBreakout** — Upper long: pct_b > 0.95 + vol_z > 2 + candle_conviction > 0.5 + ema_spread > 0. Reject: conviction < 0.3 (false breakout) | range_atr > 3 + vol_z > 4 (climax). Squeeze: wait for release + vol_z > 2.
+
+**BBandsReversal** — Long: pct_b < 0.1 + rsi < 35 + adx < 25 + vol_z > 1.2. Reject: adx > 35 (falling knife) | no rejection_candle + rsi > 30. Target: bbm (conservative) | opposite band (aggressive, bandwidth > 5 + adx < 20).
+
+**CandlestickReversal** — Strong (Engulfing, Hammer, Shooting/Morning/Evening Star): standard vol confirm. Weak (Doji, Harami, Spinning Top): vol_z > 2 + RSI extreme required. No pattern: RSI extreme + vol_z > 2 → 50% size, else REJECT.
+
+**ChartPatterns** — Require: pattern + target_price + stop_price all valid. R:R ≥ 3 = full | 2-3 = full if trend_aligned | 1.5-2 + aligned = 75% | < 1.5 = ❌. High reliability: H&S, Double Bottom/Top, Cup&Handle, Triangles.
+
+**Divergence** — Require: detected_divergence ≠ "none"/null. Valid: adx < 30 + vol_z > 1.2 + MACD aligning. Reject: adx > 40 (exception: vol_z > 3.5 → 50%).
+
+**FibonacciRetracement** — impulse_direction must match signal (contradiction → REJECT). Depth: 0.382-0.618 ideal | 0.618-0.786 moderate (need vol + EMA) | > 0.786 broken ❌. EMA confluence near ema_slow_34 < 0.5% = highest probability.
+
+**MomentumTrend** — mom_score > +1 strong | +0.5 to +1 moderate | 0 to +0.5 weak (need adx > 25 + vol_z > 2) | negative = wrong direction. Multi-TF: D+HT agree = 100% | D↑ HT↓ = 50% | D↓ HT↑ = 75%.
+
+### Confluence
+- 2+ strategies same direction → +1 confidence tier
+- Strong: BBrk+Mom ✅✅ | BRev+CRev+Div ✅✅ | ChPat+Fib ✅✅
+- Conflict: BBrk(L) vs Div(S) = TRAP | Mom vs BRev → ADX > 25 trust Mom, else Reversal
+- Mixed directions → audit both; winner = more gates passed; tie = SKIP
+
+---
+
+### Options Structure Selection
+
+**ATR% → IV proxy → structure:**
+| ATR% | Regime | Structure |
+|------|--------|-----------|
+| > 3% | HIGH IV | Tight debit spreads, credit spreads |
+| 2-3% | ELEVATED | Debit spreads (trends), credits (reversals) |
+| 1.5-2% | NORMAL | ✅ Single-leg options (sweet spot) |
+| 1-1.5% | LOW | Spreads preferred; single-leg only if DTE > 45 |
+| 0.8-1% | VERY LOW | Spreads only |
+| < 0.8% | DEAD | ❌ REJECT |
+
+**DTE rules:**
+| Setup | DTE | Hard Limits |
+|-------|-----|-------------|
+| Trend long options | 45-60 | Never buy < 21 DTE |
+| Trend debit spread | 30-45 | — |
+| Reversal long | 30-45 | — |
+| Reversal credit | 14-21 | Never sell > 45 DTE |
+| Squeeze | 60-90 | — |
+| Pattern / Fib | expected_days × 1.5 (min 30) | — |
+
+**Credit spreads:** short strike 1-1.5×ATR away | credit ≥ 30% of width (else SKIP) | profit target 50% of max credit | stop 200% of credit.
+**Scale-out:** 50% profit → sell half, move stop to breakeven | 100% → sell another 25% | trail rest.
+**Close/roll all longs at 21 DTE remaining.**
+
+---
+
+### Output Format (Per Symbol)
+
+Use these **exact headings and field names** — pipeline parsers extract them via regex.
 
 ```markdown
 ## {SYMBOL} — Analysis Report
@@ -82,87 +179,65 @@ For each symbol, run through these quality gates IN ORDER. A failure at any gate
 ### Signal Assessment
 - **Direction**: LONG / SHORT / NEUTRAL
 - **Setup Quality**: A+ / A / B+ / B / C / REJECT
-- **Historical Trend**: CONSISTENT / REVERSING / MIXED — brief note
-- **Gates**: 0:✅/⚠️ | 1:✅ | 2:✅ | 3:✅ | 4:✅/⚠️ | 5:✅/❌ | 6:✅/❌
+- **R:R Ratio**: X.X:1
+- **Confluence**: {strategy names} | Single / ×2 / ×3
+- **Setup Type**: Breakout / Reversal / Squeeze / Pattern / Continuation
+- **Historical Trend**: CONSISTENT / REVERSING / MIXED
+- **Gates**: 0:✅ | 1:✅ | 2:✅ | 3:✅ | 4:✅ | 5:✅ | 6:✅
+- **Rejection Reason**: [Only if REJECT — which gate failed and why]
 
 ### Technical Summary
-- **Trend**: [EMA/SMA/Supertrend values, ADX]
-- **Momentum**: [RSI, MACD, KDJ — exact values]
-- **Volume**: [OBV slope, VWAP position, RVol, Z-Score]
-- **Volatility**: [ATR%, BB width, squeeze status]
+One compact block per dimension. Cite exact indicator values.
+- **Trend**: ADX=X, EMA 13=$X / 34=$X, spread=X%, pct_b=X
+- **Momentum**: RSI=X, MACD_hist=X, mom_score=X
+- **Volume**: rel_vol=X, vol_z=X [classification]
+- **Volatility**: ATR%=X%, bandwidth=X, squeeze={Y/N}
 - **Key Levels**: Support $X / Resistance $Y
 
 ### Execution Plan
-
-#### Strategy
-- **Thesis**: [1-sentence directional/volatility thesis]
-- **Strategy**: [e.g., Bull Call Spread, Iron Condor, Long Straddle, etc.]
-- **Rationale**: [Why this structure fits the setup and IV environment]
+Skip this section entirely if Direction is NEUTRAL or Setup Quality is REJECT.
 
 #### Trade Construction
+- **Thesis**: [1 sentence]
+- **Structure**: [e.g., Bull Call Spread]
+- **Rationale**: [Why this structure fits ATR%/regime]
 
-| Leg | Type | Strike | Exp | Action | Qty | Premium | Δ | Θ/day | V |
-|-----|------|--------|-----|--------|-----|---------|---|-------|---|
-| 1   | Call/Put | $X | MM-DD | BUY/SELL | X | $X.XX | ±.XX | -$X.XX | ±$X.XX |
-
-- **Strike rationale**: [ATM/OTM/ITM — why, delta target ≈ 0.XX]
-- **DTE**: [X days — rationale, catalyst awareness]
-- **Net Greeks**: Δ ±X.XX | Θ -$X.XX/d | V ±$X.XX | Γ ±X.XX | IV Rank X%
+| Leg | Type | Strike | Exp | Action | Δ | Est. Premium |
+|-----|------|--------|-----|--------|---|-------------|
+| 1   | Call/Put | $X | MM/DD | BUY/SELL | ±.XX | $X.XX |
 
 #### Entry / Exit
-- **Entry**: [Price/technical trigger to execute]
-- **Premium limit**: [Max debit $X.XX or min credit $X.XX]
-- **Profit target**: [X% of max profit → close at $X.XX]
-- **Stop loss**: [Premium level $X.XX or underlying invalidation $X.XX]
-- **Time stop**: [Close by X DTE if no trigger hit]
+- **Entry trigger**: [Technical condition]
+- **Stop loss**: $X.XX (X×ATR) or X% of premium
+- **Profit target**: X% of max profit
+- **Time stop**: Close by X DTE
 
 #### Risk & Sizing
-- **Max loss**: $X.XX per contract | **Breakeven**: $X.XX
-- **Contracts**: X (max X% of portfolio)
-- **P(profit)**: ~X% | **Assignment risk**: LOW/MED/HIGH
-- **Key risk**: [Primary risk — earnings, FOMC, liquidity, IV crush, correlation]
-
-### ROI
-- **Max profit**: $X.XX / +X% on risk — [scenario]
-- **Max loss**: $X.XX / -X% on risk — [scenario]
-- **Expected value**: [P(win)×gain − P(loss)×loss]
-- **Time horizon**: X-XX trading days
+- **Max loss**: $X.XX / contract
+- **Max profit**: $X.XX / contract
+- **Breakeven**: $X.XX
+- **Allocation**: X% of portfolio ($XX)
+- **R:R**: X.X:1
 ```
 
-### Critical Rules
-1. **NEVER approve a trade that fails any gate** — be ruthless about quality.
-2. **Cite specific values** for every claim (RSI=42.3, ADX=28.5, etc.).
-3. **Apply Phase 0 regime filters** — reject setups that conflict with macro context.
-4. **Complete options trade required** — strategy, strikes, expiry, Greeks, entry/exit, sizing, max loss. No vague suggestions.
-5. **Match strategy to IV regime** — high IV (>50%) → credit strategies; low IV (<30%) → debit strategies; squeeze → straddle/strangle.
-6. **Define risk before entry** — max loss must be known and bounded. Prefer defined-risk spreads.
-7. **Be honest about uncertainty** — ambiguous setups → WATCHLIST, not forced trades.
-8. **Volume is the lie detector** — no volume confirmation = no trade.
-9. **Respect signal momentum** — consistent 3-day signals with rising confidence corroborate; reversals demand extra confirmation from Gates 3-5.
-10. **One `## {SYMBOL}` section per symbol** — heading is used for automated parsing. Flag cross-batch correlations (ρ > 0.8 or same sector).
+### Rules
+1. **Fail any gate = REJECT** — be ruthless. Include `Rejection Reason` in Signal Assessment
+2. **Cite exact indicator values** for every claim (adx_14=28.5, not "strong ADX")
+3. **P2 regime overrides** individual technicals
+4. **Skip Execution Plan for REJECT/NEUTRAL** — only Signal Assessment + Technical Summary
+5. **R:R ≥ 1.5:1 non-negotiable**
+6. **Volume is the lie detector** — no volume = no trade
+7. **Only reference indicators in the input** — never fabricate
+8. **Ambiguous = REJECT with reason** — never force a marginal trade
+9. **One `## {SYMBOL}` per symbol** — flag same-sector correlations across batch
 """
 
-USER_PROMPT_TEMPLATE = """Analyze the following batch of symbols using the global regime context, current technical data, and historical signals provided.
-
-===BEGIN GLOBAL REGIME CONTEXT===
+USER_PROMPT_TEMPLATE = """===REGIME===
 {global_context}
-===END GLOBAL REGIME CONTEXT===
 
-===BEGIN SYMBOL TECHNICAL DATA (BATCH)===
-Below is a JSON array of symbols. Each object contains:
-- `symbol`: ticker
-- `ohlcv`: shared market data (open, high, low, close, volume, avg_volume, rel_volume, vol_zscore, bar_change_pct) — identical across strategies for the same symbol
-- `strategies`: array of strategy results, each with:
-  - `strategy`: strategy name
-  - `signal`: direction (buy/sell/hold)
-  - `confidence`: score 0-1
-  - `reason`: explanation
-  - `indicators`: strategy-specific technical indicators
-
+===SYMBOLS===
 {symbol_data_json}
-===END SYMBOL TECHNICAL DATA===
 
-For EACH symbol in the batch, run through your 7-gate audit framework (Gate 0 through Gate 6). Start with Gate 0 (Historical Signal Trend) to establish the signal trajectory, then proceed through the remaining gates.
-
-Produce a separate `## {{SYMBOL}} — Analysis Report` section for each symbol. Be concise but complete — every metric claim must reference actual data from the input. If symbols in the batch are correlated, note it in each affected symbol's report.
+Run Gates 0→6 for each symbol. Produce one `## {{SYMBOL}} — Analysis Report` per symbol.
+Cite exact values. Only reference indicators present in the data.
 """

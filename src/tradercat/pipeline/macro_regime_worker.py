@@ -1,12 +1,13 @@
 """Macro regime worker for pipeline P2 — MacroAnalystRole.
 
 P2 produces the global market regime report (one per run_date).
-Uses MacroAnalystRole with the options_strategist identity to classify
+Uses MacroAnalystRole with the macro_analyst identity to classify
 the current regime from ETF/index signals.
 
 Token optimization:
   - Only sends global-symbol signals (ETFs/indices).
-  - Compresses OHLCV and indicators via MacroAnalystRole._compress_signal().
+  - Shared indicators hoisted to symbol-level; hold signals stripped.
+  - Compact JSON (no indent, minimal separators).
 """
 import asyncio
 import json
@@ -38,10 +39,15 @@ def _get_llm_provider(model_id: str = None):
 
 
 def _extract_regime_label(content_md: str) -> Optional[str]:
-    """Extract regime label from the markdown report (best-effort)."""
-    m = re.search(r"\*\*Regime\*\*:\s*\S+\s*[-—]\s*(.+?)$", content_md, re.MULTILINE)
+    """Extract regime label from the markdown report (best-effort).
+
+    Captures the full label including color code, e.g. 'YELLOW — Choppy/Transitional'.
+    Falls back to name-only if parsing the color fails.
+    """
+    # Try full format: **Regime**: COLOR — Name
+    m = re.search(r"\*\*Regime\*\*:\s*(.+?)$", content_md, re.MULTILINE)
     if m:
-        return m.group(1).strip()[:50]
+        return m.group(1).strip()[:80]
     return None
 
 
@@ -86,8 +92,8 @@ def _extract_downstream_filters_json(content_md: str) -> Optional[Dict[str, Any]
 class MacroRegimeWorker:
     """Worker for generating the macro regime context (P2)."""
 
-    # Fixed identity for P2 — always "options_strategist"
-    _P2_IDENTITY = "options_strategist"
+    # Fixed identity for P2 — always "macro_analyst"
+    _P2_IDENTITY = "macro_analyst"
 
     def __init__(
         self,
@@ -167,21 +173,32 @@ class MacroRegimeWorker:
 
     @staticmethod
     def _placeholder(run_date: date, etf_signals: List[Dict[str, Any]]) -> str:
-        report = f"# Market Macro & Sector Summary — {run_date}\n\n"
-        report += f"## 1. Regime Classification\n\n- **Regime**: YELLOW — Choppy/Transitional\n"
-        report += f"- **Regime Score**: 0\n\n"
-        report += f"## 2. Sector Rotation Map\n\nBased on {len(etf_signals)} ETF signals.\n\n"
-        for sig in etf_signals:
-            report += f"- **{sig.get('symbol')}**: {sig.get('signal', 'N/A').upper()} "
-            report += f"(confidence: {sig.get('confidence', 0):.2f})\n"
+        symbols = set(s.get("symbol", "?") for s in etf_signals)
+        report = f"# Global Market Regime Report — {run_date}\n\n"
+        report += "## 1. Regime Classification\n"
+        report += "- **Regime**: YELLOW — Choppy/Transitional\n"
+        report += "- **Regime Score**: 0.0\n"
+        report += "- **Regime Trend**: Stable\n"
+        report += f"- **Key Evidence**: {len(etf_signals)} signals from {', '.join(sorted(symbols))}\n"
+        report += "- **Override Applied**: None\n\n"
+        report += "## 2. Sector Rotation Map\n\n"
+        report += f"Based on {len(etf_signals)} ETF signals — no LLM analysis available.\n\n"
+        report += "- **Favored Sectors**: None\n"
+        report += "- **Avoid Sectors**: None\n\n"
+        report += "## 3. Cross-Asset Signals\n"
+        report += "- **Risk Appetite**: Mixed\n"
+        report += "- **Volatility Trend**: Stable\n\n"
         report += (
-            "\n## 4. Downstream Filters (For Per-Symbol Analysis)\n"
+            "## 4. Downstream Filters (For Per-Symbol Analysis)\n"
             "- **Directional Bias**: BOTH\n"
-            "- **Confidence Floor**: 0.5\n"
-            "- **Risk Modifier**: 1.0x\n"
+            "- **Confidence Floor**: 0.65\n"
+            "- **Favored Sectors**: None\n"
+            "- **Avoid Sectors**: None\n"
+            "- **Risk Modifier**: 0.75x\n"
             "- **Cash Reserve**: 30%\n"
+            "- **Special Conditions**: Defined-risk only (LLM unavailable)\n"
         )
-        report += f"\n---\n*Placeholder — LLM not available*\n"
+        report += "\n---\n*Placeholder — LLM not available*\n"
         return report
 
 

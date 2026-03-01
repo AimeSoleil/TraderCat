@@ -130,7 +130,7 @@ function PlanDetailContent({ plan }: { plan: SymbolExecutionPlanResponse }) {
           <span className="text-base font-bold tracking-tight">{plan.symbol}</span>
           {plan.verdict && (
             <Badge
-              variant={plan.verdict === "go" ? "default" : "secondary"}
+              variant={plan.verdict === "buy" ? "default" : plan.verdict === "sell" ? "destructive" : "secondary"}
               className="text-[0.65rem] px-1.5 py-px"
             >
               {plan.verdict.toUpperCase()}
@@ -200,7 +200,7 @@ function PlansTab({
             <div className="flex items-center gap-2">
               {p.verdict && (
                 <Badge
-                  variant={p.verdict === "go" ? "default" : "secondary"}
+                  variant={p.verdict === "buy" ? "default" : p.verdict === "sell" ? "destructive" : "secondary"}
                   className="text-xs"
                 >
                   {p.verdict.toUpperCase()}
@@ -238,7 +238,7 @@ function PlansTab({
               <TableCell>
                 {p.verdict ? (
                   <Badge
-                    variant={p.verdict === "go" ? "default" : "secondary"}
+                    variant={p.verdict === "buy" ? "default" : p.verdict === "sell" ? "destructive" : "secondary"}
                     className="text-xs"
                   >
                     {p.verdict.toUpperCase()}

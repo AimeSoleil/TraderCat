@@ -36,19 +36,22 @@ class SummarizerRole(AIRole):
         self.identity = identity
         self.model_id = model_id
         self.api_key = api_key
+        self._system_prompt_cache: Optional[str] = None
     
     @property
     def role_type(self) -> RoleType:
         return RoleType.SUMMARY
     
     def _compose_system_prompt(self) -> str:
-        """Compose Identity prompt + Summary instructions."""
-        identity_prompt = self.identity.get_system_prompt()
-        return f"""{identity_prompt}
+        """Compose Identity prompt + Summary instructions (cached)."""
+        if self._system_prompt_cache is None:
+            identity_prompt = self.identity.get_system_prompt()
+            self._system_prompt_cache = f"""{identity_prompt}
 
 ---
 
 {SUMMARY_SYSTEM}"""
+        return self._system_prompt_cache
     
     async def summarize(
         self,
@@ -83,11 +86,14 @@ class SummarizerRole(AIRole):
         logger.info(f"Summarizer: Generating portfolio summary for {run_date} "
                      f"({len(symbol_reports)} symbols, identity={self.identity.identity_key})")
         
+        from tradercat.config import settings
+
         content = await self.llm.generate_thought(
             prompt=user_prompt,
             model_id=self.model_id,
             system_prompt=system_prompt,
             api_key=self.api_key,
+            max_tokens=settings.llm_max_tokens_p4,
         )
         
         return RoleOutput(

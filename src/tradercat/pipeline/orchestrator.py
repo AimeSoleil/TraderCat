@@ -43,8 +43,8 @@ from tradercat.pipeline.execution_plan_worker import generate_execution_plans_p3
 from tradercat.pipeline.briefing_worker import (
     generate_user_briefings_p4,
     compress_regime_for_briefing,
-    compress_plan_for_briefing,
 )
+from tradercat.ai.roles.options_strategist import format_p4_card
 from tradercat.pipeline.holidays import is_market_day
 
 logger = get_logger(__name__)
@@ -55,7 +55,6 @@ class PipelineOrchestrator:
 
     def __init__(self):
         self.max_concurrency = settings.pipeline_max_concurrency
-        self.batch_size = settings.pipeline_report_batch_size
 
     async def run_pipeline(
         self, run_date: date | None = None, *, force: bool = False
@@ -364,14 +363,16 @@ class PipelineOrchestrator:
                 pipeline_run_id=pipeline_run.id,
                 global_symbols=global_symbols,
                 regime_context_md=regime_context_md,
-                batch_size=self.batch_size,
                 max_concurrency=self.max_concurrency,
                 api_key=llm_api_key,
             )
 
             # Upsert execution plans
             symbol_plans_md: Dict[str, str] = {}
+            symbol_plans_data: Dict[str, Dict] = {}  # T3: structured data for P4
             for plan_data in exec_plan_records:
+                # structured_data is in-memory only — strip before DB insert
+                structured = plan_data.pop("structured_data", None)
                 stmt = pg_insert(SymbolExecutionPlan).values(**plan_data)
                 stmt = stmt.on_conflict_do_update(
                     constraint="uq_exec_plan_run_date_symbol",
@@ -389,9 +390,11 @@ class PipelineOrchestrator:
                 await db.execute(stmt)
                 if plan_data.get("symbol"):
                     symbol_plans_md[plan_data["symbol"]] = plan_data["content_md"]
+                    if structured:
+                        symbol_plans_data[plan_data["symbol"]] = structured
 
             await db.commit()
-            logger.info(f"P3 DONE: {len(symbol_plans_md)} execution plans saved")
+            logger.info(f"P3 DONE: {len(symbol_plans_md)} execution plans saved ({len(symbol_plans_data)} with structured data)")
 
             # =============================================
             # PHASE 4 (P4): User Briefings
@@ -426,11 +429,11 @@ class PipelineOrchestrator:
                     logger.info(f"P4: Skipping user {user.username} — empty watchlist")
                     continue
 
-                # Filter and compress symbol plans for this user's watchlist
+                # Build compressed symbol plans for this user's watchlist
                 user_symbol_plans = {}
                 for sym in user_symbols:
-                    if sym in symbol_plans_md:
-                        user_symbol_plans[sym] = compress_plan_for_briefing(symbol_plans_md[sym])
+                    if sym in symbol_plans_data:
+                        user_symbol_plans[sym] = format_p4_card(symbol_plans_data[sym])
 
                 user_tasks.append({
                     "user_id": user.id,

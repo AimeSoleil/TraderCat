@@ -2,13 +2,13 @@
 
 P4 generates personalized portfolio briefings per user by:
 1. Loading compressed regime context from P2 (regime label + score + filters)
-2. Loading execution plans for the user's watchlist from P3
+2. Loading structured P3 trade cards for the user's watchlist
 3. Using SummarizerRole with a FIXED summarizer identity
 
 Token optimization:
   - Regime context is compressed (label + score + Section 4 filters only)
-  - Per-symbol plans are summarized: only Signal Assessment + Execution Plan
-    sections are sent (full gate analysis is stripped)
+  - Per-symbol plans are pre-formatted as ultra-compact trade cards (~200-300 chars)
+    from structured P3 JSON via format_p4_card() in options_strategist
 """
 import asyncio
 import json
@@ -66,60 +66,6 @@ def compress_regime_for_briefing(regime_md: str, regime_label: str | None = None
         parts.append(regime_md[:800])
 
     return "\n".join(parts)
-
-
-def compress_plan_for_briefing(plan_md: str) -> str:
-    """
-    Compress a P3 execution plan for P4 input.
-    Keeps: ## header, Signal Assessment, Execution Plan sections.
-    Strips: verbose gate-by-gate technical analysis, full Technical Summary.
-    """
-    if not plan_md:
-        return ""
-
-    lines = plan_md.split("\n")
-    output_lines: List[str] = []
-    keep = True  # Start keeping (## SYMBOL header)
-    in_wanted_section = False
-
-    wanted_sections = {
-        "signal assessment",
-        "execution plan",
-        "roi",
-    }
-    skip_sections = {
-        "technical summary",
-    }
-
-    for line in lines:
-        stripped = line.strip().lower()
-
-        # Detect section headers (### level)
-        if stripped.startswith("### "):
-            section_name = stripped.lstrip("#").strip()
-            if any(w in section_name for w in wanted_sections):
-                in_wanted_section = True
-                keep = True
-            elif any(s in section_name for s in skip_sections):
-                in_wanted_section = False
-                keep = False
-            else:
-                # Other ### sections: keep briefly
-                in_wanted_section = False
-                keep = True
-
-        # Always keep ## headers (symbol name)
-        if stripped.startswith("## "):
-            keep = True
-
-        if keep:
-            output_lines.append(line)
-
-    result = "\n".join(output_lines).strip()
-    # Ensure we return something reasonable
-    if len(result) < 50:
-        return plan_md[:2000]
-    return result
 
 
 class UserBriefingWorker:

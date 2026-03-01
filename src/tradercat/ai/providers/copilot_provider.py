@@ -12,7 +12,9 @@ at runtime to discover the actual set, or rely on the hard-coded fallback list.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
+import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from tradercat.ai.llm_provider_factory import LLMFactory
@@ -49,6 +51,12 @@ class CopilotProvider(LLMProvider):
 
     # Timeout (seconds) for a single send_and_wait call.
     REQUEST_TIMEOUT = 300.0
+
+    # Session cache TTL (seconds) — discard cached sessions older than this.
+    SESSION_CACHE_TTL = 600.0  # 10 minutes
+
+    # Max cached sessions to prevent unbounded growth.
+    SESSION_CACHE_MAX = 10
 
     # Fallback catalogue when the CLI is not reachable at import time.
     KNOWN_MODELS = [
@@ -92,6 +100,11 @@ class CopilotProvider(LLMProvider):
         self._client_lock: asyncio.Lock | None = None
         self._github_token: str | None = os.environ.get("GITHUB_TOKEN")
 
+        # T3c: Session cache — keyed by (model_id, hash(system_prompt))
+        # Reuses sessions within the same pipeline run to avoid per-call overhead.
+        self._session_cache: Dict[str, Any] = {}  # key → (session, created_at)
+        self._session_cache_lock: asyncio.Lock | None = None
+
         logger.info("Copilot SDK provider registered (client starts lazily)")
 
     # ------------------------------------------------------------------
@@ -114,28 +127,27 @@ class CopilotProvider(LLMProvider):
         max_tokens: int = 16384,
         api_key: Optional[str] = None,
     ) -> str:
-        """Single-shot generation via the Copilot SDK."""
+        """Single-shot generation via the Copilot SDK.
+
+        T3c: Reuses cached sessions when the same (model_id, system_prompt)
+        is requested again (common in P3a/P3b batched pipeline calls).
+        """
         if not self._available:
             return "Error: copilot-sdk not installed"
 
         client = await self._ensure_client(api_key)
 
-        session_config: Dict = {
-            "model": model_id,
-            "infinite_sessions": {"enabled": False},
-        }
-        if system_prompt:
-            session_config["system_message"] = {"content": system_prompt}
+        cache_key = self._session_cache_key(model_id, system_prompt)
+        session = await self._get_or_create_session(client, cache_key, model_id, system_prompt)
 
-        session = await client.create_session(session_config)
         try:
             reply = await session.send_and_wait({"prompt": prompt}, timeout=self.REQUEST_TIMEOUT)
             return reply.data.content if (reply and reply.data) else ""
         except Exception as e:
             logger.error("Copilot SDK generation error (model=%s): %s", model_id, e)
+            # Evict failed session from cache
+            await self._evict_session(cache_key)
             raise
-        finally:
-            await self._destroy_session_safe(session)
 
     async def chat(
         self,
@@ -186,6 +198,77 @@ class CopilotProvider(LLMProvider):
             raise
         finally:
             await self._destroy_session_safe(session)
+
+    # ------------------------------------------------------------------
+    # Session cache (T3c)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _session_cache_key(model_id: str, system_prompt: str | None) -> str:
+        """Build a cache key from model + hash of system prompt."""
+        sp_hash = hashlib.md5((system_prompt or "").encode()).hexdigest()[:12]
+        return f"{model_id}:{sp_hash}"
+
+    async def _get_or_create_session(self, client, cache_key: str, model_id: str, system_prompt: str | None):
+        """Return a cached session or create a new one."""
+        if self._session_cache_lock is None:
+            self._session_cache_lock = asyncio.Lock()
+
+        async with self._session_cache_lock:
+            # Check cache
+            if cache_key in self._session_cache:
+                session, created_at = self._session_cache[cache_key]
+                if time.monotonic() - created_at < self.SESSION_CACHE_TTL:
+                    logger.debug("T3c: Session cache HIT for %s", cache_key)
+                    return session
+                else:
+                    # Expired — destroy and recreate
+                    logger.debug("T3c: Session cache EXPIRED for %s", cache_key)
+                    await self._destroy_session_safe(session)
+                    del self._session_cache[cache_key]
+
+            # Evict oldest if at capacity
+            if len(self._session_cache) >= self.SESSION_CACHE_MAX:
+                oldest_key = min(self._session_cache, key=lambda k: self._session_cache[k][1])
+                old_session, _ = self._session_cache.pop(oldest_key)
+                await self._destroy_session_safe(old_session)
+                logger.debug("T3c: Evicted oldest session %s", oldest_key)
+
+            # Create new session
+            session_config: Dict = {
+                "model": model_id,
+                "infinite_sessions": {"enabled": True},
+            }
+            if system_prompt:
+                session_config["system_message"] = {"content": system_prompt}
+
+            session = await client.create_session(session_config)
+            self._session_cache[cache_key] = (session, time.monotonic())
+            logger.debug("T3c: Session cache MISS — created new session for %s", cache_key)
+            return session
+
+    async def _evict_session(self, cache_key: str) -> None:
+        """Remove and destroy a session from the cache."""
+        if self._session_cache_lock is None:
+            return
+        async with self._session_cache_lock:
+            entry = self._session_cache.pop(cache_key, None)
+            if entry:
+                await self._destroy_session_safe(entry[0])
+                logger.debug("T3c: Evicted failed session %s", cache_key)
+
+    async def destroy_session_cache(self) -> None:
+        """Tear down all cached sessions. Call at end of pipeline run."""
+        if not self._session_cache:
+            return
+        if self._session_cache_lock is None:
+            self._session_cache_lock = asyncio.Lock()
+        async with self._session_cache_lock:
+            for key, (session, _) in list(self._session_cache.items()):
+                await self._destroy_session_safe(session)
+            count = len(self._session_cache)
+            self._session_cache.clear()
+            logger.info("T3c: Destroyed %d cached sessions", count)
 
     # ------------------------------------------------------------------
     # Internal helpers

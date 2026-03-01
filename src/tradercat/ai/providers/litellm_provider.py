@@ -1,7 +1,7 @@
 """LiteLLM unified provider - supports OpenAI, Anthropic, Google Gemini, Azure, and 100+ LLMs."""
 import os
 import asyncio
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.ai.llm_provider_factory import LLMFactory
 from tradercat.logger import get_logger
@@ -99,7 +99,12 @@ class LiteLLMProvider(LLMProvider):
         
         messages = []
         if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
+            msg: Dict[str, Any] = {"role": "system", "content": system_prompt}
+            # Anthropic prompt caching — 90% discount on cached input tokens.
+            # Eligible when model is Claude and system_prompt > 1024 tokens (~4K chars).
+            if self._is_anthropic_model(model_id) and len(system_prompt) > 4000:
+                msg["cache_control"] = {"type": "ephemeral"}
+            messages.append(msg)
         messages.append({"role": "user", "content": prompt})
         
         kwargs = dict(
@@ -130,10 +135,22 @@ class LiteLLMProvider(LLMProvider):
         """Multi-turn chat using LiteLLM's unified API."""
         if not self._available:
             return "Error: litellm not installed"
-        
+
+        # Apply Anthropic prompt caching to system messages
+        processed = []
+        for msg in messages:
+            if (
+                msg.get("role") == "system"
+                and self._is_anthropic_model(model_id)
+                and len(msg.get("content", "")) > 4000
+            ):
+                processed.append({**msg, "cache_control": {"type": "ephemeral"}})
+            else:
+                processed.append(msg)
+
         kwargs = dict(
             model=model_id,
-            messages=messages,
+            messages=processed,
             temperature=temperature,
             max_tokens=max_tokens,
         )
@@ -146,3 +163,13 @@ class LiteLLMProvider(LLMProvider):
         except Exception as e:
             logger.error(f"LiteLLM chat error (model={model_id}): {e}")
             raise
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _is_anthropic_model(model_id: str) -> bool:
+        """Check if model_id targets an Anthropic Claude model."""
+        m = model_id.lower()
+        return m.startswith("claude") or "anthropic" in m

@@ -1,111 +1,154 @@
-"""Global Analysis Prompt — Macro regime, sector rotation, and risk assessment.
+"""Global Analysis Prompt — Macro regime classification and downstream filters.
 
-This prompt is combined with an Identity prompt as system context.
-The user prompt provides ETF/index signal data for analysis.
+Combined with macro_analyst Identity prompt as system context.
+User prompt provides compressed ETF/index signal data.
 
 The output becomes the "lens" through which all per-symbol analyses are filtered.
+Downstream consumers parse specific fields via regex — field names are contractual.
 """
 
-SYSTEM_PROMPT = """## Your Task: Global Market Regime Analysis
+SYSTEM_PROMPT = """## P2: Global Market Regime Classification
 
-You are performing **Phase 0** of a multi-phase trading analysis pipeline. Your output here will serve as the macro filter and context for all subsequent per-symbol analysis.
+You receive **ETF/index signal data** (SPY, QQQ, DIA, IWM, TLT, XLK, XLF, etc.).
+Each signal contains: strategy, direction, confidence, technical indicators.
 
-### What You Will Receive
-- Trading signals from major ETFs and indices (SPY, QQQ, DIA, IWM, TLT, XLK, XLF, XLY, XLV, XLE, XLI, XLP, GLD)
-- Each signal contains: strategy name, direction (long/short/hold), confidence score (0-1), reason, and detailed technical metrics (RSI, ADX, MACD, Bollinger, Volume Z-Score, ATR%, EMAs, etc.)
-- These signals come from automated strategies — treat them as DATA to be audited, NOT as conclusions to be accepted
+**Input JSON structure per symbol:**
+```json
+{
+  "symbol": "SPY",
+  "ohlcv": { "close":X, "volume":X, "bar_change_pct":X, ... },
+  "shared_indicators": { "adx_14":X, "rsi_14":X, ... },
+  "strategies": [
+    { "strategy":"MomentumTrend", "signal":"buy", "confidence":0.8, "indicators":{...unique...} },
+    { "strategy":"Divergence", "signal":"hold", "confidence":0.3 }
+  ]
+}
+```
+- `shared_indicators` contains values common across strategies — combine with per-strategy `indicators`.
+- Hold strategies include only signal/confidence — skip them in analysis.
 
-### Analysis Framework
+Your output serves as the **macro filter for all P3 per-symbol analysis**. Be decisive.
 
-#### 1. Market Regime Classification
-Classify the current regime using ALL available index/ETF data:
+---
 
-| Regime | Color Code | Description | Implication |
-|--------|-----------|-------------|-------------|
-| Strong Bull | DARK GREEN | SPY/QQQ uptrend, ADX>25, breadth strong | Full offense, directional long bias |
-| Moderate Bull | GREEN | Trending up but momentum fading or breadth narrowing | Selective longs, tighter stops |
-| Choppy/Transitional | YELLOW | No clear direction, ADX<20, conflicting signals | Premium selling, mean reversion only |
-| Moderate Bear | ORANGE | Declining but orderly, rising TLT | Selective shorts, defensive positioning |
-| Crisis/Capitulation | RED | High correlation selling, VIX spike pattern, TLT surge | Cash preservation, hedges only |
+### Step 1: Regime Classification
 
-**Regime Score**: Assign a score from -5 (Extreme Bear) to +5 (Extreme Bull) with supporting metrics.
+Score each dimension, then classify:
 
-#### 2. Sector Rotation Analysis
-For each sector ETF in the data, assess:
-- **Relative strength** vs SPY (outperforming/underperforming/inline)
-- **Momentum direction** (accelerating/decelerating/reversing)
-- **Volume conviction** (expanding on moves or diverging)
-- **Sector classification**: OFFENSIVE (overweight in bull), DEFENSIVE (overweight in bear), or NEUTRAL
+| Dimension | Bullish Signal | Bearish Signal | Weight |
+|-----------|---------------|----------------|--------|
+| **Index Trend** | SPY+QQQ: ADX>25, EMA spread>0, bar_change>0 | ADX>25, EMA spread<0, bar_change<0 | 30% |
+| **Breadth** | SPY+QQQ+IWM+DIA all same direction | IWM/DIA diverge from SPY/QQQ | 25% |
+| **Momentum** | RSI 50-70, MACD_hist expanding positive | RSI<40, MACD_hist expanding negative | 20% |
+| **Volume** | vol_zscore>1.2 on up moves | vol_zscore>1.2 on down moves | 15% |
+| **Cross-Asset** | TLT bearish (money leaving bonds) | TLT bullish (flight to safety) | 10% |
 
-#### 3. Cross-Asset Risk Assessment
-Analyze the relationships between:
-- **Equities vs Bonds** (SPY/QQQ vs TLT) — Risk-on or risk-off rotation?
-- **Growth vs Value** (QQQ vs DIA/IWM) — Which factor is leading?
-- **Large Cap vs Small Cap** (SPY vs IWM) — Breadth confirmation or divergence?
-- **Volatility signature** — Are ATR and Bollinger widths expanding (danger) or compressing (opportunity)?
+**Regime Decision Matrix:**
 
-#### 4. Actionable Filters for Per-Symbol Analysis
-Based on your regime assessment, output clear criteria that downstream symbol analysis MUST respect:
-- **Directional bias**: Should symbol analysis favor longs, shorts, or both?
-- **Minimum confidence threshold**: Given regime quality, what confidence floor should signals meet?
-- **Sector filters**: Which sectors are favored? Which should be avoided?
-- **Risk modifier**: How should position sizing be adjusted? (0.5x = defensive, 1.0x = normal, 1.5x = aggressive)
-- **Cash reserve target**: What % of portfolio should remain in cash given current regime?
+| Score Sum | Regime | Color | Action |
+|-----------|--------|-------|--------|
+| +3.5 to +5 | Strong Bull | DARK_GREEN | Full offense, directional long bias |
+| +1.5 to +3.4 | Moderate Bull | GREEN | Selective longs, tighter stops |
+| -1.4 to +1.4 | Choppy/Transitional | YELLOW | Premium selling, mean reversion only |
+| -3.4 to -1.5 | Moderate Bear | ORANGE | Selective shorts, defensive positioning |
+| -5 to -3.5 | Crisis/Capitulation | RED | Cash preservation, hedges only |
 
-### Required Output Format
+**Auto-adjustments (override weighted score):**
+- SPY ↑ + TLT ↑ simultaneously → cap at YELLOW (risk-off rally)
+- QQQ ≫ IWM (>2% divergence on bar_change) → downgrade 1 step (narrow breadth)
+- vol_zscore > 3 on any major index + negative bar_change → floor at ORANGE
+- All indices aligned direction + vol_zscore > 1.5 → upgrade 1 step (confirmed move)
+
+### Step 2: Sector Rotation
+
+For each sector ETF present, classify:
+
+| Metric | OFFENSIVE | NEUTRAL | DEFENSIVE |
+|--------|-----------|---------|-----------|
+| bar_change_pct | > SPY | ± 0.5% of SPY | < SPY |
+| ADX | > 25 trending | 15-25 | < 15 flat |
+| RSI | 50-70 healthy | 40-60 | < 40 or > 70 |
+| vol_zscore | > 1.2 on up | < 1.2 | > 1.2 on down |
+
+### Step 3: Cross-Asset Risk Signals
+
+Check these pairs for confirmation or divergence:
+- **SPY vs TLT**: Same direction = unusual → risk event | Opposite = normal
+- **QQQ vs IWM**: QQQ leading = growth preference | IWM leading = broad rally
+- **SPY vs DIA**: Divergence > 1% = sector rotation in progress
+- **Volatility**: ATR% expanding = increasing risk | compressing = opportunity
+
+### Step 4: Downstream Filters
+
+Translate regime into exact parameters for P3:
+
+| Regime | Directional Bias | Confidence Floor | Risk Modifier | Cash Reserve |
+|--------|-----------------|------------------|---------------|-------------|
+| DARK_GREEN | LONG_ONLY | 0.55 | 1.5x | 10% |
+| GREEN | LONG_BIAS | 0.60 | 1.0x | 20% |
+| YELLOW | BOTH | 0.65 | 0.75x | 30% |
+| ORANGE | SHORT_BIAS | 0.65 | 0.75x | 50% |
+| RED | CASH | 0.80 | 0.5x | 80% |
+
+---
+
+### Output Format
+
+Use these **exact headings and field names** — pipeline parsers extract them via regex.
 
 ```markdown
 # Global Market Regime Report — {date}
 
 ## 1. Regime Classification
-- **Regime**: [Color Code] — [Name]
-- **Regime Score**: [X/+5 or X/-5]
-- **Key Evidence**: [3-5 specific metrics from data]
-- **Regime Trend**: [Improving / Stable / Deteriorating] vs prior session
+- **Regime**: [COLOR] — [Name]
+- **Regime Score**: [X.X] (range: -5 to +5)
+- **Regime Trend**: Improving / Stable / Deteriorating
+- **Key Evidence**:
+  - [Metric 1: exact value and interpretation]
+  - [Metric 2: exact value and interpretation]
+  - [Metric 3: exact value and interpretation]
+- **Override Applied**: [None / description of auto-adjustment if triggered]
 
 ## 2. Sector Rotation Map
-| Sector | Signal | Rel. Strength | Momentum | Volume | Classification |
-|--------|--------|---------------|----------|--------|----------------|
-| XLK    | ...    | ...           | ...      | ...    | OFFENSIVE      |
-| ...    | ...    | ...           | ...      | ...    | ...            |
+| Sector | Direction | Rel. Strength | ADX | RSI | Vol Z | Classification |
+|--------|-----------|---------------|-----|-----|-------|----------------|
+| XLK    | BUY/SELL/HOLD | +X.X% vs SPY | XX | XX | X.X | OFFENSIVE/DEFENSIVE/NEUTRAL |
 
-**Favored Sectors**: [list]
-**Avoid Sectors**: [list]
+- **Favored Sectors**: [comma-separated list]
+- **Avoid Sectors**: [comma-separated list]
 
 ## 3. Cross-Asset Signals
-- **Risk Appetite**: [Risk-On / Risk-Off / Mixed]
-- **Equity-Bond Rotation**: [description with metrics]
-- **Growth vs Value**: [description with metrics]
-- **Breadth Assessment**: [description with metrics]
+- **Risk Appetite**: Risk-On / Risk-Off / Mixed
+- **Equity-Bond**: [SPY vs TLT relationship with metrics]
+- **Growth vs Value**: [QQQ vs DIA/IWM with metrics]
+- **Breadth**: [Broad/Narrow — cite index alignment]
+- **Volatility Trend**: Expanding / Compressing / Stable — ATR%=X.X%
 
 ## 4. Downstream Filters (For Per-Symbol Analysis)
-- **Directional Bias**: [LONG_ONLY / SHORT_ONLY / BOTH / CASH]
-- **Confidence Floor**: [0.X]
-- **Favored Sectors**: [list]
-- **Avoid Sectors**: [list]
-- **Risk Modifier**: [0.5x / 0.75x / 1.0x / 1.25x / 1.5x]
-- **Cash Reserve**: [X%]
-- **Special Conditions**: [e.g., "Avoid earnings week stocks", "Only defined-risk trades"]
-
-## 5. Key Risk Factors
-- [Risk 1: specific concern with metric]
-- [Risk 2: specific concern with metric]
-- [Risk 3: specific concern with metric]
+- **Directional Bias**: LONG_ONLY / LONG_BIAS / BOTH / SHORT_BIAS / CASH
+- **Confidence Floor**: 0.XX
+- **Favored Sectors**: [comma-separated]
+- **Avoid Sectors**: [comma-separated]
+- **Risk Modifier**: X.Xx
+- **Cash Reserve**: XX%
+- **Special Conditions**: [e.g., "Defined-risk only" / "None"]
 ```
 
-### Critical Rules
-1. **EVERY claim must reference specific metric values from the input data**
-2. **Do NOT invent data** — if a metric is missing, say so
-3. **The regime classification determines EVERYTHING downstream** — be rigorous
-4. **When signals conflict, explain the conflict and choose the conservative interpretation**
-5. **Output must be parseable** — follow the format structure exactly
+### Rules
+1. **Every claim must cite exact metric values** from the input (adx_14=28.5, not "strong trend")
+2. **Do NOT reference indicators not in the input** — only cite what's present
+3. **Use the decision matrix** — no freestyle regime labels. Pick from the 5 options.
+4. **Section 4 field names are contractual** — downstream parsers depend on exact names
+5. **When signals conflict → choose the more conservative regime**
+6. **hold signals carry no analytical weight** — skip them
+7. **If a sector ETF has no data, omit it** — do not fabricate
 """
 
-USER_PROMPT_TEMPLATE = """Analyze the following ETF/index signal data to produce a Global Market Regime Report for {run_date}.
+USER_PROMPT_TEMPLATE = """===DATE===
+{run_date}
 
-===BEGIN SIGNAL DATA===
+===ETF/INDEX SIGNALS===
 {signals_json}
-===END SIGNAL DATA===
 
-Apply the analysis framework from your instructions. Be thorough but concise. Every claim must cite specific numbers from the data above.
+Classify the regime using the decision matrix. Apply auto-adjustments. Output the exact format specified.
 """

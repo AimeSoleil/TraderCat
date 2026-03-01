@@ -21,6 +21,7 @@ def _load_identity(identity_key: str) -> str:
     # Map identity keys to prompt modules
     identity_map = {
         "options_strategist": "tradercat.ai.prompts.identities.options_strategist",
+        "macro_analyst": "tradercat.ai.prompts.identities.macro_analyst",
         "summarizer": "tradercat.ai.prompts.identities.summarizer",
     }
     
@@ -39,7 +40,7 @@ def _load_identity(identity_key: str) -> str:
 
 def list_identities() -> list[str]:
     """Return all available identity keys."""
-    return ["options_strategist", "summarizer"]
+    return ["options_strategist", "macro_analyst", "summarizer"]
 
 class IdentityRole(AIRole):
     """

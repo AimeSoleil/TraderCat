@@ -65,12 +65,20 @@ Public endpoints: `/`, `/api/admin/system/health`, `/api/v1/auth/login`
     pipeline_schedule_hour: int = Field(default=20, description="Hour to run pipeline (24h format)")
     pipeline_timezone: str = Field(default="America/New_York", description="Timezone for pipeline schedule")
     pipeline_max_concurrency: int = Field(default=5, description="Max concurrent workers")
-    pipeline_report_batch_size: int = Field(default=5, description="Number of symbols per LLM batch in P3")
+    pipeline_audit_batch_size: int = Field(default=20, description="P3a: symbols per gate audit batch")
+    pipeline_exec_batch_size: int = Field(default=3, description="P3b: symbols per execution plan batch")
     pipeline_llm_max_retries: int = Field(default=1, description="Max retries for LLM calls before skipping")
     
     # AI/LLM
     default_llm_model: str = Field(default="claude-opus-4.6", description="Default LLM model")
     default_llm_provider: str = Field(default="copilot", description="Default LLM provider (litellm, copilot, copilot-azure, mock)")
+
+    # Per-phase max_tokens caps (output tokens).  Sized to expected output:
+    #   P2 regime ~2-3K tokens, P3a verdict ~50 tokens/sym, P3b exec ~600 tokens/sym, P4 report ~4-6K tokens.
+    llm_max_tokens_p2: int = Field(default=4096, description="Max output tokens for P2 regime analysis")
+    llm_max_tokens_p3a: int = Field(default=2048, description="Max output tokens for P3a gate audit batch")
+    llm_max_tokens_p3b: int = Field(default=4096, description="Max output tokens for P3b execution plan batch")
+    llm_max_tokens_p4: int = Field(default=8192, description="Max output tokens for P4 portfolio briefing")
     
     # Limits
     default_max_symbols_per_user: int = Field(default=50, description="Default max symbols per user")
