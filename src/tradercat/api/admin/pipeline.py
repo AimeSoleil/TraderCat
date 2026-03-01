@@ -61,8 +61,17 @@ async def trigger_pipeline(
     """
     from datetime import datetime
     from tradercat.pipeline.orchestrator import PipelineOrchestrator
+    from tradercat.pipeline.holidays import is_market_day
 
     target_date = run_date or datetime.utcnow().date()
+
+    # ── Guard: target date must be a market day ──
+    if not is_market_day(target_date):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{target_date} is not a market day (weekend or US market holiday). "
+                   "Please select a valid trading day.",
+        )
 
     # ── Guard: at least one active LLM token must exist ──
     token_result = await db.execute(

@@ -238,8 +238,8 @@ export default function AdminPipelinePage() {
             </Button>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Leave date empty to use today. Requires at least one active LLM
-            token.
+            Leave date empty to use today. Date must be a US market trading day
+            (no weekends or holidays). Requires at least one active LLM token.
           </p>
         </CardContent>
       </Card>
