@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/page-header";
-import { adminPipelineApi } from "@/lib/api-client";
+import { adminPipelineApi, ApiError } from "@/lib/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -196,7 +196,16 @@ export default function AdminPipelinePage() {
       toast.success(`Pipeline triggered for ${res.run_date}`);
       qc.invalidateQueries({ queryKey: ["admin", "pipeline-runs"] });
     },
-    onError: () => toast.error("Failed to trigger pipeline"),
+    onError: (err) => {
+      const detail =
+        err instanceof ApiError &&
+        typeof err.body === "object" &&
+        err.body !== null &&
+        "detail" in err.body
+          ? String((err.body as { detail: unknown }).detail)
+          : "Failed to trigger pipeline";
+      toast.error(detail);
+    },
   });
 
   const toggleExpand = (id: string) =>
