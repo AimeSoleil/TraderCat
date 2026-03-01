@@ -303,7 +303,12 @@ class CopilotProvider(LLMProvider):
             try:
                 models = await self._client.list_models()
                 if models:
-                    self.KNOWN_MODELS = [m.id for m in models]
+                    # SDK may return objects with .id or plain dicts with ["id"]
+                    self.KNOWN_MODELS = [
+                        m.id if hasattr(m, "id") else m["id"]
+                        for m in models
+                        if (hasattr(m, "id") and m.id) or (isinstance(m, dict) and m.get("id"))
+                    ]
                     logger.info(
                         "Copilot models refreshed from server: %s",
                         ", ".join(self.KNOWN_MODELS),

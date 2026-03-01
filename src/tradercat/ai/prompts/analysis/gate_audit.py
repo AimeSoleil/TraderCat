@@ -29,6 +29,17 @@ You receive a **batch of symbols** (up to 25). For each, run Gates 0→6 and out
 - Hold strategies: only signal/confidence — no further analysis.
 - `history`: prior day's data grouped by date.
 
+**Indicator naming convention:**
+All indicator keys include their calculation period as a suffix:
+- `adx_14` = ADX (14-period), `atr_14` = ATR (14-period), `atr_pct` or `atr_pct_14` = ATR%
+- `rsi_14` = RSI (14-period), `macd_hist_12_26_9` = MACD histogram (12/26/9)
+- `ema_fast_13` / `ema_slow_34` = EMA (13/34), `ema_fast_8` / `ema_slow_21` = EMA (8/21)
+- `bbu_20` / `bbl_20` / `bbm_20` / `pct_b_20` / `bandwidth_20` = Bollinger Bands (20-period)
+- `avg_volume_20` / `rel_volume_20` / `vol_zscore_20` = Volume metrics (20-day)
+- `ht_fast_8` / `ht_slow_21` = Higher timeframe EMAs (weekly)
+When the prompt says "ADX" it means `adx_14`, "ATR" means `atr_14`, "RSI" means `rsi_14`, etc.
+**Match keys as they appear in the data — do not require bare names without suffixes.**
+
 ---
 
 ### Audit Gates (Sequential — fail ANY = REJECT)
@@ -42,10 +53,10 @@ Compare today vs prior day:
 #### Gate 1: Data Quality
 | Check | PASS | FAIL → SKIP |
 |-------|------|-------------|
-| Volume metrics | rel_volume + vol_zscore present | Missing both |
-| ATR% viability | ≥ 0.8% | < 0.8% (dead money) |
+| Volume metrics | `rel_volume_20` + `vol_zscore_20` present | Missing both |
+| ATR% viability | `atr_pct` (or `atr_pct_14`) ≥ 0.8% | < 0.8% (dead money) |
 | Price sanity | close > 0, high ≥ low | Corrupted |
-| Critical fields | adx + atr + close present | ≥ 2 missing |
+| Critical fields | `adx_14` + `atr_14` + close present | ≥ 2 missing |
 
 #### Gate 2: Regime Alignment
 Direction must align with P2 regime bias + meet confidence floor from downstream filters.
@@ -62,8 +73,8 @@ FAIL = REJECT (right setup, wrong regime).
 | 15-20 | ❌ > 60% fail | ✅ IDEAL mean reversion |
 | < 15 | ❌ unless squeeze | ✅ Range-bound |
 
-**EMA:** price > ema_fast > ema_slow = bullish | reverse = bearish | between = transitional
-**Bollinger:** pct_b > 0.95 + vol_z > 2 = breakout | pct_b < 0.05 + RSI extreme = reversal | squeeze = pending
+**EMA:** price > `ema_fast` > `ema_slow` = bullish | reverse = bearish | between = transitional (key names: `ema_fast_13`/`ema_slow_34` or `ema_fast_8`/`ema_slow_21`)
+**Bollinger:** `pct_b_20` > 0.95 + `vol_zscore_20` > 2 = breakout | `pct_b_20` < 0.05 + RSI extreme = reversal | `squeeze`=true = pending
 
 #### Gate 4: Momentum
 
@@ -78,14 +89,14 @@ FAIL = REJECT (right setup, wrong regime).
 | 20-30 | ✅ Oversold + pattern | ❌ Exhaustion |
 | < 20 | ⚠️ Capitulation (ADX < 25 + vol_z > 2.5) | ❌ Too late |
 
-**Kill zones:** RSI < 25 + ADX > 40 → FALLING KNIFE | RSI > 80 + ADX > 40 → BLOW-OFF TOP
-**MACD hist:** expanding ✅ | contracting ⚠️ | sign change = crossover
-**Multi-TF:** D+HT agree = 100% | disagree = 50% sizing
+**Kill zones:** `rsi_14` < 25 + `adx_14` > 40 → FALLING KNIFE | `rsi_14` > 80 + `adx_14` > 40 → BLOW-OFF TOP
+**MACD hist:** `macd_hist_12_26_9` expanding ✅ | contracting ⚠️ | sign change = crossover
+**Multi-TF:** `daily_trend_up` + `ht_trend_up` agree = 100% | disagree = 50% sizing
 ≥ 2 momentum indicators must confirm same direction.
 
 #### Gate 5: Volume Conviction
 
-| vol_zscore | Classification | Action |
+| `vol_zscore_20` | Classification | Action |
 |------------|---------------|--------|
 | > 4.0 | Extreme | ⚠️ Spreads only |
 | 2.0-4.0 | Institutional | ✅ Confirmed |
@@ -106,13 +117,13 @@ FAIL = REJECT (right setup, wrong regime).
 
 ### Strategy-Specific Validation (after universal gates)
 
-**BollingerBreakout** — pct_b > 0.95 + vol_z > 2 + candle_conviction > 0.5 + ema_spread > 0. Reject: conviction < 0.3 | range_atr > 3 + vol_z > 4 (climax). Squeeze: wait release + vol_z > 2.
-**BBandsReversal** — pct_b < 0.1 + rsi < 35 + adx < 25 + vol_z > 1.2. Reject: adx > 35 | no rejection + rsi > 30.
-**CandlestickReversal** — Strong patterns: standard vol confirm. Weak (Doji, Harami): vol_z > 2 + RSI extreme. No pattern + RSI extreme + vol_z > 2 → 50% size, else REJECT.
-**ChartPatterns** — pattern + target + stop all valid. R:R ≥ 3 full | 2-3 trend_aligned full | 1.5-2 aligned 75% | < 1.5 ❌.
-**Divergence** — detected_divergence ≠ none. adx < 30 + vol_z > 1.2 + MACD aligning. Reject: adx > 40 (exception vol_z > 3.5 → 50%).
-**FibonacciRetracement** — impulse_direction must match. 0.382-0.618 ideal | 0.618-0.786 moderate | > 0.786 ❌.
-**MomentumTrend** — mom_score > +1 strong | +0.5-1 moderate | 0-0.5 weak (need adx > 25 + vol_z > 2) | negative REJECT.
+**BollingerBreakout** — `pct_b_20` > 0.95 + `vol_zscore_20` > 2 + `candle_conviction` > 0.5 + `ema_spread_pct` > 0. Reject: conviction < 0.3 | `candle_range_atr` > 3 + `vol_zscore_20` > 4 (climax). `squeeze`=true: wait release + `vol_zscore_20` > 2.
+**BBandsReversal** — `pct_b_20` < 0.1 + `rsi_14` < 35 + `adx_14` < 25 + `vol_zscore_20` > 1.2. Reject: `adx_14` > 35 | no `rejection_candle` + `rsi_14` > 30.
+**CandlestickReversal** — Strong patterns (`detected_pattern`): standard vol confirm. Weak (Doji, Harami): `vol_zscore_20` > 2 + RSI extreme. No pattern + RSI extreme + `vol_zscore_20` > 2 → 50% size, else REJECT.
+**ChartPatterns** — `pattern` + `target_price` + `stop_price` all valid. `reward_risk_ratio` ≥ 3 full | 2-3 `trend_aligned` full | 1.5-2 aligned 75% | < 1.5 ❌.
+**Divergence** — `detected_divergence` ≠ none. `adx_14` < 30 + `vol_zscore_20` > 1.2 + `macd_hist_12_26_9` aligning. Reject: `adx_14` > 40 (exception `vol_zscore_20` > 3.5 → 50%).
+**FibonacciRetracement** — `impulse_direction` must match. `in_fib_zone` 0.382-0.618 ideal | 0.618-0.786 moderate | > 0.786 ❌.
+**MomentumTrend** — `mom_score_risk_adj` > +1 strong | +0.5-1 moderate | 0-0.5 weak (need `adx_14` > 25 + `vol_zscore_20` > 2) | negative REJECT.
 
 ### Confluence
 - 2+ strategies same direction → +1 tier

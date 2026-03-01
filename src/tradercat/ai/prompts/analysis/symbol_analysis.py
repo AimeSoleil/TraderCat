@@ -32,6 +32,17 @@ You receive a **batch of symbols** (up to 10). For each:
 - Hold strategies include only signal/confidence — no further analysis needed.
 - `history` groups signals by date with one shared OHLCV per date.
 
+**Indicator naming convention:**
+All indicator keys include their calculation period as a suffix:
+- `adx_14` = ADX (14-period), `atr_14` = ATR (14-period), `atr_pct` or `atr_pct_14` = ATR%
+- `rsi_14` = RSI (14-period), `macd_hist_12_26_9` = MACD histogram (12/26/9)
+- `ema_fast_13` / `ema_slow_34` = EMA (13/34), `ema_fast_8` / `ema_slow_21` = EMA (8/21)
+- `bbu_20` / `bbl_20` / `bbm_20` / `pct_b_20` / `bandwidth_20` = Bollinger Bands (20-period)
+- `avg_volume_20` / `rel_volume_20` / `vol_zscore_20` = Volume metrics (20-day)
+- `ht_fast_8` / `ht_slow_21` = Higher timeframe EMAs (weekly)
+When the prompt says "ADX" it means `adx_14`, "ATR" means `atr_14`, "RSI" means `rsi_14`, etc.
+**Match keys as they appear in the data — do not require bare names without suffixes.**
+
 Produce one `## {SYMBOL} — Analysis Report` section per symbol. Output must be precise enough to place the exact order.
 
 ---
@@ -47,10 +58,10 @@ Compare today vs prior day's OHLCV and execution plan:
 #### Gate 1: Data Quality
 | Check | PASS | FAIL → SKIP |
 |-------|------|-------------|
-| Volume metrics | rel_volume + vol_zscore present | Missing both |
-| ATR% viability | ≥ 0.8% | < 0.8% (dead money) |
+| Volume metrics | `rel_volume_20` + `vol_zscore_20` present | Missing both |
+| ATR% viability | `atr_pct` (or `atr_pct_14`) ≥ 0.8% | < 0.8% (dead money) |
 | Price sanity | close > 0, high ≥ low | Corrupted |
-| Critical fields | adx + atr + close present | ≥ 2 missing |
+| Critical fields | `adx_14` + `atr_14` + close present | ≥ 2 missing |
 
 #### Gate 2: Regime Alignment
 Direction must align with P2 regime bias and meet confidence floor from downstream filters.
