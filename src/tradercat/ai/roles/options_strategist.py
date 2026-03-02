@@ -537,6 +537,14 @@ class OptionsStrategistRole(AIRole):
         self.api_key = api_key
         self._gate_audit_cache: Optional[str] = None
         self._exec_plan_cache: Optional[str] = None
+        
+        # Enable progress logging on the LLM provider
+        AIRole.enable_llm_progress_logging(
+            llm,
+            role_name="OptionsStrategist",
+            identity=identity.identity_key,
+            phase="P3",
+        )
 
     @property
     def role_type(self) -> RoleType:

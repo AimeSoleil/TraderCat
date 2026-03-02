@@ -44,3 +44,34 @@ class AIRole(ABC):
     async def execute(self, **kwargs) -> RoleOutput:
         """Execute this role's function and return structured output."""
         ...
+    
+    @staticmethod
+    def enable_llm_progress_logging(
+        llm,
+        role_name: str,
+        identity: Optional[str] = None,
+        phase: Optional[str] = None,
+        progress_interval: float = 1.0,
+    ) -> None:
+        """
+        Enable real-time progress logging on an LLM provider instance.
+        
+        This is typically called during role initialization to configure
+        the LLM provider with role context for logging.
+        
+        Args:
+            llm: The LLM provider instance
+            role_name: Name of the role (e.g., "MacroAnalyst")
+            identity: Optional identity key (e.g., "macro_analyst")
+            phase: Optional pipeline phase (e.g., "P2", "P3a", "P3b")
+            progress_interval: Seconds between progress updates
+        """
+        from tradercat.config import settings
+        
+        llm.enable_progress_logging(
+            enabled=settings.llm_progress_logging_enabled,
+            progress_interval=settings.llm_progress_interval,
+            role_name=role_name,
+            identity=identity,
+            phase=phase,
+        )

@@ -4,6 +4,7 @@ import asyncio
 from typing import Any, List, Dict, Optional
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.ai.llm_provider_factory import LLMFactory
+from tradercat.ai.llm_progress_logger import llm_call_progress, estimate_tokens
 from tradercat.logger import get_logger
 
 try:
@@ -97,32 +98,58 @@ class LiteLLMProvider(LLMProvider):
         if not self._available:
             return "Error: litellm not installed"
         
-        messages = []
-        if system_prompt:
-            msg: Dict[str, Any] = {"role": "system", "content": system_prompt}
-            # Anthropic prompt caching — 90% discount on cached input tokens.
-            # Eligible when model is Claude and system_prompt > 1024 tokens (~4K chars).
-            if self._is_anthropic_model(model_id) and len(system_prompt) > 4000:
-                msg["cache_control"] = {"type": "ephemeral"}
-            messages.append(msg)
-        messages.append({"role": "user", "content": prompt})
-        
-        kwargs = dict(
-            model=model_id,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        if api_key:
-            kwargs["api_key"] = api_key
+        async with llm_call_progress(
+            role_name=self._role_name or "LiteLLM",
+            model_id=model_id,
+            system_prompt_length=len(system_prompt or ""),
+            user_prompt_length=len(prompt),
+            identity=self._identity,
+            phase=self._phase,
+            progress_interval=self._progress_interval,
+            enabled=self._progress_logging_enabled,
+        ) as result_dict:
+            messages = []
+            if system_prompt:
+                msg: Dict[str, Any] = {"role": "system", "content": system_prompt}
+                # Anthropic prompt caching — 90% discount on cached input tokens.
+                # Eligible when model is Claude and system_prompt > 1024 tokens (~4K chars).
+                if self._is_anthropic_model(model_id) and len(system_prompt) > 4000:
+                    msg["cache_control"] = {"type": "ephemeral"}
+                messages.append(msg)
+            messages.append({"role": "user", "content": prompt})
+            
+            kwargs = dict(
+                model=model_id,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            if api_key:
+                kwargs["api_key"] = api_key
 
-        try:
-            response = await litellm.acompletion(**kwargs)
-            content = response.choices[0].message.content
-            return content or ""
-        except Exception as e:
-            logger.error(f"LiteLLM generation error (model={model_id}): {e}")
-            raise
+            try:
+                response = await litellm.acompletion(**kwargs)
+                content = response.choices[0].message.content
+                result_dict["output_length"] = len(content or "")
+
+                # Extract token usage from LiteLLM response
+                usage = getattr(response, "usage", None)
+                if usage:
+                    result_dict["input_tokens"] = getattr(usage, "prompt_tokens", 0) or 0
+                    result_dict["output_tokens"] = getattr(usage, "completion_tokens", 0) or 0
+                    result_dict["total_tokens"] = getattr(usage, "total_tokens", 0) or 0
+                    result_dict["token_source"] = "api"
+                else:
+                    # Fallback: estimate from char lengths
+                    result_dict["input_tokens"] = estimate_tokens(system_prompt or "") + estimate_tokens(prompt)
+                    result_dict["output_tokens"] = estimate_tokens(content or "")
+                    result_dict["total_tokens"] = result_dict["input_tokens"] + result_dict["output_tokens"]
+                    result_dict["token_source"] = "estimated"
+
+                return content or ""
+            except Exception as e:
+                logger.error(f"LiteLLM generation error (model={model_id}): {e}")
+                raise
     
     async def chat(
         self,
@@ -136,33 +163,69 @@ class LiteLLMProvider(LLMProvider):
         if not self._available:
             return "Error: litellm not installed"
 
-        # Apply Anthropic prompt caching to system messages
-        processed = []
+        # Calculate prompt lengths
+        total_prompt_length = sum(len(str(msg.get("content", ""))) for msg in messages)
+        system_prompt_length = 0
         for msg in messages:
-            if (
-                msg.get("role") == "system"
-                and self._is_anthropic_model(model_id)
-                and len(msg.get("content", "")) > 4000
-            ):
-                processed.append({**msg, "cache_control": {"type": "ephemeral"}})
-            else:
-                processed.append(msg)
+            if msg.get("role") == "system":
+                system_prompt_length = len(msg.get("content", ""))
+                break
 
-        kwargs = dict(
-            model=model_id,
-            messages=processed,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        if api_key:
-            kwargs["api_key"] = api_key
+        async with llm_call_progress(
+            role_name=self._role_name or "LiteLLM",
+            model_id=model_id,
+            system_prompt_length=system_prompt_length,
+            user_prompt_length=total_prompt_length - system_prompt_length,
+            identity=self._identity,
+            phase=self._phase,
+            progress_interval=self._progress_interval,
+            enabled=self._progress_logging_enabled,
+        ) as result_dict:
+            # Apply Anthropic prompt caching to system messages
+            processed = []
+            for msg in messages:
+                if (
+                    msg.get("role") == "system"
+                    and self._is_anthropic_model(model_id)
+                    and len(msg.get("content", "")) > 4000
+                ):
+                    processed.append({**msg, "cache_control": {"type": "ephemeral"}})
+                else:
+                    processed.append(msg)
 
-        try:
-            response = await litellm.acompletion(**kwargs)
-            return response.choices[0].message.content
-        except Exception as e:
-            logger.error(f"LiteLLM chat error (model={model_id}): {e}")
-            raise
+            kwargs = dict(
+                model=model_id,
+                messages=processed,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            if api_key:
+                kwargs["api_key"] = api_key
+
+            try:
+                response = await litellm.acompletion(**kwargs)
+                content = response.choices[0].message.content
+                result_dict["output_length"] = len(content or "")
+
+                # Extract token usage from LiteLLM response
+                usage = getattr(response, "usage", None)
+                if usage:
+                    result_dict["input_tokens"] = getattr(usage, "prompt_tokens", 0) or 0
+                    result_dict["output_tokens"] = getattr(usage, "completion_tokens", 0) or 0
+                    result_dict["total_tokens"] = getattr(usage, "total_tokens", 0) or 0
+                    result_dict["token_source"] = "api"
+                else:
+                    # Fallback: estimate from char lengths
+                    input_text = "".join(m.get("content", "") for m in processed)
+                    result_dict["input_tokens"] = estimate_tokens(input_text)
+                    result_dict["output_tokens"] = estimate_tokens(content or "")
+                    result_dict["total_tokens"] = result_dict["input_tokens"] + result_dict["output_tokens"]
+                    result_dict["token_source"] = "estimated"
+
+                return content
+            except Exception as e:
+                logger.error(f"LiteLLM chat error (model={model_id}): {e}")
+                raise
 
     # ------------------------------------------------------------------
     # Internal helpers

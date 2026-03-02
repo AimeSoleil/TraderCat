@@ -37,6 +37,14 @@ class SummarizerRole(AIRole):
         self.model_id = model_id
         self.api_key = api_key
         self._system_prompt_cache: Optional[str] = None
+        
+        # Enable progress logging on the LLM provider
+        AIRole.enable_llm_progress_logging(
+            llm,
+            role_name="Summarizer",
+            identity=identity.identity_key,
+            phase="P4",
+        )
     
     @property
     def role_type(self) -> RoleType:

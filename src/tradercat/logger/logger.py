@@ -43,6 +43,38 @@ class JSONFormatter(logging.Formatter):
             log_entry["symbol"] = record.symbol
         if hasattr(record, "strategy"):
             log_entry["strategy"] = record.strategy
+        
+        # Add LLM-specific fields if present
+        if hasattr(record, "llm_event"):
+            log_entry["llm_event"] = record.llm_event
+        if hasattr(record, "role"):
+            log_entry["role"] = record.role
+        if hasattr(record, "model"):
+            log_entry["model"] = record.model
+        if hasattr(record, "elapsed_seconds"):
+            log_entry["elapsed_seconds"] = record.elapsed_seconds
+        if hasattr(record, "system_prompt_length"):
+            log_entry["system_prompt_length"] = record.system_prompt_length
+        if hasattr(record, "user_prompt_length"):
+            log_entry["user_prompt_length"] = record.user_prompt_length
+        if hasattr(record, "output_length"):
+            log_entry["output_length"] = record.output_length
+        if hasattr(record, "identity"):
+            log_entry["identity"] = record.identity
+        if hasattr(record, "phase"):
+            log_entry["phase"] = record.phase
+        if hasattr(record, "status"):
+            log_entry["status"] = record.status
+        
+        # Add token usage fields if present
+        if hasattr(record, "input_tokens"):
+            log_entry["input_tokens"] = record.input_tokens
+        if hasattr(record, "output_tokens"):
+            log_entry["output_tokens"] = record.output_tokens
+        if hasattr(record, "total_tokens"):
+            log_entry["total_tokens"] = record.total_tokens
+        if hasattr(record, "token_source"):
+            log_entry["token_source"] = record.token_source
             
         # Add exception info if present
         if record.exc_info:
@@ -160,3 +192,32 @@ def get_logger(name: str,
         logger.addHandler(fh)
 
     return logger
+
+
+def init_llm_logger(log_file: Optional[str] = None, use_json: bool = True) -> None:
+    """
+    Initialize the dedicated LLM call logger.
+    
+    This function sets up a separate logger for LLM-specific events with a file handler.
+    Should be called once during application initialization, typically from main or orchestrator.
+    
+    Args:
+        log_file: Path to LLM call log file (if None, uses default from config)
+        use_json: Whether to use JSON formatting for LLM logs
+    """
+    if log_file is None:
+        try:
+            from tradercat.config import settings as _settings
+            log_file = _settings.llm_progress_log_file
+        except Exception:
+            log_file = "logs/llm_calls.log"
+    
+    # Get the LLM logger with file handler
+    llm_logger = get_logger(
+        "tradercat.ai.llm_calls",
+        level=logging.INFO,
+        log_file=log_file,
+        use_json=use_json,
+        timed=True,
+        when="midnight"
+    )

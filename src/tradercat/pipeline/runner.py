@@ -29,7 +29,7 @@ import signal
 import sys
 from datetime import datetime
 
-from tradercat.logger import get_logger
+from tradercat.logger import get_logger, init_llm_logger
 from tradercat.config import settings
 from tradercat.pipeline.scheduler import get_scheduler
 
@@ -55,6 +55,13 @@ async def run_pipeline_worker():
     logger.info(f"Mode: {settings.run_mode}")
     logger.info(f"Schedule: {settings.pipeline_schedule_hour}:00 {settings.pipeline_timezone}")
     logger.info("=" * 80)
+    
+    # Initialize LLM progress logger
+    try:
+        init_llm_logger()
+        logger.info("LLM progress logger initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize LLM progress logger: {e}")
     
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from tradercat.ai.llm_provider_factory import LLMFactory
 from tradercat.ai.providers.llm_interface import LLMProvider
+from tradercat.ai.llm_progress_logger import llm_call_progress, StreamingAccumulator, estimate_tokens
 from tradercat.logger import get_logger
 
 if TYPE_CHECKING:
@@ -109,6 +110,72 @@ class CopilotProvider(LLMProvider):
         logger.info("Copilot SDK provider registered (client starts lazily)")
 
     # ------------------------------------------------------------------
+    # Streaming helper
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _is_streaming_enabled() -> bool:
+        """Check config to decide whether to use streaming mode."""
+        try:
+            from tradercat.config import settings
+            return settings.llm_streaming_enabled
+        except Exception:
+            return True
+
+    async def _send_streaming(
+        self,
+        session,
+        prompt: str,
+        accumulator: StreamingAccumulator,
+    ) -> str:
+        """Send a prompt and stream the response via SDK events.
+
+        Uses ``session.on(callback)`` + ``session.send()`` + ``asyncio.Event``
+        to receive incremental deltas and assemble the full content.
+
+        Falls back to the final ``assistant.message`` event content to guarantee
+        completeness even if deltas are somehow lost.
+        """
+        done = asyncio.Event()
+        final_content: Dict[str, str] = {"message": ""}
+
+        def on_event(event) -> None:
+            etype = event.type.value if hasattr(event.type, "value") else str(event.type)
+
+            if etype == "assistant.message_delta":
+                delta = getattr(event.data, "delta_content", None) or ""
+                accumulator.on_delta(delta)
+
+            elif etype == "assistant.reasoning_delta":
+                delta = getattr(event.data, "delta_content", None) or ""
+                accumulator.on_reasoning_delta(delta)
+
+            elif etype == "assistant.message":
+                # Final complete content — keep as authoritative source
+                final_content["message"] = getattr(event.data, "content", "") or ""
+
+            elif etype == "assistant.reasoning":
+                pass  # reasoning complete; we already streamed it
+
+            elif etype == "session.idle":
+                done.set()
+
+        session.on(on_event)
+        await session.send({"prompt": prompt})
+
+        try:
+            await asyncio.wait_for(done.wait(), timeout=self.REQUEST_TIMEOUT)
+        except asyncio.TimeoutError:
+            logger.error("Streaming timed out after %.0fs", self.REQUEST_TIMEOUT)
+            raise
+
+        accumulator.log_final()
+
+        # Prefer the authoritative final message; fall back to accumulated deltas
+        content = final_content["message"] or accumulator.content
+        return content
+
+    # ------------------------------------------------------------------
     # Public interface (LLMProvider ABC)
     # ------------------------------------------------------------------
 
@@ -130,25 +197,78 @@ class CopilotProvider(LLMProvider):
     ) -> str:
         """Single-shot generation via the Copilot SDK.
 
+        When streaming is enabled the response is received incrementally and
+        each chunk is printed to stderr / logged in real time.
+
         T3c: Reuses cached sessions when the same (model_id, system_prompt)
         is requested again (common in P3a/P3b batched pipeline calls).
         """
         if not self._available:
             return "Error: copilot-sdk not installed"
 
-        client = await self._ensure_client(api_key)
+        use_streaming = self._is_streaming_enabled()
 
-        cache_key = self._session_cache_key(model_id, system_prompt)
-        session = await self._get_or_create_session(client, cache_key, model_id, system_prompt)
+        async with llm_call_progress(
+            role_name=self._role_name or "Copilot",
+            model_id=model_id,
+            system_prompt_length=len(system_prompt or ""),
+            user_prompt_length=len(prompt),
+            identity=self._identity,
+            phase=self._phase,
+            progress_interval=self._progress_interval,
+            enabled=self._progress_logging_enabled,
+        ) as result_dict:
+            client = await self._ensure_client(api_key)
 
-        try:
-            reply = await session.send_and_wait({"prompt": prompt}, timeout=self.REQUEST_TIMEOUT)
-            return reply.data.content if (reply and reply.data) else ""
-        except Exception as e:
-            logger.error("Copilot SDK generation error (model=%s): %s", model_id, e)
-            # Evict failed session from cache
-            await self._evict_session(cache_key)
-            raise
+            if use_streaming:
+                # ---- Streaming path (fresh session with streaming=True) ----
+                session_config: Dict[str, Any] = {
+                    "model": model_id,
+                    "streaming": True,
+                    "infinite_sessions": {"enabled": False},
+                }
+                if system_prompt:
+                    session_config["system_message"] = {"content": system_prompt}
+
+                session = await client.create_session(session_config)
+                accumulator = StreamingAccumulator(
+                    role_name=self._role_name or "Copilot",
+                    model_id=model_id,
+                    identity=self._identity,
+                    phase=self._phase,
+                    enabled=self._progress_logging_enabled,
+                )
+                try:
+                    content = await self._send_streaming(session, prompt, accumulator)
+                    result_dict["output_length"] = len(content)
+                    result_dict["input_tokens"] = estimate_tokens(system_prompt or "") + estimate_tokens(prompt)
+                    result_dict["output_tokens"] = estimate_tokens(content)
+                    result_dict["total_tokens"] = result_dict["input_tokens"] + result_dict["output_tokens"]
+                    result_dict["token_source"] = "estimated"
+                    return content
+                except Exception as e:
+                    logger.error("Copilot SDK streaming generation error (model=%s): %s", model_id, e)
+                    raise
+                finally:
+                    await self._destroy_session_safe(session)
+            else:
+                # ---- Non-streaming path (uses session cache) ----
+                cache_key = self._session_cache_key(model_id, system_prompt)
+                session = await self._get_or_create_session(client, cache_key, model_id, system_prompt)
+
+                try:
+                    reply = await session.send_and_wait({"prompt": prompt}, timeout=self.REQUEST_TIMEOUT)
+                    content = reply.data.content if (reply and reply.data) else ""
+                    result_dict["output_length"] = len(content)
+                    result_dict["input_tokens"] = estimate_tokens(system_prompt or "") + estimate_tokens(prompt)
+                    result_dict["output_tokens"] = estimate_tokens(content)
+                    result_dict["total_tokens"] = result_dict["input_tokens"] + result_dict["output_tokens"]
+                    result_dict["token_source"] = "estimated"
+                    return content
+                except Exception as e:
+                    logger.error("Copilot SDK generation error (model=%s): %s", model_id, e)
+                    await self._evict_session(cache_key)
+                    raise
 
     async def chat(
         self,
@@ -167,38 +287,97 @@ class CopilotProvider(LLMProvider):
         if not self._available:
             return "Error: copilot-sdk not installed"
 
-        client = await self._ensure_client(api_key)
-
-        # Separate system message from the conversation
-        system_content: Optional[str] = None
-        conversation: List[Dict[str, str]] = []
+        # Calculate prompt lengths
+        total_prompt_length = sum(len(str(msg.get("content", ""))) for msg in messages)
+        system_prompt_length = 0
         for msg in messages:
             if msg.get("role") == "system":
-                # Concatenate if several system messages exist
-                if system_content is None:
-                    system_content = msg.get("content", "")
+                system_prompt_length = len(msg.get("content", ""))
+                break
+
+        use_streaming = self._is_streaming_enabled()
+
+        async with llm_call_progress(
+            role_name=self._role_name or "Copilot",
+            model_id=model_id,
+            system_prompt_length=system_prompt_length,
+            user_prompt_length=total_prompt_length - system_prompt_length,
+            identity=self._identity,
+            phase=self._phase,
+            progress_interval=self._progress_interval,
+            enabled=self._progress_logging_enabled,
+        ) as result_dict:
+            client = await self._ensure_client(api_key)
+
+            # Separate system message from the conversation
+            system_content: Optional[str] = None
+            conversation: List[Dict[str, str]] = []
+            for msg in messages:
+                if msg.get("role") == "system":
+                    if system_content is None:
+                        system_content = msg.get("content", "")
+                    else:
+                        system_content += "\n" + msg.get("content", "")
                 else:
-                    system_content += "\n" + msg.get("content", "")
+                    conversation.append(msg)
+
+            flat_prompt = self._flatten_conversation(conversation)
+
+            if use_streaming:
+                # ---- Streaming path ----
+                session_config: Dict[str, Any] = {
+                    "model": model_id,
+                    "streaming": True,
+                    "infinite_sessions": {"enabled": False},
+                }
+                if system_content:
+                    session_config["system_message"] = {"content": system_content}
+
+                session = await client.create_session(session_config)
+                accumulator = StreamingAccumulator(
+                    role_name=self._role_name or "Copilot",
+                    model_id=model_id,
+                    identity=self._identity,
+                    phase=self._phase,
+                    enabled=self._progress_logging_enabled,
+                )
+                try:
+                    content = await self._send_streaming(session, flat_prompt, accumulator)
+                    result_dict["output_length"] = len(content)
+                    result_dict["input_tokens"] = estimate_tokens(system_content or "") + estimate_tokens(flat_prompt)
+                    result_dict["output_tokens"] = estimate_tokens(content)
+                    result_dict["total_tokens"] = result_dict["input_tokens"] + result_dict["output_tokens"]
+                    result_dict["token_source"] = "estimated"
+                    return content
+                except Exception as e:
+                    logger.error("Copilot SDK streaming chat error (model=%s): %s", model_id, e)
+                    raise
+                finally:
+                    await self._destroy_session_safe(session)
             else:
-                conversation.append(msg)
+                # ---- Non-streaming path ----
+                session_config: Dict = {
+                    "model": model_id,
+                    "infinite_sessions": {"enabled": False},
+                }
+                if system_content:
+                    session_config["system_message"] = {"content": system_content}
 
-        session_config: Dict = {
-            "model": model_id,
-            "infinite_sessions": {"enabled": False},
-        }
-        if system_content:
-            session_config["system_message"] = {"content": system_content}
-
-        session = await client.create_session(session_config)
-        try:
-            prompt = self._flatten_conversation(conversation)
-            reply = await session.send_and_wait({"prompt": prompt}, timeout=self.REQUEST_TIMEOUT)
-            return reply.data.content if (reply and reply.data) else ""
-        except Exception as e:
-            logger.error("Copilot SDK chat error (model=%s): %s", model_id, e)
-            raise
-        finally:
-            await self._destroy_session_safe(session)
+                session = await client.create_session(session_config)
+                try:
+                    reply = await session.send_and_wait({"prompt": flat_prompt}, timeout=self.REQUEST_TIMEOUT)
+                    content = reply.data.content if (reply and reply.data) else ""
+                    result_dict["output_length"] = len(content)
+                    result_dict["input_tokens"] = estimate_tokens(system_content or "") + estimate_tokens(flat_prompt)
+                    result_dict["output_tokens"] = estimate_tokens(content)
+                    result_dict["total_tokens"] = result_dict["input_tokens"] + result_dict["output_tokens"]
+                    result_dict["token_source"] = "estimated"
+                    return content
+                except Exception as e:
+                    logger.error("Copilot SDK chat error (model=%s): %s", model_id, e)
+                    raise
+                finally:
+                    await self._destroy_session_safe(session)
 
     # ------------------------------------------------------------------
     # Session cache (T3c)

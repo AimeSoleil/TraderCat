@@ -87,6 +87,12 @@ Public endpoints: `/`, `/api/admin/system/health`, `/api/v1/auth/login`
     log_format: str = Field(default="json", description="Log format: json or text")
     log_level: str = Field(default="INFO", description="Logging level")
     
+    # LLM Progress Logging
+    llm_progress_logging_enabled: bool = Field(default=True, description="Enable real-time LLM call progress logging")
+    llm_progress_log_file: str = Field(default="logs/llm_calls.log", description="File path for LLM call logs")
+    llm_progress_interval: float = Field(default=1.0, description="Seconds between LLM progress updates")
+    llm_streaming_enabled: bool = Field(default=True, description="Enable streaming output for Copilot LLM calls (logs tokens as they arrive)")
+    
     # Run Mode
     run_mode: str = Field(
         default="combined",

@@ -1,11 +1,19 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
+
 
 class LLMProvider(ABC):
     """
     Abstract Base Class for AI Models.
     Stateless regarding the specific model in use; defines the connection to the provider.
     """
+    
+    # Class-level configuration for progress logging
+    _progress_logging_enabled: bool = False
+    _progress_interval: float = 1.0
+    _role_name: Optional[str] = None
+    _identity: Optional[str] = None
+    _phase: Optional[str] = None
     
     @abstractmethod
     def __init__(self):
@@ -21,6 +29,31 @@ class LLMProvider(ABC):
     def list_supported_models(self) -> List[str]:
         """Returns a list of valid model identifiers for this provider."""
         pass
+    
+    @classmethod
+    def enable_progress_logging(
+        cls,
+        enabled: bool = True,
+        progress_interval: float = 1.0,
+        role_name: Optional[str] = None,
+        identity: Optional[str] = None,
+        phase: Optional[str] = None,
+    ) -> None:
+        """
+        Enable or disable real-time progress logging for LLM calls.
+        
+        Args:
+            enabled: Whether to enable progress logging
+            progress_interval: Seconds between progress updates
+            role_name: Name of the role making the call (e.g., "MacroAnalyst")
+            identity: Identity key (e.g., "macro_analyst")
+            phase: Pipeline phase (e.g., "P2", "P3a")
+        """
+        cls._progress_logging_enabled = enabled
+        cls._progress_interval = progress_interval
+        cls._role_name = role_name
+        cls._identity = identity
+        cls._phase = phase
 
     @abstractmethod
     async def generate_thought(

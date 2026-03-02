@@ -8,7 +8,7 @@ from fastapi.openapi.utils import get_openapi
 
 from tradercat.config import settings
 from tradercat.database import init_db
-from tradercat.logger import get_logger
+from tradercat.logger import get_logger, init_llm_logger
 
 # Import routers
 from tradercat.api.v1 import auth, users, watchlist, signals, reports
@@ -33,6 +33,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
+    
+    # Initialize LLM progress logger
+    try:
+        init_llm_logger()
+        logger.info("LLM progress logger initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize LLM progress logger: {e}")
     
     # Conditionally start pipeline scheduler based on RUN_MODE
     # NOTE: In production, use RUN_MODE=api-only for API service
