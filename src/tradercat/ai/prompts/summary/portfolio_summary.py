@@ -86,9 +86,17 @@ Use these **exact headings and field names** — pipeline parsers extract them v
 | 2 | YYY | NEUTRAL | Iron Condor | A | 1.8:1 | $XX | $XX | X.X |
 
 ### Position Details
-For each active position, one compact line referencing the P3 trade spec:
-- **{SYMBOL}**: [Structure] — [1-line thesis]. Entry: $X, Stop: $X, Target: $X. Max loss: $XX. Alloc: $XX (X%). DTE: X.
-*(Do NOT re-derive — reference P3 specs)*
+For each active position, include the full option execution structure from P3:
+
+**#{RANK}. {SYMBOL} — {Direction} — [1-line thesis]**
+```
+Structure: {type} | Contract: {SYMBOL} {DD}{MMM} {STRIKE} {TYPE}
+Buy: ${strike} {type} @Δ~{val} | Sell: ${strike} {type} @Δ~{val} [if spread]
+Net Debit/Credit: ~${amt} | DTE: {days} | MaxProfit: ${} | MaxLoss: ${}
+Allocation: ${} ({pct}% of portfolio)
+```
+Entry: ${close} | Stop: ${stop} | Target: ${target} | R:R: {ratio}:1
+*(Reference P3 specs directly — do NOT re-derive)*
 
 ## Hedges
 - **Hedge**: [e.g., "SPY bear put spread" or "No hedge — GREEN regime"]

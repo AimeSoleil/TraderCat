@@ -207,6 +207,44 @@ export interface UserBriefingList {
   total: number;
 }
 
+// ── Dashboard ──
+
+export interface DashboardPositionItem {
+  id: string;
+  symbol: string;
+  run_date: string;
+  verdict: string | null;
+  setup_quality: string | null;
+  direction: string | null;
+  setup_type: string | null;
+  confluence: string | null;
+  rr_estimate: string | null;
+  rejection_reason: string | null;
+  structure: string | null;
+  legs: Array<Record<string, unknown>> | null;
+  entry_price: string | null;
+  stop_loss: string | null;
+  profit_target: string | null;
+  time_stop: string | null;
+  max_loss: string | null;
+  max_profit: string | null;
+  allocation: string | null;
+  breakeven: string | null;
+  thesis: string | null;
+  rank: number;
+  has_structured_data: boolean;
+}
+
+export interface DashboardPositionsResponse {
+  positions: DashboardPositionItem[];
+  run_date: string | null;
+  briefing_id: string | null;
+  regime_label: string | null;
+  regime_score: number | null;
+  total_positions: number;
+  available_dates: string[];
+}
+
 // ── Strategy ──
 export interface StrategyPresetResponse {
   id: string;

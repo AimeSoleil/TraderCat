@@ -40,5 +40,9 @@ class SymbolExecutionPlan(Base):
         JSONB().with_variant(JSON, "sqlite"),
         nullable=True,
     )  # Snapshot of signal data sent to LLM
+    structured_json = Column(
+        JSONB().with_variant(JSON, "sqlite"),
+        nullable=True,
+    )  # P3 structured data: direction, quality, execution (structure, legs, entry/stop/target, risk)
     pipeline_run_id = Column(UUID(as_uuid=True), nullable=True)
     created_at = Column(DateTime, default=utcnow, nullable=False)

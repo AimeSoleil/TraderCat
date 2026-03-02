@@ -51,7 +51,7 @@ class AIRole(ABC):
         role_name: str,
         identity: Optional[str] = None,
         phase: Optional[str] = None,
-        progress_interval: float = 1.0,
+        progress_interval: float = 30.0,
     ) -> None:
         """
         Enable real-time progress logging on an LLM provider instance.

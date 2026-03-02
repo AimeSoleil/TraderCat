@@ -1,17 +1,16 @@
-# Use Python 3.12 slim base image
-FROM python:3.12-slim
+# ── TraderCat Pipeline Worker ──
+FROM python:3.12-slim AS base
 
-# Set working directory
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files
-COPY pyproject.toml requirements.txt* ./
+# Copy dependency files first (better layer caching)
+COPY pyproject.toml ./
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
@@ -22,11 +21,17 @@ COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 
-# Set Python path
-ENV PYTHONPATH=/app/src
+# Create logs directory
+RUN mkdir -p /app/logs
 
-# Set default run mode for pipeline worker
-ENV RUN_MODE=scheduler
+# Set environment
+ENV PYTHONPATH=/app/src \
+    PYTHONUNBUFFERED=1 \
+    RUN_MODE=scheduler
 
-# Run the pipeline worker
+# No HTTP port — this is a background worker
+# Graceful shutdown via SIGTERM
+STOPSIGNAL SIGTERM
+
+# Run the pipeline scheduler worker
 CMD ["python", "-m", "tradercat.pipeline.runner"]

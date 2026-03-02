@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -24,11 +22,18 @@ services:
       dockerfile: Dockerfile
     container_name: tradercat-api
     environment:
+      # Database
       DATABASE_URL: postgresql+asyncpg://tradercat:tradercat@postgres:5432/tradercat
+      # Logging
       LOG_FORMAT: json
       LOG_LEVEL: INFO
+      # Run mode
       RUN_MODE: api-only
-      # Admin user seed configuration (used during initial migration)
+      # JWT (CHANGE IN PRODUCTION!)
+      JWT_SECRET: ${JWT_SECRET:-tradercat-jwt-secret-change-me}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-480}
+      # Admin user seed (used during initial migration)
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@tradercat.com}
       ADMIN_MAX_SYMBOLS: ${ADMIN_MAX_SYMBOLS:-100}
@@ -47,15 +52,36 @@ services:
       dockerfile: Dockerfile.pipeline
     container_name: tradercat-pipeline
     environment:
+      # Database
       DATABASE_URL: postgresql+asyncpg://tradercat:tradercat@postgres:5432/tradercat
+      # Logging
       LOG_FORMAT: json
       LOG_LEVEL: INFO
+      # Run mode
       RUN_MODE: scheduler
+      # Schedule
       PIPELINE_SCHEDULE_HOUR: ${PIPELINE_SCHEDULE_HOUR:-20}
       PIPELINE_TIMEZONE: ${PIPELINE_TIMEZONE:-America/New_York}
+      # Concurrency & batching
       PIPELINE_MAX_CONCURRENCY: ${PIPELINE_MAX_CONCURRENCY:-5}
+      PIPELINE_AUDIT_BATCH_SIZE: ${PIPELINE_AUDIT_BATCH_SIZE:-5}
+      PIPELINE_EXEC_BATCH_SIZE: ${PIPELINE_EXEC_BATCH_SIZE:-5}
+      PIPELINE_LLM_MAX_RETRIES: ${PIPELINE_LLM_MAX_RETRIES:-0}
+      # LLM provider
       DEFAULT_LLM_MODEL: ${DEFAULT_LLM_MODEL:-claude-opus-4.6}
       DEFAULT_LLM_PROVIDER: ${DEFAULT_LLM_PROVIDER:-copilot}
+      # LLM per-phase output token caps
+      LLM_MAX_TOKENS_P2: ${LLM_MAX_TOKENS_P2:-4096}
+      LLM_MAX_TOKENS_P3A: ${LLM_MAX_TOKENS_P3A:-2048}
+      LLM_MAX_TOKENS_P3B: ${LLM_MAX_TOKENS_P3B:-4096}
+      LLM_MAX_TOKENS_P4: ${LLM_MAX_TOKENS_P4:-8192}
+      # LLM progress logging & streaming
+      LLM_PROGRESS_LOGGING_ENABLED: ${LLM_PROGRESS_LOGGING_ENABLED:-true}
+      LLM_PROGRESS_LOG_FILE: logs/llm_calls.log
+      LLM_PROGRESS_INTERVAL: ${LLM_PROGRESS_INTERVAL:-30.0}
+      LLM_STREAMING_ENABLED: ${LLM_STREAMING_ENABLED:-true}
+      # JWT (pipeline needs it if it accesses auth-dependent code paths)
+      JWT_SECRET: ${JWT_SECRET:-tradercat-jwt-secret-change-me}
     depends_on:
       postgres:
         condition: service_healthy

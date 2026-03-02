@@ -209,6 +209,15 @@ export const reportsApi = {
   getPlan: (id: string) => get<T.SymbolExecutionPlanDetail>(`/api/v1/reports/plans/${id}`),
 };
 
+export const dashboardApi = {
+  getPositions: (params?: { run_date?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.run_date) sp.set("run_date", params.run_date);
+    const qs = sp.toString();
+    return get<T.DashboardPositionsResponse>(`/api/v1/dashboard/positions${qs ? `?${qs}` : ""}`);
+  },
+};
+
 // ── Admin APIs ──
 
 export const adminPipelineApi = {

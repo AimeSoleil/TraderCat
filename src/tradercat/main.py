@@ -11,7 +11,7 @@ from tradercat.database import init_db
 from tradercat.logger import get_logger, init_llm_logger
 
 # Import routers
-from tradercat.api.v1 import auth, users, watchlist, signals, reports
+from tradercat.api.v1 import auth, users, watchlist, signals, reports, dashboard
 from tradercat.api.admin import pipeline, system
 from tradercat.api.admin import global_symbols as admin_global_symbols
 from tradercat.api.admin import strategies as admin_strategies
@@ -210,6 +210,7 @@ app.include_router(users.router, prefix="/api/v1")
 app.include_router(watchlist.router, prefix="/api/v1")
 app.include_router(signals.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
+app.include_router(dashboard.router, prefix="/api/v1")
 app.include_router(admin_llm_tokens.router, prefix="/api/admin")
 app.include_router(pipeline.router, prefix="/api/admin")
 app.include_router(system.router, prefix="/api/admin")

@@ -13,6 +13,7 @@ Token optimization applied at every phase:
   - P4: Compressed regime + condensed execution plan summaries.
 """
 import asyncio
+import json
 from datetime import datetime, date
 from typing import List, Dict, Any
 from uuid import UUID
@@ -48,6 +49,11 @@ from tradercat.ai.roles.options_strategist import format_p4_card
 from tradercat.pipeline.holidays import is_market_day
 
 logger = get_logger(__name__)
+
+
+def _json_safe(obj: Any) -> Any:
+    """Round-trip through JSON to ensure all values are serializable."""
+    return json.loads(json.dumps(obj, default=str))
 
 
 class PipelineOrchestrator:
@@ -371,8 +377,10 @@ class PipelineOrchestrator:
             symbol_plans_md: Dict[str, str] = {}
             symbol_plans_data: Dict[str, Dict] = {}  # T3: structured data for P4
             for plan_data in exec_plan_records:
-                # structured_data is in-memory only — strip before DB insert
+                # Rename structured_data → structured_json for DB column
                 structured = plan_data.pop("structured_data", None)
+                if structured:
+                    plan_data["structured_json"] = _json_safe(structured)
                 stmt = pg_insert(SymbolExecutionPlan).values(**plan_data)
                 stmt = stmt.on_conflict_do_update(
                     constraint="uq_exec_plan_run_date_symbol",
@@ -383,6 +391,7 @@ class PipelineOrchestrator:
                         "model_used": stmt.excluded.model_used,
                         "identity_used": stmt.excluded.identity_used,
                         "input_context": stmt.excluded.input_context,
+                        "structured_json": stmt.excluded.structured_json,
                         "pipeline_run_id": stmt.excluded.pipeline_run_id,
                         "created_at": stmt.excluded.created_at,
                     },
