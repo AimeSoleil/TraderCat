@@ -89,5 +89,21 @@ services:
       - ./logs:/app/logs
     restart: unless-stopped
 
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        # The browser calls the API via this URL.
+        # In Docker networking the browser runs on the HOST, so this must be
+        # the host-reachable address (not the internal docker service name).
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    container_name: tradercat-web
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
 volumes:
   postgres_data:

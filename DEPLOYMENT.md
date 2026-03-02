@@ -1,33 +1,52 @@
-# TraderCat Standalone Pipeline Deployment Guide
+# TraderCat Deployment Guide
 
 ## Overview
 
-The TraderCat pipeline is **completely separated** from the API service. This provides:
+TraderCat is deployed as **four services** that communicate exclusively through a shared PostgreSQL database:
+
+| Service | Container | Port | Entry Point |
+|---------|-----------|------|-------------|
+| **PostgreSQL** | `tradercat-postgres` | 5432 | — |
+| **API** | `tradercat-api` | 8000 | `uvicorn tradercat.main:app` |
+| **Pipeline Worker** | `tradercat-pipeline` | — | `python -m tradercat.pipeline.runner` |
+| **Web** | `tradercat-web` | 3000 | `node server.js` (Next.js standalone) |
+
+Benefits of this separation:
 - ✅ **Complete code isolation**: API never imports scheduler code
-- ✅ **Independent scaling**: Scale API and pipeline separately
+- ✅ **Independent scaling**: Scale API and web separately from pipeline
 - ✅ **Isolated resource usage**: No resource contention
-- ✅ **No API downtime**: Pipeline runs don't affect API
+- ✅ **No API downtime**: Pipeline runs don't affect API or frontend
 - ✅ **Easier monitoring**: Separate logs and metrics
 - ✅ **Flexible deployment**: Deploy services independently
 
 ## Architecture
 
 ```
-┌─────────────────────────┐     ┌──────────────────┐     ┌─────────────────────────┐
-│  API Service            │────▶│    PostgreSQL    │◀────│  Pipeline Worker        │
-│  (main.py)              │     │                  │     │  (pipeline.runner)      │
-│  RUN_MODE=api-only      │     │  Shared Database │     │  RUN_MODE=scheduler     │
-│                         │     │                  │     │                         │
-│  ├── FastAPI app        │     │  Communication:  │     │  ├── APScheduler        │
-│  ├── REST endpoints     │     │  Database only   │     │  ├── Orchestrator       │
-│  ├── Manual triggers    │     │                  │     │  ├── Signal workers     │
-│  └── NO scheduler code  │     │                  │     │  └── Report workers     │
-└─────────────────────────┘     └──────────────────┘     └─────────────────────────┘
-                                                           
-                                                           COMPLETE SEPARATION:
-                                                           - Different entry points
-                                                           - No shared scheduler state
-                                                           - Independent processes
+┌───────────────────┐
+│  Web (Next.js)    │
+│  Port 3000        │──── browser calls ────┐
+│  tradercat-web    │                       │
+└───────────────────┘                       ▼
+                              ┌─────────────────────────┐     ┌──────────────────┐
+                              │  API Service            │────▶│    PostgreSQL    │
+                              │  Port 8000              │     │    Port 5432     │
+                              │  RUN_MODE=api-only      │     │                  │
+                              │                         │     │  Shared Database │
+                              │  ├── FastAPI app        │     │                  │
+                              │  ├── REST endpoints     │     └────────▲─────────┘
+                              │  ├── Manual triggers    │              │
+                              │  └── NO scheduler code  │              │
+                              └─────────────────────────┘              │
+                                                          ┌────────────┴────────────┐
+                                                          │  Pipeline Worker        │
+                                                          │  No HTTP port           │
+                                                          │  RUN_MODE=scheduler     │
+                                                          │                         │
+                                                          │  ├── APScheduler        │
+                                                          │  ├── Orchestrator       │
+                                                          │  ├── Signal workers     │
+                                                          │  └── Report workers     │
+                                                          └─────────────────────────┘
 ```
 
 ## Complete Separation Design
@@ -65,30 +84,38 @@ The `RUN_MODE` environment variable enforces complete separation:
 
 ### Option 1: Docker Compose (Recommended)
 
-**Full deployment** (API + Pipeline + Database):
+**Full stack** (Database + API + Pipeline + Web):
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 This starts:
-- PostgreSQL database
-- API service (port 8000, RUN_MODE=api-only)
-- Pipeline worker (RUN_MODE=scheduler, runs at 8 PM ET)
+- PostgreSQL database (port 5432)
+- API service (port 8000, `RUN_MODE=api-only`)
+- Pipeline worker (`RUN_MODE=scheduler`, runs at 8 PM ET)
+- Web frontend (port 3000, Next.js standalone)
 
-**API only** (without pipeline):
+**API + Web only** (no pipeline):
 ```bash
-docker-compose up -d postgres api
+docker compose up -d postgres api web
+```
+
+**Backend only** (no frontend):
+```bash
+docker compose up -d postgres api pipeline-worker
 ```
 
 **Check status**:
 ```bash
-docker-compose ps
-docker-compose logs -f pipeline-worker
+docker compose ps
+docker compose logs -f api
+docker compose logs -f web
+docker compose logs -f pipeline-worker
 ```
 
 ### Option 2: Kubernetes
 
-Example K8s deployment:
+Example K8s deployments:
 
 ```yaml
 # api-deployment.yaml
@@ -111,6 +138,25 @@ spec:
             secretKeyRef:
               name: tradercat-secrets
               key: database-url
+
+---
+# web-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tradercat-web
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+      - name: web
+        image: tradercat-web:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: HOSTNAME
+          value: "0.0.0.0"
 
 ---
 # pipeline-deployment.yaml
@@ -171,9 +217,24 @@ DATABASE_URL=postgresql+asyncpg://tradercat:tradercat@postgres:5432/tradercat
 PIPELINE_SCHEDULE_HOUR=20
 PIPELINE_TIMEZONE=America/New_York
 PIPELINE_MAX_CONCURRENCY=5
-DEFAULT_LLM_MODEL=gpt-4o
+PIPELINE_AUDIT_BATCH_SIZE=5
+PIPELINE_EXEC_BATCH_SIZE=5
+PIPELINE_LLM_MAX_RETRIES=0
+DEFAULT_LLM_MODEL=claude-opus-4.6
+DEFAULT_LLM_PROVIDER=copilot
+LLM_MAX_TOKENS_P2=4096
+LLM_MAX_TOKENS_P3A=2048
+LLM_MAX_TOKENS_P3B=4096
+LLM_MAX_TOKENS_P4=8192
+LLM_STREAMING_ENABLED=true
 LOG_FORMAT=json
 LOG_LEVEL=INFO
+```
+
+#### Web Frontend
+```bash
+# Build-time only (baked into the JS bundle)
+NEXT_PUBLIC_API_URL=http://localhost:8000   # or https://api.example.com in prod
 ```
 
 ## Manual Pipeline Triggers
@@ -201,17 +262,18 @@ curl http://localhost:8000/api/admin/system/health
 
 ### Logging
 
-Both services write structured JSON logs to `/app/logs`:
+All services write structured JSON logs:
 ```bash
-docker-compose logs -f api
-docker-compose logs -f pipeline-worker
+docker compose logs -f api
+docker compose logs -f web
+docker compose logs -f pipeline-worker
 ```
 
 ### Graceful Shutdown
 
 Pipeline worker handles SIGTERM/SIGINT gracefully:
 ```bash
-docker-compose stop pipeline-worker  # Waits for current jobs
+docker compose stop pipeline-worker  # Waits for current jobs
 ```
 
 ## Scaling
@@ -220,7 +282,12 @@ docker-compose stop pipeline-worker  # Waits for current jobs
 
 **API**: Scale to N replicas
 ```bash
-docker-compose up -d --scale api=3
+docker compose up -d --scale api=3
+```
+
+**Web**: Scale to N replicas
+```bash
+docker compose up -d --scale web=2
 ```
 
 **Pipeline**: Keep at 1 replica (scheduler should run once)
@@ -239,6 +306,13 @@ services:
         limits:
           cpus: '1.0'
           memory: 1G
+  
+  web:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
   
   pipeline-worker:
     deploy:
@@ -309,19 +383,22 @@ services:
 
 ## Production Recommendations
 
-1. **Use separate services** (`api-only` + `scheduler`)
+1. **Use separate services** (`api-only` + `scheduler` + `web`)
 2. **Run 1 pipeline worker** (avoid duplicate schedules)
-3. **Scale API independently** (3+ replicas behind load balancer)
-4. **Set resource limits** (prevent resource exhaustion)
-5. **Monitor exit codes** (pipeline worker health)
-6. **Enable structured logging** (`LOG_FORMAT=json`)
-7. **Use secrets management** (for DATABASE_URL, API tokens)
+3. **Scale API and Web independently** (3+ replicas behind load balancer)
+4. **Set `NEXT_PUBLIC_API_URL`** to the production API domain when building the web image
+5. **Set resource limits** (prevent resource exhaustion)
+6. **Monitor exit codes** (pipeline worker health)
+7. **Enable structured logging** (`LOG_FORMAT=json`)
+8. **Use secrets management** (for `DATABASE_URL`, `JWT_SECRET`, API tokens)
+9. **Change `JWT_SECRET`** from the default in production
 
 ## Security Notes
 
 - Pipeline worker does NOT expose HTTP ports
-- Only API service should be internet-facing
-- Both services require database access
+- Only API and Web services should be internet-facing
+- API and Pipeline require database access; Web only calls the API
+- `NEXT_PUBLIC_API_URL` is baked into the JS bundle at build time — rebuild the web image when the API URL changes
 - Use network policies in K8s to restrict traffic
 
 ## Performance
@@ -339,6 +416,7 @@ services:
 ## Support
 
 For issues or questions:
-- Check logs: `docker-compose logs`
+- Check logs: `docker compose logs`
 - GitHub Issues: https://github.com/AimeSoleil/TraderCat/issues
 - API Documentation: http://localhost:8000/docs
+- Web Frontend: http://localhost:3000

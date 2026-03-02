@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TraderCat Web
 
-## Getting Started
+Next.js 16 frontend for the TraderCat trading-signal & report-generation platform.  
+Built with **React 19**, **shadcn/ui**, **Tailwind CSS v4**, and **TanStack React Query**.
 
-First, run the development server:
+## Prerequisites
+
+| Tool | Version |
+|------|---------|
+| Node.js | ≥ 22 |
+| pnpm | ≥ 10 |
+
+## Getting Started (Development)
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+# Install dependencies
+pnpm install
+
+# Start the dev server (http://localhost:3000)
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+> The frontend expects the API at `http://localhost:8000` by default.  
+> Override with `NEXT_PUBLIC_API_URL` in a `.env.local` file or via environment.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Production Build (Local)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+pnpm build   # outputs to .next/
+pnpm start   # serves at http://localhost:3000
+```
 
-## Learn More
+## Docker
 
-To learn more about Next.js, take a look at the following resources:
+A multi-stage Dockerfile is provided that uses Next.js **standalone** output for a minimal image.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Build & run standalone
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+# From the web/ directory
+docker build -t tradercat-web .
+docker run -p 3000:3000 -e HOSTNAME=0.0.0.0 tradercat-web
+```
 
-## Deploy on Vercel
+### Override the API URL at build time
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+docker build --build-arg NEXT_PUBLIC_API_URL=https://api.example.com -t tradercat-web .
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Full stack via Docker Compose
+
+From the project root:
+
+```bash
+docker compose up -d          # postgres + api + pipeline + web
+docker compose up -d api web  # api + web only (skip pipeline)
+```
+
+| Service | URL |
+|---------|-----|
+| Web | http://localhost:3000 |
+| API | http://localhost:8000 |
+| API Docs | http://localhost:8000/docs |
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Backend API base URL (baked at build time) |
+
+## Project Structure
+
+```
+web/
+├── public/              # Static assets
+├── src/
+│   ├── app/             # Next.js App Router pages
+│   │   ├── (admin)/     # Admin-only pages (pipeline, users, strategies …)
+│   │   ├── (portal)/    # User pages (dashboard, signals, reports …)
+│   │   └── login/       # Auth page
+│   ├── components/      # React components + shadcn/ui primitives
+│   ├── hooks/           # Custom React hooks
+│   └── lib/             # API client, types, utilities
+├── Dockerfile           # Multi-stage production build
+├── next.config.ts       # Next.js configuration (standalone output)
+├── package.json
+└── tsconfig.json
+```
+
+## Tech Stack
+
+- **Framework**: Next.js 16 (App Router, Turbopack)
+- **UI**: shadcn/ui (new-york) + Tailwind CSS v4
+- **State**: TanStack React Query v5
+- **Auth**: PAT → JWT, cookie + localStorage guard
+- **Markdown**: react-markdown + remark-gfm + rehype-highlight
