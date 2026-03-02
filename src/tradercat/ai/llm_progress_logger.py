@@ -137,7 +137,7 @@ async def llm_call_progress(
     identity: Optional[str] = None,
     phase: Optional[str] = None,
     extra_metadata: Optional[Dict[str, Any]] = None,
-    progress_interval: float = 1.0,
+    progress_interval: float = 10.0,
     enabled: bool = True,
 ):
     """

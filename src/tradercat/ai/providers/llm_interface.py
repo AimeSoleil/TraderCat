@@ -10,7 +10,7 @@ class LLMProvider(ABC):
     
     # Class-level configuration for progress logging
     _progress_logging_enabled: bool = False
-    _progress_interval: float = 1.0
+    _progress_interval: float = 10.0
     _role_name: Optional[str] = None
     _identity: Optional[str] = None
     _phase: Optional[str] = None
@@ -34,7 +34,7 @@ class LLMProvider(ABC):
     def enable_progress_logging(
         cls,
         enabled: bool = True,
-        progress_interval: float = 1.0,
+        progress_interval: float = 10.0,
         role_name: Optional[str] = None,
         identity: Optional[str] = None,
         phase: Optional[str] = None,
