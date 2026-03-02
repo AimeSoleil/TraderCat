@@ -1,0 +1,179 @@
+# TraderCat — Top 100 Options Trading Universe
+# Curated from symbols.yml + high_rr_symbols.yml (macro ETFs/indices excluded)
+#
+# Selection criteria:
+#   1. Options liquidity  — high volume / open interest, tight bid-ask spreads
+#   2. Weekly options     — all names below have weeklies (or near-weeklies)
+#   3. Implied volatility — enough premium to make strategies worthwhile
+#   4. Catalyst density   — earnings, product launches, regulatory events
+#   5. Sector diversity   — balanced across growth, value, and thematic plays
+
+symbols: [
+  # ==============================================================================
+  # 1. MEGA-CAP TECH (8)  — Deepest options pools on the planet
+  # ==============================================================================
+  "NVDA",   # NVIDIA [AI King / #1 single-stock options volume]
+  "TSLA",   # Tesla [EV + Energy / #2 retail options flow]
+  "AAPL",   # Apple [Cash fortress / massive weekly OI]
+  "MSFT",   # Microsoft [Cloud + AI anchor]
+  "AMZN",   # Amazon [AWS + Consumer / liquid weeklies]
+  "GOOGL",  # Alphabet [Search + Cloud deep value]
+  "META",   # Meta Platforms [Ads + GenAI / high gamma moves]
+  "AMD",    # Advanced Micro [AI GPU challenger / high beta]
+
+  # ==============================================================================
+  # 2. SEMICONDUCTORS (8)  — High beta, cyclical IV swings
+  # ==============================================================================
+  "AVGO",   # Broadcom [AI custom silicon / post-split liquid]
+  "MU",     # Micron [Memory cycle / big earnings moves]
+  "QCOM",   # Qualcomm [Edge AI / mobile seasonality]
+  "TSM",    # Taiwan Semi [Foundry monopoly / geopolitical IV]
+  "ARM",    # Arm Holdings [Architecture royalty / high IV]
+  "SMCI",   # Super Micro [AI server / extreme IV swings]
+  "AMAT",   # Applied Materials [Semi cap equip / capex cycle]
+  "MRVL",   # Marvell [Optical + networking / earnings plays]
+
+  # ==============================================================================
+  # 3. SOFTWARE & SaaS (12)  — Growth momentum, rich premiums
+  # ==============================================================================
+  "PLTR",   # Palantir [AI data OS / retail favourite, high OI]
+  "CRM",    # Salesforce [SaaS anchor / liquid weeklies]
+  "SNOW",   # Snowflake [Data cloud / elevated IV]
+  "CRWD",   # CrowdStrike [Endpoint security / big ER moves]
+  "PANW",   # Palo Alto Networks [Network security / momentum]
+  "NOW",    # ServiceNow [Enterprise workflow / steady grower]
+  "ADBE",   # Adobe [Creative AI / earnings catalyst]
+  "ORCL",   # Oracle [Cloud infra / resurgent flow]
+  "NET",    # Cloudflare [Edge platform / popular weekly plays]
+  "DDOG",   # Datadog [Observability / growth premium]
+  "TTD",    # The Trade Desk [Digital ad spend / high gamma]
+  "APP",    # AppLovin [AdTech algo / extreme momentum, high IV]
+
+  # ==============================================================================
+  # 4. CYBERSECURITY & AI INFRA (8)  — Secular growth, M&A optionality
+  # ==============================================================================
+  "ZS",     # Zscaler [Zero trust leader]
+  "S",      # SentinelOne [AI endpoint / high IV small-cap]
+  "CYBR",   # CyberArk [Identity security / steady growth]
+  "OKTA",   # Okta [Identity mgmt / turnaround catalyst]
+  "VRT",    # Vertiv [Data center cooling / AI infra darling]
+  "ANET",   # Arista Networks [High-speed ethernet / momentum]
+  "ALAB",   # Astera Labs [AI connectivity / high IV new issue]
+  "PSTG",   # Pure Storage [AI data storage / earnings plays]
+
+  # ==============================================================================
+  # 5. FINTECH, CRYPTO & PAYMENTS (12)  — Highest IV sector, meme overlap
+  # ==============================================================================
+  "MSTR",   # MicroStrategy [Bitcoin proxy / extreme IV, weeklies]
+  "COIN",   # Coinbase [Crypto exchange / earnings + BTC correlation]
+  "HOOD",   # Robinhood [Retail brokerage / high retail OI]
+  "SQ",     # Block [Cash App + SMB / moderate IV]
+  "PYPL",   # PayPal [Payments value play / liquid weeklies]
+  "SOFI",   # SoFi [Digital bank / popular weekly straddles]
+  "AFRM",   # Affirm [BNPL / big earnings swings]
+  "UPST",   # Upstart [AI lending / extreme post-ER moves]
+  "V",      # Visa [Payment rails / low IV but massive liquidity]
+  "MA",     # Mastercard [Payment rails / tight spreads]
+  "JPM",    # JPMorgan [Bank bellwether / rates beta]
+  "GS",     # Goldman Sachs [Capital markets cycle]
+
+  # ==============================================================================
+  # 6. CRYPTO MINERS (2)  — Leveraged BTC beta, very high IV
+  # ==============================================================================
+  "MARA",   # Marathon Digital [BTC miner leader / extreme IV]
+  "RIOT",   # Riot Platforms [BTC mining infra / high gamma]
+
+  # ==============================================================================
+  # 7. CONSUMER & TRAVEL (10)  — Earnings movers, seasonal IV
+  # ==============================================================================
+  "NFLX",   # Netflix [Streaming dominance / big ER moves]
+  "DIS",    # Disney [Content + Parks / event-driven]
+  "UBER",   # Uber [Network effects / steady IV]
+  "ABNB",   # Airbnb [Travel platform / seasonal patterns]
+  "BKNG",   # Booking Holdings [OTA monopoly / high-priced spreads]
+  "NKE",    # Nike [Consumer cyclical / deep value playable]
+  "LULU",   # Lululemon [Athleisure / high ER delta]
+  "ONON",   # On Holding [Growth footwear / popular call flows]
+  "CELH",   # Celsius [Energy drink disruptor / high IV]
+  "CAVA",   # Cava Group [Fast casual growth / rich premiums]
+
+  # ==============================================================================
+  # 8. RETAIL & STAPLES (3)  — Theta-friendly, liquid covered calls
+  # ==============================================================================
+  "HD",     # Home Depot [Housing + rates / liquid weeklies]
+  "WMT",    # Walmart [Consumer defensive / earnings plays]
+  "COST",   # Costco [Membership rev / tight spreads]
+
+  # ==============================================================================
+  # 9. BIOTECH & PHARMA (8)  — Binary events, volatility crush plays
+  # ==============================================================================
+  "LLY",    # Eli Lilly [GLP-1 leader / massive options flow]
+  "NVO",    # Novo Nordisk [Obesity / GLP-1 duopoly]
+  "VRTX",   # Vertex [CF monopoly / pain mgmt catalyst]
+  "REGN",   # Regeneron [Dupixent / diversified pipeline]
+  "AMGN",   # Amgen [BioPharma / obesity entry]
+  "VKTX",   # Viking Therapeutics [Obesity M&A target / high IV]
+  "CRSP",   # CRISPR Therapeutics [Gene editing / binary catalysts]
+  "ALNY",   # Alnylam [RNAi therapeutics / pipeline catalysts]
+
+  # ==============================================================================
+  # 10. ENERGY & INDUSTRIALS (6)  — Macro-sensitive, commodity IV
+  # ==============================================================================
+  "XOM",    # Exxon Mobil [Energy super-major / liquid weeklies]
+  "BA",     # Boeing [Aerospace duopoly / event-driven IV spikes]
+  "GE",     # GE Aerospace [Jet engine cycle / restructure catalyst]
+  "CAT",    # Caterpillar [Global infra / macro bellwether]
+  "VST",    # Vistra [AI power demand / nuclear renaissance]
+  "ENPH",   # Enphase [Solar / extreme IV swings on policy]
+
+  # ==============================================================================
+  # 11. SPACE & QUANTUM (3)  — Speculative IV, small allocations
+  # ==============================================================================
+  "RKLB",   # Rocket Lab [Space launch / growing options market]
+  "IONQ",   # IonQ [Quantum computing / high IV thematic]
+  "ASTS",   # AST SpaceMobile [Satellite direct-to-cell / catalyst-rich]
+
+  # ==============================================================================
+  # 12. E-COMMERCE & INTERNATIONAL (5)  — Geographic diversification
+  # ==============================================================================
+  "BABA",   # Alibaba [China tech / very high IV, geopolitical]
+  "PDD",    # PDD Holdings [Temu growth / high gamma]
+  "MELI",   # MercadoLibre [LatAm Amazon+PayPal / liquid]
+  "SE",     # Sea Limited [Gaming + Shopee / high IV recovery]
+  "CPNG",   # Coupang [Korea e-comm / growing OI]
+
+  # ==============================================================================
+  # 13. EV & ROBOTICS (3)  — High IV, thematic catalysts
+  # ==============================================================================
+  "RIVN",   # Rivian [EV trucks / high IV, popular puts]
+  "MBLY",   # Mobileye [ADAS / M&A optionality]
+  "JOBY",   # Joby Aviation [eVTOL / FAA catalyst binary]
+
+  # ==============================================================================
+  # 14. GAMING & SOCIAL (4)  — Engagement metrics, ER plays
+  # ==============================================================================
+  "RBLX",   # Roblox [3D platform / popular ER straddles]
+  "DKNG",   # DraftKings [Sports betting / event-driven]
+  "EA",     # Electronic Arts [Sports franchise / moderate IV]
+  "PINS",   # Pinterest [Social commerce / visual search catalyst]
+
+  # ==============================================================================
+  # 15. SPECIAL SITUATIONS & MEME (5)  — Extreme IV, gamma squeezes
+  # ==============================================================================
+  "RDDT",   # Reddit [AI data licensing / very high IV]
+  "CVNA",   # Carvana [Deep value turnaround / extreme swings]
+  "AI",     # C3.ai [AI pure play / high IV thematic]
+  "SOUN",   # SoundHound [Voice AI / popular retail calls]
+  "GME",    # GameStop [Meme king / extreme OI, gamma dynamics]
+
+  # ==============================================================================
+  # 16. HEALTHCARE DEFENSIVE (3)  — Low IV theta harvesting
+  # ==============================================================================
+  "UNH",    # UnitedHealth [Managed care / liquid, covered calls]
+  "ABBV",   # AbbVie [Immunology + dividend / premium selling]
+  "MRK",    # Merck [Keytruda cliff / event vol]
+]
+
+# Total: 100 symbols
+# Excluded: SPY, QQQ, DIA, IWM, TLT, VIX, XLK, XLF, XLY, XLV, XLE, XLI, XLP
+#           and all other macro ETFs / indices

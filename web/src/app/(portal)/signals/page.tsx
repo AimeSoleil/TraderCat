@@ -34,8 +34,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Loader2 } from "lucide-react";
 import { Fragment, useState, useEffect, useRef, useCallback } from "react";
+import { toast } from "sonner";
 import type { SignalResponse } from "@/lib/types";
 
 /** Debounce hook — delays value updates by `delay` ms */
@@ -274,6 +275,24 @@ export default function SignalsPage() {
       <PageHeader
         title="Signals"
         description={`${data?.total ?? 0} signal(s)`}
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              signalsApi
+                .exportCsv({
+                  run_date: runDate || undefined,
+                  symbol: debouncedSymbol.toUpperCase() || undefined,
+                  signal: signalParam,
+                })
+                .catch(() => toast.error("Export failed"));
+            }}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export CSV
+          </Button>
+        }
       />
 
       <div className="mb-4 flex flex-wrap gap-3">

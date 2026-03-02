@@ -1,5 +1,9 @@
 """Admin Global Symbols API — manage pipeline global symbols."""
+import csv
+import io
+
 from fastapi import APIRouter, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 from uuid import UUID
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func
@@ -180,3 +184,39 @@ async def batch_remove_global_symbols(
     await db.commit()
 
     return BatchRemoveResponse(removed=removed, not_found=not_found, results=results)
+
+
+@router.get("/export", response_class=StreamingResponse)
+async def export_global_symbols_csv(
+    db: DatabaseSession,
+    admin: CurrentAdminUser,
+    symbol_type: str | None = Query(None, pattern="^(macro|sector)$"),
+):
+    """
+    Export global symbols to CSV. Optionally filter by type.
+    """
+    query = select(GlobalSymbol)
+    if symbol_type:
+        query = query.where(GlobalSymbol.symbol_type == symbol_type)
+    query = query.order_by(GlobalSymbol.symbol_type, GlobalSymbol.symbol)
+
+    result = await db.execute(query)
+    items = result.scalars().all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["symbol", "symbol_type", "description", "added_at"])
+    for item in items:
+        writer.writerow([
+            item.symbol,
+            item.symbol_type,
+            item.description or "",
+            item.added_at.isoformat() if item.added_at else "",
+        ])
+
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=global_symbols.csv"},
+    )

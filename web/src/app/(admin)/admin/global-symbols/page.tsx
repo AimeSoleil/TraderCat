@@ -6,6 +6,8 @@ import { DataTable } from "@/components/data-table";
 import { adminGlobalSymbolsApi } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Download, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { GlobalSymbolResponse } from "@/lib/types";
@@ -51,6 +53,7 @@ export default function AdminGlobalSymbolsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [addType, setAddType] = useState<"macro" | "sector">("macro");
   const [batchText, setBatchText] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "global-symbols", typeFilter],
@@ -94,7 +97,55 @@ export default function AdminGlobalSymbolsPage() {
     onError: () => toast.error("Failed to remove"),
   });
 
+  const batchRemoveMut = useMutation({
+    mutationFn: () => adminGlobalSymbolsApi.batchRemove(Array.from(selected)),
+    onSuccess: () => {
+      toast.success(`Removed ${selected.size} symbols`);
+      qc.invalidateQueries({ queryKey: ["admin", "global-symbols"] });
+      setSelected(new Set());
+    },
+    onError: () => toast.error("Batch remove failed"),
+  });
+
+  const toggleSelect = (sym: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(sym)) next.delete(sym);
+      else next.add(sym);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const allSymbols = (data?.items ?? []).map((i) => i.symbol);
+    if (selected.size === allSymbols.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(allSymbols));
+    }
+  };
+
   const columnsWithActions: ColumnDef<GlobalSymbolResponse>[] = [
+    {
+      id: "select",
+      header: () => (
+        <Checkbox
+          checked={
+            (data?.items?.length ?? 0) > 0 && selected.size === (data?.items?.length ?? 0)
+          }
+          onCheckedChange={toggleSelectAll}
+          aria-label="Select all"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={selected.has(row.original.symbol)}
+          onCheckedChange={() => toggleSelect(row.original.symbol)}
+          aria-label={`Select ${row.original.symbol}`}
+        />
+      ),
+      enableSorting: false,
+    },
     ...columns,
     {
       id: "actions",
@@ -116,46 +167,74 @@ export default function AdminGlobalSymbolsPage() {
         title="Global Symbols"
         description="Manage macro & sector symbols for global analysis"
         actions={
-          <Dialog open={addOpen} onOpenChange={setAddOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Symbols
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Batch Add Global Symbols</DialogTitle>
-              </DialogHeader>
-              <Select
-                value={addType}
-                onValueChange={(v) => setAddType(v as "macro" | "sector")}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="macro">Macro</SelectItem>
-                  <SelectItem value="sector">Sector</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">
-                One per line. Optional description after comma.
-              </p>
-              <Textarea
-                rows={8}
-                value={batchText}
-                onChange={(e) => setBatchText(e.target.value)}
-                placeholder={"SPY, S&P 500\nQQQ, Nasdaq 100\nDIA"}
-              />
+          <div className="flex gap-2">
+            {selected.size > 0 && (
               <Button
-                onClick={() => addMut.mutate()}
-                disabled={!batchText.trim()}
+                variant="destructive"
+                size="sm"
+                onClick={() => batchRemoveMut.mutate()}
               >
-                Add
+                <Trash2 className="mr-2 h-4 w-4" />
+                Remove {selected.size}
               </Button>
-            </DialogContent>
-          </Dialog>
+            )}
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const filterType = typeFilter !== "all" ? (typeFilter as "macro" | "sector") : undefined;
+                adminGlobalSymbolsApi.exportCsv(filterType).catch(() => toast.error("Export failed"));
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Button>
+
+            <Dialog open={addOpen} onOpenChange={setAddOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Symbols
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-h-[85vh] flex flex-col">
+                <DialogHeader>
+                  <DialogTitle>Batch Add Global Symbols</DialogTitle>
+                </DialogHeader>
+                <Select
+                  value={addType}
+                  onValueChange={(v) => setAddType(v as "macro" | "sector")}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="macro">Macro</SelectItem>
+                    <SelectItem value="sector">Sector</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  One per line. Optional description after comma.
+                </p>
+                <ScrollArea className="flex-1 min-h-0">
+                  <Textarea
+                    rows={12}
+                    className="min-h-[200px] max-h-[50vh] resize-y"
+                    value={batchText}
+                    onChange={(e) => setBatchText(e.target.value)}
+                    placeholder={"SPY, S&P 500\nQQQ, Nasdaq 100\nDIA"}
+                  />
+                </ScrollArea>
+                <Button
+                  onClick={() => addMut.mutate()}
+                  disabled={!batchText.trim()}
+                >
+                  Add
+                </Button>
+              </DialogContent>
+            </Dialog>
+          </div>
         }
       />
 

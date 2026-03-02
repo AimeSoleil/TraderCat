@@ -15,8 +15,10 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Plus, Trash2, Upload } from "lucide-react";
+import { Download, Plus, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { WatchlistItemResponse } from "@/lib/types";
@@ -98,7 +100,45 @@ export default function WatchlistPage() {
     onError: () => toast.error("Batch remove failed"),
   });
 
+  const toggleSelect = (sym: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(sym)) next.delete(sym);
+      else next.add(sym);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const allSymbols = (data?.items ?? []).map((i) => i.symbol);
+    if (selected.size === allSymbols.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(allSymbols));
+    }
+  };
+
   const columnsWithActions: ColumnDef<WatchlistItemResponse>[] = [
+    {
+      id: "select",
+      header: () => (
+        <Checkbox
+          checked={
+            (data?.items?.length ?? 0) > 0 && selected.size === (data?.items?.length ?? 0)
+          }
+          onCheckedChange={toggleSelectAll}
+          aria-label="Select all"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={selected.has(row.original.symbol)}
+          onCheckedChange={() => toggleSelect(row.original.symbol)}
+          aria-label={`Select ${row.original.symbol}`}
+        />
+      ),
+      enableSorting: false,
+    },
     ...columns,
     {
       id: "actions",
@@ -127,9 +167,21 @@ export default function WatchlistPage() {
                 size="sm"
                 onClick={() => batchRemoveMut.mutate()}
               >
+                <Trash2 className="mr-2 h-4 w-4" />
                 Remove {selected.size}
               </Button>
             )}
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                watchlistApi.exportCsv().catch(() => toast.error("Export failed"));
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Button>
 
             <Dialog open={batchOpen} onOpenChange={setBatchOpen}>
               <DialogTrigger asChild>
@@ -138,7 +190,7 @@ export default function WatchlistPage() {
                   Batch Import
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-h-[85vh] flex flex-col">
                 <DialogHeader>
                   <DialogTitle>Batch Import Symbols</DialogTitle>
                 </DialogHeader>
@@ -147,12 +199,15 @@ export default function WatchlistPage() {
                   <br />
                   <code className="text-xs">AAPL, Apple Inc</code>
                 </p>
-                <Textarea
-                  rows={8}
-                  value={batchText}
-                  onChange={(e) => setBatchText(e.target.value)}
-                  placeholder={"AAPL, Apple Inc\nMSFT, Microsoft\nTSLA"}
-                />
+                <ScrollArea className="flex-1 min-h-0">
+                  <Textarea
+                    rows={12}
+                    className="min-h-[200px] max-h-[50vh] resize-y"
+                    value={batchText}
+                    onChange={(e) => setBatchText(e.target.value)}
+                    placeholder={"AAPL, Apple Inc\nMSFT, Microsoft\nTSLA"}
+                  />
+                </ScrollArea>
                 <Button onClick={() => batchMut.mutate()} disabled={!batchText.trim()}>
                   Import
                 </Button>

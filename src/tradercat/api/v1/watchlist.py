@@ -1,5 +1,9 @@
 """Watchlist API endpoints."""
+import csv
+import io
+
 from fastapi import APIRouter, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func
 
 from tradercat.api.deps import CurrentUser, DatabaseSession
@@ -256,4 +260,43 @@ async def batch_remove_from_watchlist(
         removed=removed,
         not_found=not_found,
         results=results,
+    )
+
+
+@router.get("/export", response_class=StreamingResponse)
+async def export_watchlist_csv(
+    db: DatabaseSession,
+    current_user: CurrentUser,
+    symbol: str | None = Query(None, max_length=20),
+    company: str | None = Query(None, max_length=255),
+):
+    """
+    Export watchlist to CSV. Supports the same filters as the list endpoint.
+    """
+    query = select(WatchlistItem).where(WatchlistItem.user_id == current_user.id)
+
+    if symbol:
+        query = query.where(WatchlistItem.symbol.ilike(f"%{symbol}%"))
+    if company:
+        query = query.where(WatchlistItem.description.ilike(f"%{company}%"))
+
+    query = query.order_by(WatchlistItem.symbol)
+    result = await db.execute(query)
+    items = result.scalars().all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["symbol", "description", "added_at"])
+    for item in items:
+        writer.writerow([
+            item.symbol,
+            item.description or "",
+            item.added_at.isoformat() if item.added_at else "",
+        ])
+
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=watchlist.csv"},
     )

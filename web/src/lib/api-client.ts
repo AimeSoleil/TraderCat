@@ -79,6 +79,26 @@ function del<T = void>(path: string) {
   return request<T>(path, { method: "DELETE" });
 }
 
+/** Download a CSV file from the API and trigger browser save dialog. */
+async function downloadCsv(path: string, filename: string) {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${path}`, { headers });
+  if (!res.ok) throw new ApiError(res.status, await res.text());
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ── Auth API (login sends personal access token in body, no Bearer needed) ──
 
 import type * as T from "./types";
@@ -120,6 +140,13 @@ export const watchlistApi = {
     post<T.WatchlistBatchRemoveResponse>("/api/v1/watchlist/batch-remove", {
       symbols,
     }),
+  exportCsv: (params?: { symbol?: string; company?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.symbol) sp.set("symbol", params.symbol);
+    if (params?.company) sp.set("company", params.company);
+    const qs = sp.toString();
+    return downloadCsv(`/api/v1/watchlist/export${qs ? `?${qs}` : ""}`, "watchlist.csv");
+  },
 };
 
 export const signalsApi = {
@@ -133,6 +160,15 @@ export const signalsApi = {
     if (params.offset) sp.set("offset", String(params.offset));
     const qs = sp.toString();
     return get<T.SignalList>(`/api/v1/signals${qs ? `?${qs}` : ""}`);
+  },
+  exportCsv: (params?: { run_date?: string; symbol?: string; strategy?: string; signal?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.run_date) sp.set("run_date", params.run_date);
+    if (params?.symbol) sp.set("symbol", params.symbol);
+    if (params?.strategy) sp.set("strategy", params.strategy);
+    if (params?.signal) sp.set("signal", params.signal);
+    const qs = sp.toString();
+    return downloadCsv(`/api/v1/signals/export${qs ? `?${qs}` : ""}`, `signals_${params?.run_date || "all"}.csv`);
   },
 };
 
@@ -217,6 +253,10 @@ export const adminGlobalSymbolsApi = {
     post("/api/admin/global-symbols/batch", { items: symbols }),
   batchRemove: (symbols: string[]) =>
     post("/api/admin/global-symbols/batch-remove", { symbols }),
+  exportCsv: (symbolType?: "macro" | "sector") => {
+    const sp = symbolType ? `?symbol_type=${symbolType}` : "";
+    return downloadCsv(`/api/admin/global-symbols/export${sp}`, "global_symbols.csv");
+  },
 };
 
 export const adminStrategiesApi = {
