@@ -179,14 +179,22 @@ class TraderBot:
         """
         Runs all single-asset strategies for a specific symbol.
         Returns list of generated signals (no execution).
+
+        Data fetching and strategy execution are offloaded to a thread
+        so that the async event loop is never blocked by synchronous
+        OpenBB / indicator calls.
         """
+        import asyncio
+
         logger.info(f"🤖 Processing symbol: {symbol}...")
 
         # 1. Determine Data Requirements
         max_lookback = max(s.get_lookback_window() for s in self.single_strategies) if self.single_strategies else 30
         
-        # 2. Fetch Data
-        candles = self.data_provider.get_price_data(symbol, interval="1d", lookback=max_lookback)
+        # 2. Fetch Data — offload synchronous OpenBB call to thread pool
+        candles = await asyncio.to_thread(
+            self.data_provider.get_price_data, symbol, "1d", max_lookback
+        )
         
         if not candles:
             logger.warning(f"⚠️ No candle data found for {symbol}")
@@ -194,15 +202,21 @@ class TraderBot:
 
         logger.info(f"Fetched {len(candles)} candles for {symbol}")
 
-        # 3. Generate Signals
-        signals = []
-        for strategy in self.single_strategies:
-            try:
-                strategy_lookback = strategy.get_lookback_window()
-                signal = strategy.generate_signal(symbol, candles=candles[-strategy_lookback:])
-                logger.info(f"Strategy {strategy.__class__.__name__} generated signal: {signal.signal} for {symbol}")
-                signals.append(signal)
-            except Exception as e:
-                logger.error(f"Error running {strategy.__class__.__name__} on {symbol}: {traceback.format_exc()}")
+        # 3. Generate Signals — strategies also call sync providers internally
+        def _run_strategies():
+            signals = []
+            for strategy in self.single_strategies:
+                try:
+                    strategy_lookback = strategy.get_lookback_window()
+                    signal = strategy.generate_signal(symbol, candles=candles[-strategy_lookback:])
+                    signals.append(signal)
+                except Exception as e:
+                    logger.error(f"Error running {strategy.__class__.__name__} on {symbol}: {traceback.format_exc()}")
+            return signals
+
+        signals = await asyncio.to_thread(_run_strategies)
+
+        for signal in signals:
+            logger.info(f"Strategy {signal.strategy} generated signal: {signal.signal} for {symbol}")
 
         return signals
