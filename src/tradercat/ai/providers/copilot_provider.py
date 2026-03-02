@@ -466,8 +466,25 @@ class CopilotProvider(LLMProvider):
             if self._client is not None:
                 return self._client
 
+            # Derive SDK log_level from the application-wide setting so
+            # Copilot client verbosity follows the system logger.
+            sdk_log_level = "warning"
+            try:
+                from tradercat.config import settings
+                _level_map = {
+                    "DEBUG": "debug",
+                    "INFO": "info",
+                    "WARNING": "warning",
+                    "WARN": "warning",
+                    "ERROR": "error",
+                    "CRITICAL": "error",
+                }
+                sdk_log_level = _level_map.get(settings.log_level.upper(), "warning")
+            except Exception:
+                pass
+
             opts: Dict[str, Any] = {
-                "log_level": "warning",
+                "log_level": sdk_log_level,
                 "auto_start": True,
                 "auto_restart": True,
             }
