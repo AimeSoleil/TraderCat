@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "cp -r public .next/standalone/public 2>/dev/null; cp -r .next/static .next/standalone/.next/static 2>/dev/null; node .next/standalone/server.js",
+    "lint": "next lint"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",

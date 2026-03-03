@@ -79,21 +79,25 @@ export default function DashboardPage() {
     queryFn: () => watchlistApi.list(),
   });
 
-  const signals = useQuery({
-    queryKey: ["signals", "latest"],
-    queryFn: () => signalsApi.query({ limit: 5 }),
-  });
-
   const data = dashboard.data;
+
+  /* Use the effective run date (URL param → API response) for the signals query */
+  const effectiveDate = selectedDate ?? data?.run_date ?? "";
+
+  const signals = useQuery({
+    queryKey: ["signals", "byDate", effectiveDate],
+    queryFn: () =>
+      signalsApi.query({
+        run_date: effectiveDate || undefined,
+        limit: 500,
+      }),
+  });
 
   // Only active (buy / sell) positions are shown
   const activePositions =
     data?.positions.filter(
       (p) => p.verdict === "buy" || p.verdict === "sell",
     ) ?? [];
-
-  /* Resolve the effective date for stat-card links */
-  const effectiveDate = selectedDate ?? data?.run_date ?? "";
 
   return (
     <>
@@ -145,11 +149,6 @@ export default function DashboardPage() {
                 <Badge className={getRegimeColor(data.regime_label)}>
                   {data.regime_label}
                 </Badge>
-                {data.regime_score !== null && (
-                  <span className="text-xs text-muted-foreground">
-                    ({data.regime_score.toFixed(1)})
-                  </span>
-                )}
               </div>
             ) : (
               <span className="text-sm text-muted-foreground">—</span>
@@ -216,13 +215,11 @@ export default function DashboardPage() {
 
       {/* ---- Active Positions ---- */}
       {dashboard.isLoading ? (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <Skeleton className="h-5 w-40" />
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-64 w-full rounded-xl" />
-            ))}
-          </div>
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-14 w-full rounded-xl" />
+          ))}
         </div>
       ) : activePositions.length > 0 ? (
         <section>
@@ -247,7 +244,7 @@ export default function DashboardPage() {
               </Button>
             )}
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="space-y-2">
             {activePositions.map((p) => (
               <PositionCard key={p.id} position={p} />
             ))}
