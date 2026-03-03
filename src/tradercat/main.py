@@ -40,6 +40,10 @@ async def lifespan(app: FastAPI):
         logger.info("LLM progress logger initialized")
     except Exception as e:
         logger.warning(f"Failed to initialize LLM progress logger: {e}")
+
+    # Route uvicorn access / error logs into api.log
+    for _uv_name in ("uvicorn.access", "uvicorn.error", "uvicorn"):
+        get_logger(_uv_name)
     
     # Conditionally start pipeline scheduler based on RUN_MODE
     # NOTE: In production, use RUN_MODE=api-only for API service

@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { DatePicker } from "@/components/date-picker";
-import { PositionCard } from "@/components/position-card";
+import { PositionsTable } from "@/components/positions-table";
 import { dashboardApi, watchlistApi, signalsApi } from "@/lib/api-client";
 import {
   BarChart3,
@@ -244,11 +244,7 @@ export default function DashboardPage() {
               </Button>
             )}
           </div>
-          <div className="space-y-2">
-            {activePositions.map((p) => (
-              <PositionCard key={p.id} position={p} />
-            ))}
-          </div>
+          <PositionsTable positions={activePositions} />
         </section>
       ) : !data?.positions.length ? (
         /* Empty state — no positions at all */

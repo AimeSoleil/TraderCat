@@ -24,28 +24,32 @@ LOG_COLORS = {
     logging.CRITICAL: (Fore.MAGENTA + Style.BRIGHT) if COLORAMA_AVAILABLE else ""
 }
 
-# ── Default log file paths ────────────────────────────────────────────
+# ── Two log files: pipeline + api ─────────────────────────────────────
 DEFAULT_LOG_DIR = "logs"
 DEFAULT_API_LOG_FILE = "logs/api.log"
 DEFAULT_PIPELINE_LOG_FILE = "logs/pipeline.log"
-DEFAULT_LLM_LOG_FILE = "logs/llm_calls.log"
 
-# Prefix → default log file.  Evaluated in order; first match wins.
+# Prefix → log file.  First match wins.
+# Pipeline processing + LLM calls → pipeline.log
+# Everything else (API, uvicorn access) → api.log
 _PREFIX_LOG_MAP: list[tuple[str, str]] = [
-    ("tradercat.ai.llm_calls", DEFAULT_LLM_LOG_FILE),
     ("tradercat.pipeline",     DEFAULT_PIPELINE_LOG_FILE),
     ("tradercat.core",         DEFAULT_PIPELINE_LOG_FILE),
-    ("tradercat.ai",           DEFAULT_PIPELINE_LOG_FILE),
+    ("tradercat.ai",           DEFAULT_PIPELINE_LOG_FILE),   # includes ai.llm_calls
     ("tradercat.api",          DEFAULT_API_LOG_FILE),
     ("tradercat.main",         DEFAULT_API_LOG_FILE),
     ("tradercat.database",     DEFAULT_API_LOG_FILE),
+    ("uvicorn.access",         DEFAULT_API_LOG_FILE),
+    ("uvicorn.error",          DEFAULT_API_LOG_FILE),
+    ("uvicorn",                DEFAULT_API_LOG_FILE),
+    ("fastapi",                DEFAULT_API_LOG_FILE),
 ]
 
 _DEFAULT_FALLBACK_LOG = DEFAULT_API_LOG_FILE
 
 
 def _resolve_default_log_file(name: str) -> Optional[str]:
-    """Return the default log file for *name*, or None for non-tradercat loggers."""
+    """Return the default log file for *name*, or None for unknown loggers."""
     for prefix, path in _PREFIX_LOG_MAP:
         if name == prefix or name.startswith(prefix + "."):
             return path
@@ -225,10 +229,10 @@ def get_logger(name: str,
     * If *log_file* is given explicitly, that path is used.
     * Otherwise a default is chosen based on the logger **name**:
 
-      - ``tradercat.api.*`` / ``tradercat.main`` → ``logs/api.log``
       - ``tradercat.pipeline.*`` / ``tradercat.core.*`` / ``tradercat.ai.*``
-        → ``logs/pipeline.log``
-      - ``tradercat.ai.llm_calls`` → ``logs/llm_calls.log``
+        (incl. LLM calls) → ``logs/pipeline.log``
+      - ``tradercat.api.*`` / ``tradercat.main`` / everything else
+        → ``logs/api.log``
 
     * Pass ``disable_file=True`` to skip the file handler entirely.
     """
@@ -280,19 +284,14 @@ def get_logger(name: str,
 
 def init_llm_logger(log_file: Optional[str] = None, use_json: bool = True) -> None:
     """
-    Initialize the dedicated LLM call logger with a timed-rotating file handler.
+    Initialize the LLM call logger with a timed-rotating file handler.
 
     Should be called once during startup (from ``main.py`` or ``runner.py``).
-    With the refactored ``get_logger`` the LLM logger already gets a
-    size-rotating handler automatically; calling this upgrades it to a
-    timed-rotating (daily) handler.
+    LLM calls are routed to ``pipeline.log`` alongside other pipeline logs.
+    This call upgrades the handler to timed-rotating (daily).
     """
     if log_file is None:
-        try:
-            from tradercat.config import settings as _settings
-            log_file = _settings.llm_progress_log_file
-        except Exception:
-            log_file = DEFAULT_LLM_LOG_FILE
+        log_file = DEFAULT_PIPELINE_LOG_FILE
 
     get_logger(
         "tradercat.ai.llm_calls",
