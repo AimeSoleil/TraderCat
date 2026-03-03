@@ -15,13 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Download, Plus, Trash2 } from "lucide-react";
@@ -202,18 +196,20 @@ export default function AdminGlobalSymbolsPage() {
                 <DialogHeader>
                   <DialogTitle>Batch Add Global Symbols</DialogTitle>
                 </DialogHeader>
-                <Select
-                  value={addType}
-                  onValueChange={(v) => setAddType(v as "macro" | "sector")}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="macro">Macro</SelectItem>
-                    <SelectItem value="sector">Sector</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Type:</span>
+                  {(["macro", "sector"] as const).map((t) => (
+                    <Button
+                      key={t}
+                      variant={addType === t ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setAddType(t)}
+                      className="capitalize"
+                    >
+                      {t}
+                    </Button>
+                  ))}
+                </div>
                 <p className="text-sm text-muted-foreground">
                   One per line. Optional description after comma.
                 </p>
@@ -238,17 +234,18 @@ export default function AdminGlobalSymbolsPage() {
         }
       />
 
-      <div className="mb-4">
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="macro">Macro</SelectItem>
-            <SelectItem value="sector">Sector</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="mb-4 flex items-center gap-2">
+        {(["all", "macro", "sector"] as const).map((t) => (
+          <Button
+            key={t}
+            variant={typeFilter === t ? "default" : "outline"}
+            size="sm"
+            onClick={() => setTypeFilter(t)}
+            className="capitalize"
+          >
+            {t === "all" ? "All Types" : t}
+          </Button>
+        ))}
       </div>
 
       <DataTable

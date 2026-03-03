@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/components/providers/auth-provider";
 import { PageHeader } from "@/components/page-header";
@@ -15,12 +16,15 @@ import { PositionCard } from "@/components/position-card";
 import { dashboardApi, watchlistApi, signalsApi } from "@/lib/api-client";
 import {
   BarChart3,
-  FileText,
   List,
   Shield,
   ArrowRight,
   Inbox,
 } from "lucide-react";
+
+/* ------------------------------------------------------------------ */
+/*  Regime colour helpers                                              */
+/* ------------------------------------------------------------------ */
 
 const regimeColors: Record<string, string> = {
   "DARK GREEN": "bg-emerald-600 text-white",
@@ -39,18 +43,37 @@ function getRegimeColor(label: string | null | undefined): string {
   return "bg-muted text-muted-foreground";
 }
 
+/* ------------------------------------------------------------------ */
+/*  Dashboard page                                                     */
+/* ------------------------------------------------------------------ */
+
 export default function DashboardPage() {
   const { user, isAdmin } = useAuth();
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  // Main dashboard data
+  // Sync selectedDate with the URL query param `date`
+  const selectedDate = searchParams.get("date");
+
+  const setSelectedDate = useCallback(
+    (date: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("date", date);
+      router.replace(`?${params.toString()}`);
+    },
+    [router, searchParams],
+  );
+
+  /* ---- Data fetching ---- */
+
   const dashboard = useQuery({
     queryKey: ["dashboard", "positions", selectedDate],
     queryFn: () =>
-      dashboardApi.getPositions(selectedDate ? { run_date: selectedDate } : undefined),
+      dashboardApi.getPositions(
+        selectedDate ? { run_date: selectedDate } : undefined,
+      ),
   });
 
-  // Side stats
   const watchlist = useQuery({
     queryKey: ["watchlist"],
     queryFn: () => watchlistApi.list(),
@@ -62,11 +85,15 @@ export default function DashboardPage() {
   });
 
   const data = dashboard.data;
-  const activePositions = data?.positions.filter((p) => p.verdict === "buy" || p.verdict === "sell") ?? [];
-  const watchlistPositions = data?.positions.filter((p) => p.verdict === "watchlist") ?? [];
-  const rejectedPositions = data?.positions.filter(
-    (p) => p.verdict === "reject" || p.verdict === "hold",
-  ) ?? [];
+
+  // Only active (buy / sell) positions are shown
+  const activePositions =
+    data?.positions.filter(
+      (p) => p.verdict === "buy" || p.verdict === "sell",
+    ) ?? [];
+
+  /* Resolve the effective date for stat-card links */
+  const effectiveDate = selectedDate ?? data?.run_date ?? "";
 
   return (
     <>
@@ -90,15 +117,25 @@ export default function DashboardPage() {
         }
       />
 
-      {/* Summary Stats Bar */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {/* Regime */}
-        <Card>
+      {/* ---- Summary Stats (3 clickable cards) ---- */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Market Regime */}
+        <Card
+          className="cursor-pointer transition-colors hover:bg-muted/50"
+          onClick={() =>
+            router.push(
+              `/reports?tab=macro${effectiveDate ? `&date=${effectiveDate}` : ""}`,
+            )
+          }
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground">
               Market Regime
             </CardTitle>
-            <Shield className="h-3.5 w-3.5 text-muted-foreground" />
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Shield className="h-3.5 w-3.5" />
+              <ArrowRight className="h-3 w-3" />
+            </div>
           </CardHeader>
           <CardContent>
             {dashboard.isLoading ? (
@@ -120,77 +157,56 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Active Trades */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
-              Active Trades
-            </CardTitle>
-            <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {dashboard.isLoading ? (
-              <Skeleton className="h-7 w-12" />
-            ) : (
-              <p className="text-2xl font-bold">{activePositions.length}</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Watchlist Symbols */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
-              Watchlist
-            </CardTitle>
-            <List className="h-3.5 w-3.5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {watchlist.isLoading ? (
-              <Skeleton className="h-7 w-12" />
-            ) : (
-              <p className="text-2xl font-bold">{watchlist.data?.total ?? "—"}</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Latest Signals */}
-        <Card>
+        {/* Signals Today */}
+        <Card
+          className="cursor-pointer transition-colors hover:bg-muted/50"
+          onClick={() =>
+            router.push(
+              `/signals${effectiveDate ? `?date=${effectiveDate}` : ""}`,
+            )
+          }
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground">
               Signals Today
             </CardTitle>
-            <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <BarChart3 className="h-3.5 w-3.5" />
+              <ArrowRight className="h-3 w-3" />
+            </div>
           </CardHeader>
           <CardContent>
             {signals.isLoading ? (
               <Skeleton className="h-7 w-12" />
             ) : (
-              <p className="text-2xl font-bold">{signals.data?.total ?? "—"}</p>
+              <p className="text-2xl font-bold">
+                {signals.data?.total ?? "—"}
+              </p>
             )}
           </CardContent>
         </Card>
 
-        {/* Briefing Link */}
-        <Card>
+        {/* Watchlist */}
+        <Card
+          className="cursor-pointer transition-colors hover:bg-muted/50"
+          onClick={() => router.push("/watchlist")}
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground">
-              Full Report
+              Watchlist
             </CardTitle>
-            <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <List className="h-3.5 w-3.5" />
+              <ArrowRight className="h-3 w-3" />
+            </div>
           </CardHeader>
           <CardContent>
-            {dashboard.isLoading ? (
-              <Skeleton className="h-7 w-24" />
-            ) : data?.briefing_id ? (
-              <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs">
-                <Link href={`/reports/${data.briefing_id}`}>
-                  View Briefing
-                  <ArrowRight className="h-3 w-3" />
-                </Link>
-              </Button>
+            {watchlist.isLoading ? (
+              <Skeleton className="h-7 w-12" />
             ) : (
-              <span className="text-sm text-muted-foreground">—</span>
+              <p className="text-2xl font-bold">
+                {watchlist.data?.total ?? "—"}
+              </p>
             )}
           </CardContent>
         </Card>
@@ -198,7 +214,7 @@ export default function DashboardPage() {
 
       <Separator className="my-6" />
 
-      {/* Active Positions */}
+      {/* ---- Active Positions ---- */}
       {dashboard.isLoading ? (
         <div className="space-y-4">
           <Skeleton className="h-5 w-40" />
@@ -218,7 +234,12 @@ export default function DashboardPage() {
               </span>
             </h2>
             {data?.briefing_id && (
-              <Button asChild variant="ghost" size="sm" className="gap-1 text-xs">
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="gap-1 text-xs"
+              >
                 <Link href={`/reports/${data.briefing_id}`}>
                   View Full Report
                   <ArrowRight className="h-3 w-3" />
@@ -233,7 +254,7 @@ export default function DashboardPage() {
           </div>
         </section>
       ) : !data?.positions.length ? (
-        /* Empty state */
+        /* Empty state — no positions at all */
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
           <Inbox className="mb-4 h-12 w-12 text-muted-foreground/30" />
           <h3 className="text-base font-semibold">No positions yet</h3>
@@ -248,40 +269,6 @@ export default function DashboardPage() {
           )}
         </div>
       ) : null}
-
-      {/* Watchlist Positions */}
-      {watchlistPositions.length > 0 && (
-        <section className="mt-8">
-          <h2 className="mb-4 text-lg font-semibold">
-            Watchlist
-            <span className="ml-2 text-sm font-normal text-muted-foreground">
-              ({watchlistPositions.length})
-            </span>
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {watchlistPositions.map((p) => (
-              <PositionCard key={p.id} position={p} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Rejected / Hold */}
-      {rejectedPositions.length > 0 && (
-        <section className="mt-8">
-          <h2 className="mb-4 text-lg font-semibold text-muted-foreground">
-            Rejected / Hold
-            <span className="ml-2 text-sm font-normal">
-              ({rejectedPositions.length})
-            </span>
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {rejectedPositions.map((p) => (
-              <PositionCard key={p.id} position={p} />
-            ))}
-          </div>
-        </section>
-      )}
     </>
   );
 }

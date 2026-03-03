@@ -2,11 +2,11 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/page-header";
+import { DatePicker } from "@/components/date-picker";
 import { reportsApi } from "@/lib/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -33,10 +33,59 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { FileText, Shield, Inbox } from "lucide-react";
 import type {
   MacroRegimeContextResponse,
   SymbolExecutionPlanResponse,
 } from "@/lib/types";
+
+/* ── Regime color map (same as Dashboard) ── */
+
+const regimeColors: Record<string, string> = {
+  "DARK GREEN": "bg-emerald-600 text-white",
+  GREEN: "bg-emerald-500 text-white",
+  YELLOW: "bg-amber-400 text-amber-950",
+  ORANGE: "bg-orange-500 text-white",
+  RED: "bg-red-600 text-white",
+};
+
+function getRegimeColor(label: string | null | undefined): string {
+  if (!label) return "bg-muted text-muted-foreground";
+  const upper = label.toUpperCase();
+  for (const [key, val] of Object.entries(regimeColors)) {
+    if (upper.includes(key)) return val;
+  }
+  return "bg-muted text-muted-foreground";
+}
+
+function getRegimeBorderColor(label: string | null | undefined): string {
+  if (!label) return "border-muted-foreground/30";
+  const upper = label.toUpperCase();
+  if (upper.includes("DARK GREEN")) return "border-emerald-600";
+  if (upper.includes("GREEN")) return "border-emerald-500";
+  if (upper.includes("YELLOW")) return "border-amber-400";
+  if (upper.includes("ORANGE")) return "border-orange-500";
+  if (upper.includes("RED")) return "border-red-600";
+  return "border-muted-foreground/30";
+}
+
+/* ── Empty state helper ── */
+
+function EmptyState({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center">
+      <Inbox className="mb-3 h-10 w-10 text-muted-foreground/30" />
+      <p className="text-sm font-medium">{title}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+    </div>
+  );
+}
 
 /* ── Briefing card for My Briefing tab ── */
 
@@ -53,19 +102,30 @@ function BriefingCard({
 }) {
   return (
     <Link href={href}>
-      <Card className="cursor-pointer transition-colors hover:bg-muted/50">
+      <Card className="cursor-pointer border-l-4 border-primary transition-colors hover:bg-muted/50">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium">Briefing</CardTitle>
-            <Badge variant="outline" className="text-xs">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" />
+              <CardTitle className="text-sm font-medium">Briefing</CardTitle>
+            </div>
+            <Badge variant="outline" className="text-xs font-semibold">
               {runDate}
             </Badge>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-2 text-xs text-muted-foreground">
-            {identity && <span>Persona: {identity}</span>}
-            {model && <span>Model: {model}</span>}
+          <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {identity && (
+              <span>
+                Persona: <span className="font-medium text-foreground">{identity}</span>
+              </span>
+            )}
+            {model && (
+              <span>
+                Model: <span className="font-medium text-foreground">{model}</span>
+              </span>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -84,23 +144,45 @@ function MacroCard({
 }) {
   return (
     <Link href={href}>
-      <Card className="cursor-pointer transition-colors hover:bg-muted/50">
+      <Card
+        className={`cursor-pointer border-l-4 ${getRegimeBorderColor(report.regime_label)} transition-colors hover:bg-muted/50`}
+      >
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium">
-              {report.regime_label ?? "Macro Regime"}
-            </CardTitle>
-            <Badge variant="outline" className="text-xs">
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">
+                {report.regime_label ?? "Macro Regime"}
+              </CardTitle>
+            </div>
+            <Badge variant="outline" className="text-xs font-semibold">
               {report.run_date}
             </Badge>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-2 text-xs text-muted-foreground">
-            {report.regime_score != null && (
-              <span>Score: {report.regime_score.toFixed(1)}</span>
+          <div className="flex flex-wrap items-center gap-3">
+            {report.regime_label && (
+              <Badge className={getRegimeColor(report.regime_label)}>
+                {report.regime_label}
+              </Badge>
             )}
-            {report.model_used && <span>Model: {report.model_used}</span>}
+            {report.regime_score != null && (
+              <span className="text-xs text-muted-foreground">
+                Score:{" "}
+                <span className="font-semibold text-foreground">
+                  {report.regime_score.toFixed(1)}
+                </span>
+              </span>
+            )}
+            {report.model_used && (
+              <span className="text-xs text-muted-foreground">
+                Model:{" "}
+                <span className="font-medium text-foreground">
+                  {report.model_used}
+                </span>
+              </span>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -138,18 +220,18 @@ function PlanDetailContent({ plan }: { plan: SymbolExecutionPlanResponse }) {
           {plan.verdict && (
             <Badge
               variant={plan.verdict === "buy" ? "default" : plan.verdict === "sell" ? "destructive" : "secondary"}
-              className="text-[0.65rem] px-1.5 py-px"
+              className="text-xs px-1.5 py-px"
             >
               {plan.verdict.toUpperCase()}
             </Badge>
           )}
           {plan.setup_quality && (
-            <span className="text-[0.65rem] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               Quality: <span className="font-medium text-foreground">{plan.setup_quality}</span>
             </span>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-[0.6rem] text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>{plan.run_date}</span>
           {plan.identity_used && <span>Persona: {plan.identity_used}</span>}
           {plan.model_used && <span>Model: {plan.model_used}</span>}
@@ -160,7 +242,7 @@ function PlanDetailContent({ plan }: { plan: SymbolExecutionPlanResponse }) {
       <hr className="border-border" />
 
       {/* ── Body: markdown content ── */}
-      <MarkdownRenderer content={strippedContent} className="text-[0.475rem] leading-relaxed" />
+      <MarkdownRenderer content={strippedContent} className="text-sm leading-relaxed" />
     </div>
   );
 }
@@ -187,9 +269,10 @@ function PlansTab({
 
   if (!plans?.length) {
     return (
-      <p className="text-sm text-muted-foreground">
-        No execution plans found.
-      </p>
+      <EmptyState
+        title="No execution plans found"
+        description="Try selecting a different date"
+      />
     );
   }
 
@@ -223,7 +306,7 @@ function PlansTab({
 
   /* ── Desktop: table ── */
   const desktopTable = (
-    <div className="hidden sm:block rounded-md border">
+    <div className="hidden sm:block overflow-x-auto rounded-md border">
       <Table>
         <TableHeader>
           <TableRow>
@@ -286,7 +369,7 @@ function PlansTab({
       ) : (
         /* ── Desktop: centered dialog ── */
         <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-          <DialogContent aria-describedby={undefined} className="max-w-[162rem] w-[98vw] max-h-[90vh] overflow-y-auto px-10 py-8">
+          <DialogContent aria-describedby={undefined} className="max-w-4xl max-h-[90vh] overflow-y-auto px-10 py-8">
             {selected && (
               <>
                 <DialogHeader className="sr-only">
@@ -359,19 +442,17 @@ export default function ReportsPage() {
 
   return (
     <>
-      <PageHeader title="Reports" description="AI-generated analysis reports" />
-
-      <div className="mb-4">
-        <Input
-          type="date"
-          value={runDate}
-          onChange={(e) => handleDateChange(e.target.value)}
-          className="w-40"
-        />
-        <p className="mt-1 text-xs text-muted-foreground">
-          Select a US market trading day (no weekends or holidays)
-        </p>
-      </div>
+      <PageHeader
+        title="Reports"
+        description="AI-generated analysis reports"
+        actions={
+          <DatePicker
+            value={runDate}
+            onChange={handleDateChange}
+            placeholder="Select date"
+          />
+        }
+      />
 
       <Tabs value={tab} onValueChange={handleTabChange}>
         <TabsList>
@@ -391,7 +472,10 @@ export default function ReportsPage() {
           {briefings.isLoading ? (
             <SkeletonGrid />
           ) : !briefings.data?.reports.length ? (
-            <p className="text-sm text-muted-foreground">No briefings found.</p>
+            <EmptyState
+              title="No briefings found"
+              description="Try selecting a different date"
+            />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {briefings.data.reports.map((r) => (
@@ -412,7 +496,10 @@ export default function ReportsPage() {
           {macroReports.isLoading ? (
             <SkeletonGrid />
           ) : !macroReports.data?.reports.length ? (
-            <p className="text-sm text-muted-foreground">No macro reports found.</p>
+            <EmptyState
+              title="No macro reports found"
+              description="Try selecting a different date"
+            />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {macroReports.data.reports.map((r) => (

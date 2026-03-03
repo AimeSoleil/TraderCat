@@ -14,7 +14,9 @@ import {
   type ExpandedState,
   type Row,
 } from "@tanstack/react-table";
+import { useSearchParams, useRouter } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
+import { DatePicker } from "@/components/date-picker";
 import { signalsApi } from "@/lib/api-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,7 +37,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ChevronDown, ChevronRight, Download, Loader2 } from "lucide-react";
-import { Fragment, useState, useEffect, useRef, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import type { SignalResponse } from "@/lib/types";
 
@@ -225,11 +227,20 @@ function todayStr() {
 }
 
 export default function SignalsPage() {
-  const [runDate, setRunDate] = useState(todayStr);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [runDate, setRunDate] = useState(() => searchParams.get("date") || todayStr());
   const [symbolFilter, setSymbolFilter] = useState("");
   const [signalFilter, setSignalFilter] = useState<string>("all");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [expanded, setExpanded] = useState<ExpandedState>({});
+
+  const handleDateChange = useCallback((date: string) => {
+    setRunDate(date);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("date", date);
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }, [searchParams, router]);
 
   // Debounce symbol input so we don't fire on every keystroke
   const debouncedSymbol = useDebouncedValue(symbolFilter, 350);
@@ -296,11 +307,10 @@ export default function SignalsPage() {
       />
 
       <div className="mb-4 flex flex-wrap gap-3">
-        <Input
-          type="date"
+        <DatePicker
           value={runDate}
-          onChange={(e) => setRunDate(e.target.value)}
-          className="w-40"
+          onChange={handleDateChange}
+          placeholder="Select date"
         />
         <Input
           placeholder="Symbol"
@@ -323,7 +333,7 @@ export default function SignalsPage() {
       </div>
 
       <div className="space-y-4">
-        <div className="relative rounded-md border">
+        <div className="relative overflow-x-auto rounded-md border">
           {isFetching && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-[1px]">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
