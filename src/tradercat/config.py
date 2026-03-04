@@ -89,8 +89,7 @@ Public endpoints: `/`, `/api/admin/system/health`, `/api/v1/auth/login`
     
     # LLM Progress Logging
     llm_progress_logging_enabled: bool = Field(default=True, description="Enable real-time LLM call progress logging")
-    llm_progress_log_file: str = Field(default="logs/llm_calls.log", description="File path for LLM call logs")
-    llm_progress_interval: float = Field(default=10.0, description="Seconds between LLM progress updates (console + pipeline.log)")
+    llm_progress_interval: float = Field(default=15.0, description="Seconds between LLM progress updates (console + pipeline.log)")
     llm_streaming_enabled: bool = Field(default=True, description="Enable streaming output for Copilot LLM calls (logs tokens as they arrive)")
     
     # Run Mode
