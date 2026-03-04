@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func
 
 from tradercat.api.deps import CurrentUser, DatabaseSession
-from tradercat.models import MacroRegimeContext, SymbolExecutionPlan, UserBriefing
+from tradercat.models import MacroRegimeContext, SymbolExecutionPlan, UserBriefing, PipelineRun
 from tradercat.schemas.report import (
     MacroRegimeContextResponse,
     MacroRegimeContextDetail,
@@ -166,7 +166,64 @@ async def get_execution_plan(
     return report
 
 
-# --- User Briefing by ID (must be after /macro and /plans to avoid path conflicts) ---
+# --- Pipeline Status (for all authenticated users — must be before /{report_id}) ---
+
+from pydantic import BaseModel
+from datetime import datetime
+
+
+class PipelineStatusResponse(BaseModel):
+    """Lightweight pipeline run status — tells the UI *why* data may be missing."""
+    run_date: str | None
+    status: str | None       # pending / running / completed / failed / None
+    step: str | None          # last pipeline step reached
+    error_log: str | None     # error details if failed
+    started_at: str | None
+    completed_at: str | None
+
+
+@router.get("/pipeline-status", response_model=PipelineStatusResponse)
+async def get_pipeline_status_for_date(
+    db: DatabaseSession,
+    current_user: CurrentUser,
+    run_date: date | None = Query(None, description="Date to check (defaults to today)"),
+):
+    """
+    Return pipeline run status for a given date.
+
+    This helps the UI display meaningful messages when reports or execution
+    plans are missing — e.g. "Pipeline failed at P3" or "Pipeline is still running".
+    """
+    from datetime import date as date_cls
+
+    effective_date = run_date or date_cls.today()
+
+    result = await db.execute(
+        select(PipelineRun).where(PipelineRun.run_date == effective_date).limit(1)
+    )
+    pr = result.scalars().first()
+
+    if not pr:
+        return PipelineStatusResponse(
+            run_date=str(effective_date),
+            status=None,
+            step=None,
+            error_log=None,
+            started_at=None,
+            completed_at=None,
+        )
+
+    return PipelineStatusResponse(
+        run_date=str(pr.run_date),
+        status=pr.status,
+        step=pr.step,
+        error_log=pr.error_log,
+        started_at=str(pr.started_at) if pr.started_at else None,
+        completed_at=str(pr.completed_at) if pr.completed_at else None,
+    )
+
+
+# --- User Briefing by ID (must be after /macro, /plans, /pipeline-status to avoid path conflicts) ---
 
 @router.get("/{report_id}", response_model=UserBriefingDetail)
 async def get_user_briefing(

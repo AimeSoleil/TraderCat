@@ -207,6 +207,14 @@ export const reportsApi = {
     return get<T.SymbolExecutionPlanList>(`/api/v1/reports/plans${qs ? `?${qs}` : ""}`);
   },
   getPlan: (id: string) => get<T.SymbolExecutionPlanDetail>(`/api/v1/reports/plans/${id}`),
+
+  // Pipeline status for a date (lightweight — all authenticated users)
+  pipelineStatus: (params?: { run_date?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.run_date) sp.set("run_date", params.run_date);
+    const qs = sp.toString();
+    return get<T.PipelineStatusForDate>(`/api/v1/reports/pipeline-status${qs ? `?${qs}` : ""}`);
+  },
 };
 
 export const dashboardApi = {

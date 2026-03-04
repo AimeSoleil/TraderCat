@@ -238,6 +238,8 @@ class CopilotProvider(LLMProvider):
                     phase=self._phase,
                     enabled=self._progress_logging_enabled,
                 )
+                # Attach accumulator so llm_call_progress background task can report streaming stats
+                result_dict["_accumulator"] = accumulator
                 try:
                     content = await self._send_streaming(session, prompt, accumulator)
                     result_dict["output_length"] = len(content)
@@ -341,6 +343,8 @@ class CopilotProvider(LLMProvider):
                     phase=self._phase,
                     enabled=self._progress_logging_enabled,
                 )
+                # Attach accumulator so llm_call_progress background task can report streaming stats
+                result_dict["_accumulator"] = accumulator
                 try:
                     content = await self._send_streaming(session, flat_prompt, accumulator)
                     result_dict["output_length"] = len(content)

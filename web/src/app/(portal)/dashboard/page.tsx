@@ -20,6 +20,9 @@ import {
   Shield,
   ArrowRight,
   Inbox,
+  AlertTriangle,
+  Loader2,
+  Clock,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -41,6 +44,147 @@ function getRegimeColor(label: string | null | undefined): string {
     if (upper.includes(key)) return val;
   }
   return "bg-muted text-muted-foreground";
+}
+
+/* ------------------------------------------------------------------ */
+/*  Pipeline status banner — explains why data may be missing          */
+/* ------------------------------------------------------------------ */
+
+/** Map pipeline step codes to human-readable phase names */
+function formatPipelineStep(step: string | null | undefined): string {
+  if (!step) return "Unknown step";
+  const map: Record<string, string> = {
+    p1_signals: "Phase 1 — Signal Generation",
+    p2_macro_regime: "Phase 2 — Macro Regime Analysis",
+    p3_execution_plans: "Phase 3 — Execution Plans",
+    p4_user_briefings: "Phase 4 — User Briefings",
+    completed: "Completed",
+  };
+  return map[step] ?? step;
+}
+
+function PipelineStatusBanner({
+  status,
+  step,
+  error,
+  isAdmin,
+}: {
+  status: string | null | undefined;
+  step: string | null | undefined;
+  error: string | null | undefined;
+  isAdmin: boolean;
+}) {
+  // No pipeline run exists for this date
+  if (!status) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
+        <Clock className="mb-4 h-12 w-12 text-muted-foreground/30" />
+        <h3 className="text-base font-semibold">Pipeline has not run</h3>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          No pipeline run found for this date. An admin can trigger it manually.
+        </p>
+        {isAdmin && (
+          <Button asChild variant="outline" size="sm" className="mt-4">
+            <Link href="/admin/pipeline">Go to Pipeline</Link>
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  // Pipeline is currently running
+  if (status === "running") {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-blue-200 bg-blue-50 py-12 text-center dark:border-blue-900 dark:bg-blue-950/30">
+        <Loader2 className="mb-4 h-12 w-12 animate-spin text-blue-500" />
+        <h3 className="text-base font-semibold">Pipeline is running</h3>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          Currently at: <span className="font-medium">{formatPipelineStep(step)}</span>.
+          Positions will appear once execution plans are generated.
+        </p>
+      </div>
+    );
+  }
+
+  // Pipeline is pending (queued but not started)
+  if (status === "pending") {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
+        <Clock className="mb-4 h-12 w-12 text-muted-foreground/30" />
+        <h3 className="text-base font-semibold">Pipeline is pending</h3>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          The pipeline is queued and will start shortly.
+        </p>
+      </div>
+    );
+  }
+
+  // Pipeline failed
+  if (status === "failed") {
+    // Determine a user-friendly reason from the step and error
+    let reason = "An unexpected error occurred during analysis.";
+    if (step === "p1_signals") {
+      reason = "Signal generation failed — market data may be unavailable.";
+    } else if (step === "p2_macro_regime") {
+      reason = "Macro regime analysis failed — LLM service may be unreachable.";
+    } else if (step === "p3_execution_plans") {
+      reason = "Execution plan generation failed — LLM analysis did not complete.";
+    } else if (step === "p4_user_briefings") {
+      reason = "Briefing generation failed — execution plans were generated but the final summary could not be produced.";
+    }
+    // Check for common error patterns
+    if (error) {
+      if (error.toLowerCase().includes("timeout")) {
+        reason += " (Timeout — the LLM took too long to respond)";
+      } else if (error.toLowerCase().includes("token") || error.toLowerCase().includes("auth")) {
+        reason += " (Authentication error — LLM API key may be invalid)";
+      } else if (error.toLowerCase().includes("database") || error.toLowerCase().includes("sqlalchemy")) {
+        reason += " (Database error — data could not be saved)";
+      }
+    }
+
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-red-200 bg-red-50 py-12 text-center dark:border-red-900 dark:bg-red-950/30">
+        <AlertTriangle className="mb-4 h-12 w-12 text-red-500" />
+        <h3 className="text-base font-semibold text-red-700 dark:text-red-400">Pipeline Failed</h3>
+        <p className="mt-1 max-w-md text-sm text-muted-foreground">{reason}</p>
+        {error && (
+          <details className="mt-3 max-w-lg text-left">
+            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+              Technical details
+            </summary>
+            <pre className="mt-1 max-h-24 overflow-auto rounded bg-muted p-2 text-xs">
+              {error}
+            </pre>
+          </details>
+        )}
+        {isAdmin && (
+          <Button asChild variant="outline" size="sm" className="mt-4">
+            <Link href="/admin/pipeline">Go to Pipeline</Link>
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  // Pipeline completed but no positions (LLM returned no actionable data)
+  if (status === "completed") {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
+        <Inbox className="mb-4 h-12 w-12 text-muted-foreground/30" />
+        <h3 className="text-base font-semibold">No positions generated</h3>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          The pipeline completed successfully but no actionable positions were
+          found for your watchlist. This may happen when the LLM analysis did
+          not identify high-confidence setups, or all symbols were rejected by
+          the gate audit.
+        </p>
+      </div>
+    );
+  }
+
+  // Fallback
+  return null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -238,20 +382,13 @@ export default function DashboardPage() {
           <PositionsTable positions={activePositions} />
         </section>
       ) : !data?.positions.length ? (
-        /* Empty state — no positions at all */
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-          <Inbox className="mb-4 h-12 w-12 text-muted-foreground/30" />
-          <h3 className="text-base font-semibold">No positions yet</h3>
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Run the pipeline to generate trading signals and execution plans for
-            your watchlist symbols.
-          </p>
-          {isAdmin && (
-            <Button asChild variant="outline" size="sm" className="mt-4">
-              <Link href="/admin/pipeline">Go to Pipeline</Link>
-            </Button>
-          )}
-        </div>
+        /* Empty state — show pipeline status context */
+        <PipelineStatusBanner
+          status={data?.pipeline_status}
+          step={data?.pipeline_step}
+          error={data?.pipeline_error}
+          isAdmin={!!isAdmin}
+        />
       ) : null}
     </>
   );

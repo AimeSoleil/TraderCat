@@ -17,6 +17,7 @@ Token optimization:
 """
 import asyncio
 import json
+import time
 from datetime import date
 from typing import List, Dict, Any, Optional
 from uuid import UUID
@@ -475,6 +476,10 @@ async def generate_execution_plans_p3(
     for batch in audit_batches:
         await audit_queue.put(batch)
 
+    # Shared progress counter for concurrent P3a workers
+    p3a_progress = {"processed": 0, "total": len(plan_symbols)}
+    p3a_start = time.time()
+
     async def audit_worker_fn():
         results = []
         worker = GateAuditWorker(api_key=api_key)
@@ -484,6 +489,13 @@ async def generate_execution_plans_p3(
             except asyncio.QueueEmpty:
                 break
             try:
+                logger.info(
+                    "P3a: Auditing [%s] — %d/%d processed, %d remaining",
+                    ", ".join(batch),
+                    p3a_progress["processed"],
+                    p3a_progress["total"],
+                    p3a_progress["total"] - p3a_progress["processed"],
+                )
                 verdicts = await worker.audit_batch(
                     batch_symbols=batch,
                     signals_by_symbol=signals_by_symbol,
@@ -491,6 +503,16 @@ async def generate_execution_plans_p3(
                     regime_context_md=regime_context_md,
                 )
                 results.extend(verdicts)
+                p3a_progress["processed"] += len(batch)
+                elapsed = time.time() - p3a_start
+                logger.info(
+                    "P3a: Batch [%s] done — %d/%d processed, %d remaining (%.1fs elapsed)",
+                    ", ".join(batch),
+                    p3a_progress["processed"],
+                    p3a_progress["total"],
+                    p3a_progress["total"] - p3a_progress["processed"],
+                    elapsed,
+                )
             finally:
                 audit_queue.task_done()
         return results
@@ -525,6 +547,10 @@ async def generate_execution_plans_p3(
     for batch in exec_batches:
         await exec_queue.put(batch)
 
+    # Shared progress counter for concurrent P3b workers
+    p3b_progress = {"processed": 0, "total": len(approved_symbols)}
+    p3b_start = time.time()
+
     async def exec_worker_fn():
         results: Dict[str, Dict[str, Any]] = {}
         worker = ExecutionPlanWorker(api_key=api_key)
@@ -534,6 +560,13 @@ async def generate_execution_plans_p3(
             except asyncio.QueueEmpty:
                 break
             try:
+                logger.info(
+                    "P3b: Planning [%s] — %d/%d processed, %d remaining",
+                    ", ".join(batch),
+                    p3b_progress["processed"],
+                    p3b_progress["total"],
+                    p3b_progress["total"] - p3b_progress["processed"],
+                )
                 plans = await worker.generate_batch(
                     batch_symbols=batch,
                     signals_by_symbol=signals_by_symbol,
@@ -541,6 +574,16 @@ async def generate_execution_plans_p3(
                     regime_context_md=regime_context_md,
                 )
                 results.update(plans)
+                p3b_progress["processed"] += len(batch)
+                elapsed = time.time() - p3b_start
+                logger.info(
+                    "P3b: Batch [%s] done — %d/%d processed, %d remaining (%.1fs elapsed)",
+                    ", ".join(batch),
+                    p3b_progress["processed"],
+                    p3b_progress["total"],
+                    p3b_progress["total"] - p3b_progress["processed"],
+                    elapsed,
+                )
             finally:
                 exec_queue.task_done()
         return results

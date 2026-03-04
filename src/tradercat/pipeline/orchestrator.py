@@ -13,6 +13,7 @@ Token optimization applied at every phase:
   - P4: Compressed regime + condensed execution plan summaries.
 """
 import asyncio
+import time
 from datetime import datetime, date
 from typing import List, Dict, Any
 from uuid import UUID
@@ -196,6 +197,7 @@ class PipelineOrchestrator:
             # PHASE 1 (P1): Signal Generation
             # =============================================
             current_step = "p1_signals"
+            p1_start = time.time()
             logger.info("=" * 60)
             logger.info("PHASE 1 (P1): Signal Generation")
             logger.info("=" * 60)
@@ -300,7 +302,8 @@ class PipelineOrchestrator:
                 pr = await db.get(PipelineRun, run_id)
                 pr.processed_symbols = len(all_symbols)
                 await db.commit()
-                logger.info(f"P1 DONE: {len(all_signals)} new signals saved ({skipped_count} skipped)")
+                p1_elapsed = time.time() - p1_start
+                logger.info(f"P1 DONE: {len(all_signals)} new signals saved ({skipped_count} skipped) — {p1_elapsed:.1f}s")
 
                 # Reload ALL signals for this run_date
                 if skipped_count:
@@ -330,6 +333,7 @@ class PipelineOrchestrator:
             # PHASE 2 (P2): Macro Regime Analysis
             # =============================================
             current_step = "p2_macro_regime"
+            p2_start = time.time()
             logger.info("=" * 60)
             logger.info("PHASE 2 (P2): Macro Regime Analysis")
             logger.info("=" * 60)
@@ -375,17 +379,20 @@ class PipelineOrchestrator:
                     regime_context_md = regime_record["content_md"]
                     regime_label = regime_record.get("regime_label")
                     regime_score = regime_record.get("regime_score")
+                    p2_elapsed = time.time() - p2_start
                     logger.info(
                         f"P2 DONE: regime={regime_label}, score={regime_score}, "
-                        f"{len(regime_context_md)} chars"
+                        f"{len(regime_context_md)} chars — {p2_elapsed:.1f}s"
                     )
                 else:
-                    logger.warning("P2: No regime context generated — proceeding with empty context")
+                    p2_elapsed = time.time() - p2_start
+                    logger.warning(f"P2: No regime context generated — proceeding with empty context ({p2_elapsed:.1f}s)")
 
             # =============================================
             # PHASE 3 (P3): Per-Symbol Execution Plans
             # =============================================
             current_step = "p3_execution_plans"
+            p3_start = time.time()
             logger.info("=" * 60)
             logger.info("PHASE 3 (P3): Per-Symbol Execution Plans")
             logger.info("=" * 60)
@@ -435,16 +442,18 @@ class PipelineOrchestrator:
                         await asyncio.sleep(0)
 
                 await db.commit()
+                p3_elapsed = time.time() - p3_start
                 logger.info(
                     f"P3 DONE: {len(verdict_records)} verdicts, "
                     f"{len(plan_records)} execution plans saved "
-                    f"({len(symbol_plans_data)} symbols with structured data)"
+                    f"({len(symbol_plans_data)} symbols with structured data) — {p3_elapsed:.1f}s"
                 )
 
             # =============================================
             # PHASE 4 (P4): User Briefings
             # =============================================
             current_step = "p4_user_briefings"
+            p4_start = time.time()
             logger.info("=" * 60)
             logger.info("PHASE 4 (P4): User Briefings")
             logger.info("=" * 60)
@@ -524,7 +533,11 @@ class PipelineOrchestrator:
                     pr = await db.get(PipelineRun, run_id)
                     pr.processed_reports = len(briefing_records)
                     await db.commit()
-                    logger.info(f"P4 DONE: {len(briefing_records)} user briefings saved")
+                    p4_elapsed = time.time() - p4_start
+                    logger.info(f"P4 DONE: {len(briefing_records)} user briefings saved — {p4_elapsed:.1f}s")
+            else:
+                p4_elapsed = time.time() - p4_start
+                logger.info(f"P4: No users to brief — {p4_elapsed:.1f}s")
 
             # =============================================
             # COMPLETE
@@ -535,11 +548,13 @@ class PipelineOrchestrator:
                 await db.commit()
 
             logger.info("=" * 60)
+            total_elapsed = time.time() - p1_start
             logger.info("PIPELINE COMPLETE")
-            logger.info(f"  P1 Signals: {len(all_signals)}")
-            logger.info(f"  P2 Regime: {regime_label or 'N/A'} (score={regime_score})")
-            logger.info(f"  P3 Execution Plans: {len(plan_records)} plans, {len(verdict_records)} verdicts")
-            logger.info(f"  P4 User Briefings: {len(user_tasks)}")
+            logger.info(f"  P1 Signals: {len(all_signals)} — {p1_elapsed:.1f}s")
+            logger.info(f"  P2 Regime: {regime_label or 'N/A'} (score={regime_score}) — {p2_elapsed:.1f}s")
+            logger.info(f"  P3 Execution Plans: {len(plan_records)} plans, {len(verdict_records)} verdicts — {p3_elapsed:.1f}s")
+            logger.info(f"  P4 User Briefings: {len(user_tasks)} — {p4_elapsed:.1f}s")
+            logger.info(f"  Total: {total_elapsed:.1f}s")
             logger.info("=" * 60)
 
             return True

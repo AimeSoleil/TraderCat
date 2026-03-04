@@ -11,6 +11,8 @@ from tradercat.logger import get_logger
 
 logger = get_logger(__name__)
 llm_logger = get_logger("tradercat.ai.llm_calls")
+# Pipeline logger for progress lines that MUST appear in console + pipeline.log
+pipeline_logger = get_logger("tradercat.pipeline.llm_progress")
 
 
 def estimate_tokens(text: str) -> int:
@@ -62,7 +64,7 @@ class StreamingAccumulator:
     _chunk_count: int = 0
     _start_time: float = field(default_factory=time.time)
     _last_log_time: float = 0.0
-    _log_interval: float = 2.0  # log a progress line every N seconds
+    _log_interval: float = 10.0  # log a progress line every N seconds
 
     # ---- public API ------------------------------------------------
 
@@ -81,13 +83,18 @@ class StreamingAccumulator:
         sys.stderr.write(delta)
         sys.stderr.flush()
 
-        # Periodic structured log line (avoid flooding)
+        # Periodic structured log line every 10s → console + pipeline.log
         now = time.time()
         if now - self._last_log_time >= self._log_interval:
             elapsed = now - self._start_time
-            llm_logger.info(
-                "[LLM-STREAM] %s ← %s | %d chunks, %d chars so far (%.1fs)",
-                self.role_name, self.model_id, self._chunk_count, self._char_count, elapsed,
+            est_tokens = max(1, self._char_count // 4)
+            # Content preview: last 80 chars of accumulated text
+            preview = self.content[-80:].replace("\n", " ").strip()
+            phase_tag = f"[{self.phase}] " if self.phase else ""
+            pipeline_logger.info(
+                "%s[LLM-STREAM] %s ← %s | ~%d tokens, %d chars (%.0fs) | …%s",
+                phase_tag, self.role_name, self.model_id,
+                est_tokens, self._char_count, elapsed, preview,
             )
             self._last_log_time = now
 
@@ -119,12 +126,14 @@ class StreamingAccumulator:
         if not self.enabled:
             return
         elapsed = time.time() - self._start_time
+        est_tokens = max(1, self._char_count // 4)
         # Print a newline after the streamed content
         sys.stderr.write("\n")
         sys.stderr.flush()
-        llm_logger.info(
-            "[LLM-STREAM-DONE] %s ← %s | %d chunks, %d chars total in %.2fs",
-            self.role_name, self.model_id, self._chunk_count, self._char_count, elapsed,
+        phase_tag = f"[{self.phase}] " if self.phase else ""
+        pipeline_logger.info(
+            "%s[LLM-STREAM-DONE] %s ← %s | ~%d tokens, %d chars in %.1fs",
+            phase_tag, self.role_name, self.model_id, est_tokens, self._char_count, elapsed,
         )
 
 
@@ -137,7 +146,7 @@ async def llm_call_progress(
     identity: Optional[str] = None,
     phase: Optional[str] = None,
     extra_metadata: Optional[Dict[str, Any]] = None,
-    progress_interval: float = 30.0,
+    progress_interval: float = 10.0,
     enabled: bool = True,
 ):
     """
@@ -204,18 +213,35 @@ async def llm_call_progress(
         "output_tokens": 0,
         "total_tokens": 0,
         "token_source": "none",  # "api" = provider-reported, "estimated" = heuristic
+        "_accumulator": None,  # StreamingAccumulator ref (set by provider)
     }
     
     async def log_progress():
-        """Background task to log progress updates."""
+        """Background task to log progress updates every interval.
+
+        When a StreamingAccumulator is attached (streaming path), reports
+        accumulated token count and a content preview.  Otherwise falls
+        back to a simple "still processing" heartbeat.
+        """
         try:
             while result_dict["status"] == "running":
                 await asyncio.sleep(progress_interval)
                 elapsed = time.time() - start_time
-                llm_logger.debug(
-                    f"[LLM-PROGRESS] {context.role_name} still processing... "
-                    f"(elapsed: {elapsed:.1f}s, model: {context.model_id})"
-                )
+                phase_tag = f"[{context.phase}] " if context.phase else ""
+                acc: Optional[StreamingAccumulator] = result_dict.get("_accumulator")
+                if acc and acc.char_count > 0:
+                    est_tokens = max(1, acc.char_count // 4)
+                    preview = acc.content[-80:].replace("\n", " ").strip()
+                    pipeline_logger.info(
+                        "%s[LLM-PROGRESS] %s ← %s | ~%d tokens, %d chars (%.0fs) | …%s",
+                        phase_tag, context.role_name, context.model_id,
+                        est_tokens, acc.char_count, elapsed, preview,
+                    )
+                else:
+                    pipeline_logger.info(
+                        "%s[LLM-PROGRESS] %s ← %s | waiting for response… (%.0fs)",
+                        phase_tag, context.role_name, context.model_id, elapsed,
+                    )
         except asyncio.CancelledError:
             pass
     

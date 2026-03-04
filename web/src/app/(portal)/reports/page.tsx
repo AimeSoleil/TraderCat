@@ -33,7 +33,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { FileText, Shield, Inbox } from "lucide-react";
+import { FileText, Shield, Inbox, AlertTriangle, Loader2, Clock } from "lucide-react";
 import type {
   MacroRegimeContextResponse,
   SymbolExecutionPlanResponse,
@@ -84,6 +84,111 @@ function EmptyState({
       <p className="text-sm font-medium">{title}</p>
       <p className="mt-1 text-xs text-muted-foreground">{description}</p>
     </div>
+  );
+}
+
+/** Map pipeline step to human-readable phase name */
+function formatStep(step: string | null | undefined): string {
+  if (!step) return "Unknown step";
+  const map: Record<string, string> = {
+    p1_signals: "Phase 1 — Signal Generation",
+    p2_macro_regime: "Phase 2 — Macro Regime Analysis",
+    p3_execution_plans: "Phase 3 — Execution Plans",
+    p4_user_briefings: "Phase 4 — User Briefings",
+    completed: "Completed",
+  };
+  return map[step] ?? step;
+}
+
+/**
+ * Enhanced empty state that shows pipeline status context
+ * when the pipeline hasn't produced data yet.
+ */
+function EmptyStateWithPipeline({
+  title,
+  description,
+  pipelineStatus,
+  pipelineStep,
+  pipelineError,
+}: {
+  title: string;
+  description: string;
+  pipelineStatus?: string | null;
+  pipelineStep?: string | null;
+  pipelineError?: string | null;
+}) {
+  // No pipeline run
+  if (pipelineStatus === undefined || pipelineStatus === null) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center">
+        <Clock className="mb-3 h-10 w-10 text-muted-foreground/30" />
+        <p className="text-sm font-medium">Pipeline has not run</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          No pipeline run found for this date. An admin can trigger it from the Pipeline page.
+        </p>
+      </div>
+    );
+  }
+
+  // Running
+  if (pipelineStatus === "running") {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-blue-200 bg-blue-50 py-12 text-center dark:border-blue-900 dark:bg-blue-950/30">
+        <Loader2 className="mb-3 h-10 w-10 animate-spin text-blue-500" />
+        <p className="text-sm font-medium">Pipeline is running</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Currently at: <span className="font-medium">{formatStep(pipelineStep)}</span>. Data will appear once complete.
+        </p>
+      </div>
+    );
+  }
+
+  // Pending
+  if (pipelineStatus === "pending") {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center">
+        <Clock className="mb-3 h-10 w-10 text-muted-foreground/30" />
+        <p className="text-sm font-medium">Pipeline is pending</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          The pipeline is queued and will start shortly.
+        </p>
+      </div>
+    );
+  }
+
+  // Failed
+  if (pipelineStatus === "failed") {
+    let reason = "The pipeline encountered an error during processing.";
+    if (pipelineStep === "p2_macro_regime") {
+      reason = "Macro regime analysis failed — LLM service may be unreachable.";
+    } else if (pipelineStep === "p3_execution_plans") {
+      reason = "Execution plan generation failed — LLM analysis did not complete.";
+    } else if (pipelineStep === "p4_user_briefings") {
+      reason = "Briefing generation failed. Execution plans may still be available.";
+    }
+
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-red-200 bg-red-50 py-12 text-center dark:border-red-900 dark:bg-red-950/30">
+        <AlertTriangle className="mb-3 h-10 w-10 text-red-500" />
+        <p className="text-sm font-medium text-red-700 dark:text-red-400">Pipeline Failed</p>
+        <p className="mt-1 max-w-md text-xs text-muted-foreground">{reason}</p>
+        {pipelineError && (
+          <details className="mt-2 max-w-lg text-left">
+            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+              Technical details
+            </summary>
+            <pre className="mt-1 max-h-20 overflow-auto rounded bg-muted p-2 text-xs">
+              {pipelineError}
+            </pre>
+          </details>
+        )}
+      </div>
+    );
+  }
+
+  // Completed but no data
+  return (
+    <EmptyState title={title} description={description} />
   );
 }
 
@@ -250,9 +355,15 @@ function PlanDetailContent({ plan }: { plan: SymbolExecutionPlanResponse }) {
 function PlansTab({
   isLoading,
   plans,
+  pipelineStatus,
+  pipelineStep,
+  pipelineError,
 }: {
   isLoading: boolean;
   plans: SymbolExecutionPlanResponse[] | undefined;
+  pipelineStatus?: string | null;
+  pipelineStep?: string | null;
+  pipelineError?: string | null;
 }) {
   const [selected, setSelected] = useState<SymbolExecutionPlanResponse | null>(null);
   const isMobile = useIsMobile();
@@ -269,9 +380,12 @@ function PlansTab({
 
   if (!plans?.length) {
     return (
-      <EmptyState
+      <EmptyStateWithPipeline
         title="No execution plans found"
-        description="Try selecting a different date"
+        description="The pipeline completed but the LLM gate audit rejected all symbols or no plans were generated."
+        pipelineStatus={pipelineStatus}
+        pipelineStep={pipelineStep}
+        pipelineError={pipelineError}
       />
     );
   }
@@ -440,6 +554,12 @@ export default function ReportsPage() {
     queryFn: () => reportsApi.listPlans({ run_date: dateParam, limit: 500 }),
   });
 
+  // Pipeline status for the selected date
+  const pipelineStatus = useQuery({
+    queryKey: ["reports", "pipeline-status", runDate],
+    queryFn: () => reportsApi.pipelineStatus({ run_date: dateParam }),
+  });
+
   return (
     <>
       <PageHeader
@@ -472,9 +592,12 @@ export default function ReportsPage() {
           {briefings.isLoading ? (
             <SkeletonGrid />
           ) : !briefings.data?.reports.length ? (
-            <EmptyState
+            <EmptyStateWithPipeline
               title="No briefings found"
-              description="Try selecting a different date"
+              description="The pipeline completed but did not generate a briefing for your account. Check that your watchlist has symbols."
+              pipelineStatus={pipelineStatus.data?.status}
+              pipelineStep={pipelineStatus.data?.step}
+              pipelineError={pipelineStatus.data?.error_log}
             />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -496,9 +619,12 @@ export default function ReportsPage() {
           {macroReports.isLoading ? (
             <SkeletonGrid />
           ) : !macroReports.data?.reports.length ? (
-            <EmptyState
+            <EmptyStateWithPipeline
               title="No macro reports found"
-              description="Try selecting a different date"
+              description="The pipeline completed but no macro regime analysis was generated."
+              pipelineStatus={pipelineStatus.data?.status}
+              pipelineStep={pipelineStatus.data?.step}
+              pipelineError={pipelineStatus.data?.error_log}
             />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -518,6 +644,9 @@ export default function ReportsPage() {
           <PlansTab
             isLoading={plans.isLoading}
             plans={plans.data?.reports}
+            pipelineStatus={pipelineStatus.data?.status}
+            pipelineStep={pipelineStatus.data?.step}
+            pipelineError={pipelineStatus.data?.error_log}
           />
         </TabsContent>
       </Tabs>

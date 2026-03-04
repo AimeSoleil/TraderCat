@@ -257,6 +257,10 @@ export interface DashboardPositionsResponse {
   total_positions: number;
   signal_count: number;
   available_dates: string[];
+  // Pipeline status context — explains why data may be missing
+  pipeline_status: string | null;  // pending / running / completed / failed / null
+  pipeline_step: string | null;    // last step reached
+  pipeline_error: string | null;   // error details if failed
 }
 
 // ── Strategy ──
@@ -370,4 +374,13 @@ export interface PipelineCancelResponse {
   run_date: string;
   previous_status: string;
   new_status: string;
+}
+
+export interface PipelineStatusForDate {
+  run_date: string | null;
+  status: string | null;
+  step: string | null;
+  error_log: string | null;
+  started_at: string | null;
+  completed_at: string | null;
 }

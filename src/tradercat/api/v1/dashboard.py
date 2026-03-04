@@ -17,6 +17,7 @@ from tradercat.models import (
     WatchlistItem,
     SignalRecord,
     SignalScope,
+    PipelineRun,
 )
 from tradercat.schemas.dashboard import DashboardResponse, DashboardPositionItem
 
@@ -184,6 +185,19 @@ async def get_dashboard_positions(
     )
     signal_count = (await db.execute(signal_count_query)).scalar() or 0
 
+    # --- Pipeline run status for this date ---
+    pipeline_result = await db.execute(
+        select(
+            PipelineRun.status,
+            PipelineRun.step,
+            PipelineRun.error_log,
+        ).where(PipelineRun.run_date == effective_date).limit(1)
+    )
+    pipeline_row = pipeline_result.first()
+    pipeline_status = pipeline_row[0] if pipeline_row else None
+    pipeline_step = pipeline_row[1] if pipeline_row else None
+    pipeline_error = pipeline_row[2] if pipeline_row else None
+
     return DashboardResponse(
         positions=positions,
         run_date=str(effective_date),
@@ -193,4 +207,7 @@ async def get_dashboard_positions(
         total_positions=len(positions),
         signal_count=signal_count,
         available_dates=available_dates,
+        pipeline_status=pipeline_status,
+        pipeline_step=pipeline_step,
+        pipeline_error=pipeline_error,
     )

@@ -51,3 +51,8 @@ class DashboardResponse(BaseModel):
     total_positions: int
     signal_count: int = 0
     available_dates: list[str]
+
+    # Pipeline status context — helps the UI explain *why* data may be missing
+    pipeline_status: str | None = None      # pending / running / completed / failed / None (no run)
+    pipeline_step: str | None = None        # last step the pipeline reached (e.g. p3_execution_plans)
+    pipeline_error: str | None = None       # error_log from PipelineRun if failed
