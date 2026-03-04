@@ -207,7 +207,7 @@ function BriefingCard({
 }) {
   return (
     <Link href={href}>
-      <Card className="cursor-pointer border-l-4 border-primary transition-colors hover:bg-muted/50">
+      <Card className="cursor-pointer border-l-4 border-primary transition-colors hover:bg-muted/50 interactive-card">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -250,7 +250,7 @@ function MacroCard({
   return (
     <Link href={href}>
       <Card
-        className={`cursor-pointer border-l-4 ${getRegimeBorderColor(report.regime_label)} transition-colors hover:bg-muted/50`}
+        className={`cursor-pointer border-l-4 ${getRegimeBorderColor(report.regime_label)} transition-colors hover:bg-muted/50 interactive-card`}
       >
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -396,7 +396,7 @@ function PlansTab({
       {plans.map((p) => (
         <Card
           key={p.id}
-          className="cursor-pointer transition-colors hover:bg-muted/50"
+          className="cursor-pointer transition-colors hover:bg-muted/50 interactive-card"
           onClick={() => setSelected(p)}
         >
           <CardContent className="flex items-center justify-between p-3">
@@ -435,7 +435,7 @@ function PlansTab({
           {plans.map((p) => (
             <TableRow
               key={p.id}
-              className="cursor-pointer transition-colors hover:bg-muted/60"
+              className="cursor-pointer transition-colors hover:bg-muted/60 interactive-row"
               onClick={() => setSelected(p)}
             >
               <TableCell className="font-medium">{p.symbol}</TableCell>

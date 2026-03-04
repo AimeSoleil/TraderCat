@@ -35,7 +35,7 @@ export function UserMenu({ className }: { className?: string }) {
       <DropdownMenuTrigger asChild>
         <button
           className={cn(
-            "inline-flex h-8 w-8 items-center justify-center rounded-full bg-foreground/8 text-xs font-semibold text-foreground transition-colors hover:bg-foreground/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "inline-flex h-8 w-8 items-center justify-center rounded-full bg-foreground/8 text-xs font-semibold text-foreground transition-all duration-150 hover:bg-foreground/15 hover:shadow-sm active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             className,
           )}
         >

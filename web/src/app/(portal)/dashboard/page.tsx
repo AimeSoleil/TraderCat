@@ -260,7 +260,7 @@ export default function DashboardPage() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {/* Market Regime */}
         <Card
-          className="cursor-pointer transition-colors hover:bg-muted/50"
+          className="cursor-pointer transition-colors hover:bg-muted/50 interactive-card"
           onClick={() =>
             router.push(
               `/reports?tab=macro${effectiveDate ? `&date=${effectiveDate}` : ""}`,
@@ -293,7 +293,7 @@ export default function DashboardPage() {
 
         {/* Signals Today */}
         <Card
-          className="cursor-pointer transition-colors hover:bg-muted/50"
+          className="cursor-pointer transition-colors hover:bg-muted/50 interactive-card"
           onClick={() =>
             router.push(
               `/signals${effectiveDate ? `?date=${effectiveDate}` : ""}`,
@@ -322,7 +322,7 @@ export default function DashboardPage() {
 
         {/* Watchlist */}
         <Card
-          className="cursor-pointer transition-colors hover:bg-muted/50"
+          className="cursor-pointer transition-colors hover:bg-muted/50 interactive-card"
           onClick={() => router.push("/watchlist")}
         >
           <CardHeader className="flex flex-row items-center justify-between pb-2">

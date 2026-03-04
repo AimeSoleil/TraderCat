@@ -290,6 +290,39 @@
   height: auto;
 }
 
+/* ── Interactive element utilities ── */
+
+/* Clickable cards — subtle lift on hover, press feedback */
+.interactive-card {
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.interactive-card:hover {
+  box-shadow: 0 2px 8px oklch(0 0 0 / 6%);
+}
+.interactive-card:active {
+  transform: scale(0.99);
+  box-shadow: none;
+}
+.dark .interactive-card:hover {
+  box-shadow: 0 2px 8px oklch(0 0 0 / 20%);
+}
+
+/* Clickable table rows — highlight + subtle shift */
+.interactive-row {
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+.interactive-row:active {
+  background-color: var(--muted) !important;
+}
+
+/* Icon button hover glow for ghost/icon buttons */
+[data-slot="button"][data-variant="ghost"]:hover {
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+[data-slot="button"][data-variant="ghost"]:active {
+  transform: scale(0.92);
+}
+
 /* ── Smooth transitions for theme switching ── */
 html.transition-colors,
 html.transition-colors *,

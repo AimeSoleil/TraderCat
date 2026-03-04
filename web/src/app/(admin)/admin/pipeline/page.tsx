@@ -329,7 +329,7 @@ export default function AdminPipelinePage() {
                     return (
                       <Fragment key={run.id}>
                         <TableRow
-                          className="cursor-pointer transition-colors hover:bg-muted/50"
+                          className="cursor-pointer transition-colors hover:bg-muted/50 interactive-row"
                           onClick={() => toggleExpand(run.id)}
                         >
                           <TableCell className="px-2">

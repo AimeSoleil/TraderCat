@@ -321,7 +321,7 @@ function PositionRow({
     <>
       {/* --- Main row --- */}
       <TableRow
-        className="cursor-pointer select-none"
+        className="cursor-pointer select-none interactive-row"
         onClick={onToggle}
       >
         {/* Rank */}

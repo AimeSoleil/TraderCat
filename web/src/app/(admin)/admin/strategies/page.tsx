@@ -101,7 +101,7 @@ function StrategyCard({
 }) {
   return (
     <Card
-      className={`cursor-pointer transition-colors ${active ? "border-primary" : "hover:bg-muted/50"}`}
+      className={`cursor-pointer transition-all duration-150 interactive-card ${active ? "border-primary" : "hover:bg-muted/50"}`}
       onClick={onClick}
     >
       <CardContent className="flex items-center justify-between p-4">
