@@ -184,7 +184,13 @@ class DivergenceStrategy(TradingStrategy):
 
         # [MODIFIED] Volume Calculation (Base)
         # We calculate the raw Z-score here, but interpretation depends on divergence type
-        _, vol_z = self._check_volume_zscore(vols, self.vol_zscore_window, 1.0) # Threshold ignored here, used raw z
+        _vol_res = self._check_volume_zscore(vols, self.vol_zscore_window, 1.0) # Threshold ignored here, used raw z
+
+        # Guard against None vol_z
+        if _vol_res is None:
+            vol_ok, vol_z = False, 0.0
+        else:
+            vol_ok, vol_z = _vol_res
 
         # 3. Find Fractals
         # Use a slice to speed up

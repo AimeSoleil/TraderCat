@@ -113,14 +113,12 @@ class ChartPatternStrategy(TradingStrategy):
 
     def generate_signal(self, symbol: str, candles: List[Any]) -> SignalModel:
         if not candles or len(candles) < self.get_lookback_window():
-            return SignalModel(date=None, symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Insufficient Data")
+            return SignalModel(date=None, symbol=symbol, strategy=self.get_name(), signal="hold", confidence=0.0, reason="Data insufficient")
 
-        # 1. Prepare Raw Data
-        highs = [float(c.high) for c in candles]
-        lows = [float(c.low) for c in candles]
-        closes = [float(c.close) for c in candles]
-        close = closes[-1]
-        vols = [float(c.volume) for c in candles if c.volume]
+        closes = [float(getattr(c, "close")) for c in candles]
+        highs = [float(getattr(c, "high")) for c in candles]
+        lows = [float(getattr(c, "low")) for c in candles]
+        vols = [float(getattr(c, "volume", 0.0) or 0.0) for c in candles]
         dates = [c.date for c in candles]
         
         # Indicators & Helper Tools
