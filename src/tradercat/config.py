@@ -65,8 +65,8 @@ Public endpoints: `/`, `/api/admin/system/health`, `/api/v1/auth/login`
     pipeline_schedule_hour: int = Field(default=20, description="Hour to run pipeline (24h format)")
     pipeline_timezone: str = Field(default="America/New_York", description="Timezone for pipeline schedule")
     pipeline_max_concurrency: int = Field(default=5, description="Max concurrent workers")
-    pipeline_audit_batch_size: int = Field(default=8, description="P3a: symbols per gate audit batch (larger batches reduce repeated system prompt overhead)")
-    pipeline_exec_batch_size: int = Field(default=5, description="P3b: symbols per execution plan batch")
+    pipeline_audit_batch_size: int = Field(default=3, description="P3a: symbols per gate audit batch (larger batches reduce repeated system prompt overhead)")
+    pipeline_exec_batch_size: int = Field(default=3, description="P3b: symbols per execution plan batch")
     pipeline_llm_max_retries: int = Field(default=0, description="Max retries for LLM calls before skipping")
     
     # AI/LLM
