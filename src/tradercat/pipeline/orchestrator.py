@@ -305,10 +305,13 @@ class PipelineOrchestrator:
                 p1_elapsed = time.time() - p1_start
                 logger.info(f"P1 DONE: {len(all_signals)} new signals saved ({skipped_count} skipped) — {p1_elapsed:.1f}s")
 
-                # Reload ALL signals for this run_date
+                # Reload ALL signals for this run_date (scoped to current symbols)
                 if skipped_count:
                     existing_rows = await db.execute(
-                        select(SignalRecord).where(SignalRecord.run_date == run_date)
+                        select(SignalRecord).where(
+                            SignalRecord.run_date == run_date,
+                            SignalRecord.symbol.in_(all_symbols),
+                        )
                     )
                     all_signals_for_reports = [
                         {
@@ -410,6 +413,7 @@ class PipelineOrchestrator:
                 regime_context_md=regime_context_md,
                 max_concurrency=self.max_concurrency,
                 api_key=llm_api_key,
+                allowed_symbols=set(all_symbols),
             )
 
             # Unpack P3 results

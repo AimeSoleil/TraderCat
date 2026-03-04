@@ -392,6 +392,7 @@ async def generate_execution_plans_p3(
     regime_context_md: str,
     max_concurrency: int = 3,
     api_key: str | None = None,
+    allowed_symbols: set[str] | None = None,
 ) -> Dict[str, Any]:
     """
     P3 entry point: Two-phase execution plan generation.
@@ -457,12 +458,19 @@ async def generate_execution_plans_p3(
 
     signals_by_symbol: Dict[str, List[Dict[str, Any]]] = {}
     plan_symbols: List[str] = []
+    skipped_out_of_scope = 0
     for sig in all_signals:
         sym = sig["symbol"]
+        # Skip symbols not in the allowed scope (watchlist + global)
+        if allowed_symbols is not None and sym not in allowed_symbols:
+            skipped_out_of_scope += 1
+            continue
         signals_by_symbol.setdefault(sym, []).append(sig)
         if sym not in plan_symbols and sym not in excluded_global:
             plan_symbols.append(sym)
 
+    if skipped_out_of_scope:
+        logger.info(f"P3: Filtered out {skipped_out_of_scope} signals from symbols outside watchlist+global scope")
     logger.info(f"P3: {len(plan_symbols)} symbols (excluded {len(excluded_global)} macro-only ETFs)")
 
     # ═══════════════════════════════════════════════
