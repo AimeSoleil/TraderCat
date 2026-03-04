@@ -55,9 +55,9 @@ class SymbolExecutionPlan(Base):
     entry_trigger = Column(Text, nullable=True)         # e.g. "Close above $193 on 1.5x avg volume"
 
     # ── Risk Parameters ──
-    stop_loss = Column(String(200), nullable=True)      # e.g. "$3.10 (1.5xATR) or 100% of net debit"
-    profit_target = Column(String(200), nullable=True)  # e.g. "75% of max profit ($5.63)"
-    time_stop = Column(String(100), nullable=True)      # e.g. "Close by 21 DTE"
+    stop_loss = Column(Text, nullable=True)              # e.g. "$3.10 (1.5xATR) or 100% of net debit"
+    profit_target = Column(Text, nullable=True)          # e.g. "75% of max profit ($5.63)"
+    time_stop = Column(Text, nullable=True)              # e.g. "Close by 21 DTE"
     max_loss = Column(String(50), nullable=True)        # e.g. "$3.10 / contract"
     max_profit = Column(String(50), nullable=True)      # e.g. "$6.90 / contract"
     breakeven = Column(String(100), nullable=True)      # e.g. "$193.10" or multiple values

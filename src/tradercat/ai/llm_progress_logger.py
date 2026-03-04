@@ -3,6 +3,7 @@ import asyncio
 import sys
 import time
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from typing import Optional, Dict, Any
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -13,6 +14,12 @@ logger = get_logger(__name__)
 llm_logger = get_logger("tradercat.ai.llm_calls")
 # Pipeline logger for progress lines that MUST appear in console + pipeline.log
 pipeline_logger = get_logger("tradercat.pipeline.llm_progress")
+
+# ── Per-task worker context (asyncio-safe) ──
+# Set by pipeline workers before LLM calls so that streaming output
+# can be attributed to the correct phase / worker / symbols.
+# Format examples: "P3a-W1 [AAPL, MSFT, GOOG]", "P4-W2 [user:abc123]"
+llm_worker_context: ContextVar[str] = ContextVar("llm_worker_context", default="")
 
 
 def estimate_tokens(text: str) -> int:
@@ -58,6 +65,8 @@ class StreamingAccumulator:
     identity: Optional[str] = None
     phase: Optional[str] = None
     enabled: bool = True
+    # Worker context — automatically read from ContextVar if not supplied.
+    worker_context: str = ""
     # internal
     _chunks: list = field(default_factory=list)
     _char_count: int = 0
@@ -65,6 +74,34 @@ class StreamingAccumulator:
     _start_time: float = field(default_factory=time.time)
     _last_log_time: float = 0.0
     _log_interval: float = 10.0  # log a progress line every N seconds
+    _banner_printed: bool = False
+
+    def __post_init__(self) -> None:
+        # Auto-populate worker context from the asyncio-safe ContextVar
+        # so callers don't need to pass it explicitly.
+        if not self.worker_context:
+            self.worker_context = llm_worker_context.get("")
+
+    # ---- helpers ---------------------------------------------------
+
+    def _worker_tag(self) -> str:
+        """Short tag for structured log lines: '[P3a-W1 AAPL,MSFT] ' or ''."""
+        parts = []
+        if self.worker_context:
+            parts.append(self.worker_context)
+        elif self.phase:
+            parts.append(self.phase)
+        return f"[{' '.join(parts)}] " if parts else ""
+
+    def _print_banner(self) -> None:
+        """Print a header line to stderr before the first streamed chunk."""
+        if self._banner_printed:
+            return
+        self._banner_printed = True
+        tag = self.worker_context or self.phase or self.role_name
+        banner = f"\n{'─' * 2} {tag} → {self.model_id} {'─' * 20}\n"
+        sys.stderr.write(banner)
+        sys.stderr.flush()
 
     # ---- public API ------------------------------------------------
 
@@ -79,6 +116,9 @@ class StreamingAccumulator:
         if not self.enabled:
             return
 
+        # Print a banner before the first chunk so we know who is streaming
+        self._print_banner()
+
         # Always print the chunk to stderr for real-time visibility
         sys.stderr.write(delta)
         sys.stderr.flush()
@@ -90,10 +130,10 @@ class StreamingAccumulator:
             est_tokens = max(1, self._char_count // 4)
             # Content preview: last 80 chars of accumulated text
             preview = self.content[-80:].replace("\n", " ").strip()
-            phase_tag = f"[{self.phase}] " if self.phase else ""
+            wtag = self._worker_tag()
             pipeline_logger.info(
                 "%s[LLM-STREAM] %s ← %s | ~%d tokens, %d chars (%.0fs) | …%s",
-                phase_tag, self.role_name, self.model_id,
+                wtag, self.role_name, self.model_id,
                 est_tokens, self._char_count, elapsed, preview,
             )
             self._last_log_time = now
@@ -104,6 +144,7 @@ class StreamingAccumulator:
             return
         if not self.enabled:
             return
+        self._print_banner()
         # Print reasoning to stderr with a prefix distinction
         sys.stderr.write(delta)
         sys.stderr.flush()
@@ -127,13 +168,14 @@ class StreamingAccumulator:
             return
         elapsed = time.time() - self._start_time
         est_tokens = max(1, self._char_count // 4)
-        # Print a newline after the streamed content
-        sys.stderr.write("\n")
+        # Print an end banner after the streamed content
+        tag = self.worker_context or self.phase or self.role_name
+        sys.stderr.write(f"\n{'─' * 2} /{tag} ~{est_tokens} tokens in {elapsed:.1f}s {'─' * 16}\n")
         sys.stderr.flush()
-        phase_tag = f"[{self.phase}] " if self.phase else ""
+        wtag = self._worker_tag()
         pipeline_logger.info(
             "%s[LLM-STREAM-DONE] %s ← %s | ~%d tokens, %d chars in %.1fs",
-            phase_tag, self.role_name, self.model_id, est_tokens, self._char_count, elapsed,
+            wtag, self.role_name, self.model_id, est_tokens, self._char_count, elapsed,
         )
 
 
@@ -188,6 +230,10 @@ async def llm_call_progress(
         extra_metadata=extra_metadata or {},
     )
     
+    # Capture worker context from ContextVar at call time
+    wctx = llm_worker_context.get("")
+    wtag = f"[{wctx}] " if wctx else (f"[{phase}] " if phase else "")
+
     # Log start event
     log_data = {
         "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -198,10 +244,11 @@ async def llm_call_progress(
         "user_prompt_length": context.user_prompt_length,
         "identity": context.identity,
         "phase": context.phase,
+        "worker_context": wctx,
         **context.extra_metadata,
     }
     
-    llm_logger.info(f"[LLM-START] {context.role_name} → {context.model_id} (identity={context.identity}, phase={context.phase})")
+    llm_logger.info(f"{wtag}[LLM-START] {context.role_name} → {context.model_id} (identity={context.identity}, phase={context.phase})")
     llm_logger.debug(f"LLM call details: {log_data}")
     
     # Progress task to log updates every interval
@@ -227,20 +274,19 @@ async def llm_call_progress(
             while result_dict["status"] == "running":
                 await asyncio.sleep(progress_interval)
                 elapsed = time.time() - start_time
-                phase_tag = f"[{context.phase}] " if context.phase else ""
                 acc: Optional[StreamingAccumulator] = result_dict.get("_accumulator")
                 if acc and acc.char_count > 0:
                     est_tokens = max(1, acc.char_count // 4)
                     preview = acc.content[-80:].replace("\n", " ").strip()
                     pipeline_logger.info(
                         "%s[LLM-PROGRESS] %s ← %s | ~%d tokens, %d chars (%.0fs) | …%s",
-                        phase_tag, context.role_name, context.model_id,
+                        wtag, context.role_name, context.model_id,
                         est_tokens, acc.char_count, elapsed, preview,
                     )
                 else:
                     pipeline_logger.info(
                         "%s[LLM-PROGRESS] %s ← %s | waiting for response… (%.0fs)",
-                        phase_tag, context.role_name, context.model_id, elapsed,
+                        wtag, context.role_name, context.model_id, elapsed,
                     )
         except asyncio.CancelledError:
             pass
@@ -289,7 +335,7 @@ async def llm_call_progress(
         }
         
         llm_logger.info(
-            f"[LLM-COMPLETE] {context.role_name} finished in {elapsed:.2f}s "
+            f"{wtag}[LLM-COMPLETE] {context.role_name} finished in {elapsed:.2f}s "
             f"(output: {output_length} chars, model: {context.model_id}, "
             f"tokens: {input_tokens}→{output_tokens} [{token_source}])"
         )

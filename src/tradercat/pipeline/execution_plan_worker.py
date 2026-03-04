@@ -26,6 +26,7 @@ from tradercat.logger import get_logger
 from tradercat.config import settings
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.ai.roles.identity import IdentityRole
+from tradercat.ai.llm_progress_logger import llm_worker_context
 from tradercat.ai.roles.options_strategist import (
     OptionsStrategistRole,
     extract_downstream_filters,
@@ -479,8 +480,10 @@ async def generate_execution_plans_p3(
     # Shared progress counter for concurrent P3a workers
     p3a_progress = {"processed": 0, "total": len(plan_symbols)}
     p3a_start = time.time()
+    num_audit_workers = min(max_concurrency, len(audit_batches) or 1)
 
-    async def audit_worker_fn():
+    async def audit_worker_fn(worker_id: int):
+        wname = f"P3a-W{worker_id}"
         results = []
         worker = GateAuditWorker(api_key=api_key)
         while True:
@@ -489,8 +492,10 @@ async def generate_execution_plans_p3(
             except asyncio.QueueEmpty:
                 break
             try:
+                llm_worker_context.set(f"{wname} [{', '.join(batch)}]")
                 logger.info(
-                    "P3a: Auditing [%s] — %d/%d processed, %d remaining",
+                    "%s: Auditing [%s] — %d/%d processed, %d remaining",
+                    wname,
                     ", ".join(batch),
                     p3a_progress["processed"],
                     p3a_progress["total"],
@@ -506,7 +511,8 @@ async def generate_execution_plans_p3(
                 p3a_progress["processed"] += len(batch)
                 elapsed = time.time() - p3a_start
                 logger.info(
-                    "P3a: Batch [%s] done — %d/%d processed, %d remaining (%.1fs elapsed)",
+                    "%s: Batch [%s] done — %d/%d processed, %d remaining (%.1fs elapsed)",
+                    wname,
                     ", ".join(batch),
                     p3a_progress["processed"],
                     p3a_progress["total"],
@@ -515,11 +521,13 @@ async def generate_execution_plans_p3(
                 )
             finally:
                 audit_queue.task_done()
+        logger.info(f"{wname}: Finished — {len(results)} verdicts produced")
         return results
 
+    logger.info(f"P3a: Spawning {num_audit_workers} workers for {len(audit_batches)} batches ({len(plan_symbols)} symbols)")
     audit_workers = [
-        asyncio.create_task(audit_worker_fn())
-        for _ in range(min(max_concurrency, len(audit_batches) or 1))
+        asyncio.create_task(audit_worker_fn(i + 1))
+        for i in range(num_audit_workers)
     ]
     audit_results = await asyncio.gather(*audit_workers)
     for result_list in audit_results:
@@ -550,8 +558,10 @@ async def generate_execution_plans_p3(
     # Shared progress counter for concurrent P3b workers
     p3b_progress = {"processed": 0, "total": len(approved_symbols)}
     p3b_start = time.time()
+    num_exec_workers = min(max_concurrency, len(exec_batches) or 1)
 
-    async def exec_worker_fn():
+    async def exec_worker_fn(worker_id: int):
+        wname = f"P3b-W{worker_id}"
         results: Dict[str, Dict[str, Any]] = {}
         worker = ExecutionPlanWorker(api_key=api_key)
         while True:
@@ -560,8 +570,10 @@ async def generate_execution_plans_p3(
             except asyncio.QueueEmpty:
                 break
             try:
+                llm_worker_context.set(f"{wname} [{', '.join(batch)}]")
                 logger.info(
-                    "P3b: Planning [%s] — %d/%d processed, %d remaining",
+                    "%s: Planning [%s] — %d/%d processed, %d remaining",
+                    wname,
                     ", ".join(batch),
                     p3b_progress["processed"],
                     p3b_progress["total"],
@@ -577,7 +589,8 @@ async def generate_execution_plans_p3(
                 p3b_progress["processed"] += len(batch)
                 elapsed = time.time() - p3b_start
                 logger.info(
-                    "P3b: Batch [%s] done — %d/%d processed, %d remaining (%.1fs elapsed)",
+                    "%s: Batch [%s] done — %d/%d processed, %d remaining (%.1fs elapsed)",
+                    wname,
                     ", ".join(batch),
                     p3b_progress["processed"],
                     p3b_progress["total"],
@@ -586,11 +599,13 @@ async def generate_execution_plans_p3(
                 )
             finally:
                 exec_queue.task_done()
+        logger.info(f"{wname}: Finished — {len(results)} plans produced")
         return results
 
+    logger.info(f"P3b: Spawning {num_exec_workers} workers for {len(exec_batches)} batches ({len(approved_symbols)} approved symbols)")
     exec_workers = [
-        asyncio.create_task(exec_worker_fn())
-        for _ in range(min(max_concurrency, len(exec_batches) or 1))
+        asyncio.create_task(exec_worker_fn(i + 1))
+        for i in range(num_exec_workers)
     ]
     exec_results = await asyncio.gather(*exec_workers)
     for result_dict in exec_results:

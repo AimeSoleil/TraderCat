@@ -281,6 +281,9 @@ async def generate_macro_regime_p2(
         f"P2: {len(etf_signals)} ETF signals from {len(global_symbols)} global symbols"
     )
 
+    from tradercat.ai.llm_progress_logger import llm_worker_context
+    llm_worker_context.set("P2")
+
     worker = MacroRegimeWorker(api_key=api_key)
     return await worker.generate(
         run_date=run_date,

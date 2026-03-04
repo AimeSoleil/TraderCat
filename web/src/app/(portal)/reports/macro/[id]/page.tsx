@@ -23,6 +23,12 @@ export default function MacroRegimeDetailPage() {
   if (isLoading) return <Skeleton className="h-96" />;
   if (!data) return <p>Macro regime report not found.</p>;
 
+  // Strip leading ```json { ... } ``` block so only the narrative markdown renders.
+  const contentWithoutJson = data.content_md.replace(
+    /```(?:json)?\s*\{[\s\S]*?\}\s*```\s*/,
+    "",
+  );
+
   return (
     <>
       <Button
@@ -50,7 +56,7 @@ export default function MacroRegimeDetailPage() {
         }
       />
 
-      <MarkdownRenderer content={data.content_md} />
+      <MarkdownRenderer content={contentWithoutJson} />
     </>
   );
 }

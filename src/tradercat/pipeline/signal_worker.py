@@ -13,6 +13,7 @@ from tradercat.core.bot import TraderBot
 from tradercat.core.data.openbb_provider import OpenBBProvider
 from tradercat.models import SignalScope
 from tradercat.config import settings
+from tradercat.ai.llm_progress_logger import llm_worker_context
 
 logger = get_logger(__name__)
 
@@ -104,8 +105,11 @@ async def process_symbols_p1(
     
     for symbol in symbols:
         await queue.put(symbol)
-    
-    async def worker():
+
+    num_workers = min(max_concurrency, len(symbols))
+
+    async def worker(worker_id: int):
+        wname = f"P1-W{worker_id}"
         worker_results = []
         signal_worker = SignalWorker(strategy_configs=strategy_configs)
         
@@ -116,18 +120,24 @@ async def process_symbols_p1(
                 break
             
             try:
+                llm_worker_context.set(f"{wname} {symbol}")
                 signal_records = await signal_worker.process_symbol(
                     symbol=symbol,
                     run_date=run_date,
                     pipeline_run_id=pipeline_run_id,
                 )
                 worker_results.extend(signal_records)
+                logger.info(f"{wname}: Generated {len(signal_records)} signals for {symbol}")
+            except Exception as e:
+                logger.error(f"{wname}: Error processing {symbol}: {e}")
             finally:
                 queue.task_done()
         
+        logger.info(f"{wname}: Finished — {len(worker_results)} signals produced")
         return worker_results
     
-    workers = [asyncio.create_task(worker()) for _ in range(min(max_concurrency, len(symbols)))]
+    logger.info(f"P1: Spawning {num_workers} workers for {len(symbols)} symbols")
+    workers = [asyncio.create_task(worker(i + 1)) for i in range(num_workers)]
     worker_results = await asyncio.gather(*workers)
     
     for result_list in worker_results:

@@ -22,6 +22,7 @@ from tradercat.config import settings
 from tradercat.ai.providers.llm_interface import LLMProvider
 from tradercat.ai.roles.identity import IdentityRole
 from tradercat.ai.roles.summarizer import SummarizerRole
+from tradercat.ai.llm_progress_logger import llm_worker_context
 
 logger = get_logger(__name__)
 
@@ -187,7 +188,10 @@ async def generate_user_briefings_p4(
     for task in user_tasks:
         await queue.put(task)
 
-    async def worker():
+    num_workers = min(max_concurrency, len(user_tasks))
+
+    async def worker(worker_id: int):
+        wname = f"P4-W{worker_id}"
         results = []
         w = UserBriefingWorker(api_key=api_key)
         while True:
@@ -196,16 +200,20 @@ async def generate_user_briefings_p4(
             except asyncio.QueueEmpty:
                 break
             try:
+                llm_worker_context.set(f"{wname} [user:{task['user_id']}]")
+                logger.info(f"{wname}: Generating briefing for user {task['user_id']}")
                 record = await w.generate(**task)
                 if record:
                     results.append(record)
             finally:
                 queue.task_done()
+        logger.info(f"{wname}: Finished — {len(results)} briefings produced")
         return results
 
+    logger.info(f"P4: Spawning {num_workers} workers for {len(user_tasks)} user briefings")
     workers = [
-        asyncio.create_task(worker())
-        for _ in range(min(max_concurrency, len(user_tasks)))
+        asyncio.create_task(worker(i + 1))
+        for i in range(num_workers)
     ]
     worker_results = await asyncio.gather(*workers)
 

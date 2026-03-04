@@ -51,7 +51,7 @@ class CopilotProvider(LLMProvider):
     """
 
     # Timeout (seconds) for a single send_and_wait call.
-    # opus models processing large batches (P3a gate audit) can take 3-5 min.
+    # opus models processing large batches (P3a gate audit) can take 3-10 min.
     REQUEST_TIMEOUT = 600.0
 
     # Session cache TTL (seconds) — discard cached sessions older than this.
