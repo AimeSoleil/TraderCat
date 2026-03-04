@@ -171,16 +171,29 @@ export interface SymbolExecutionPlanResponse {
   id: string;
   run_date: string;
   symbol: string;
-  verdict: string | null;
-  setup_quality: string | null;
-  content_md: string;
+  structure: string | null;
+  direction: string | null;
+  thesis: string | null;
+  content_md: string | null;
   model_used: string | null;
   identity_used: string | null;
   created_at: string;
 }
 
 export interface SymbolExecutionPlanDetail extends SymbolExecutionPlanResponse {
-  input_context: Record<string, unknown> | null;
+  rationale: string | null;
+  legs: Array<Record<string, unknown>> | null;
+  entry_trigger: string | null;
+  stop_loss: string | null;
+  profit_target: string | null;
+  time_stop: string | null;
+  max_loss: string | null;
+  max_profit: string | null;
+  breakeven: string | null;
+  rr_ratio: string | null;
+  allocation: string | null;
+  dte: number | null;
+  raw_json: Record<string, unknown> | null;
 }
 
 export interface SymbolExecutionPlanList {
@@ -242,6 +255,7 @@ export interface DashboardPositionsResponse {
   regime_label: string | null;
   regime_score: number | null;
   total_positions: number;
+  signal_count: number;
   available_dates: string[];
 }
 

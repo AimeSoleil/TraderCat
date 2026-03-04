@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { DatePicker } from "@/components/date-picker";
 import { PositionsTable } from "@/components/positions-table";
-import { dashboardApi, watchlistApi, signalsApi } from "@/lib/api-client";
+import { dashboardApi, watchlistApi } from "@/lib/api-client";
 import {
   BarChart3,
   List,
@@ -81,17 +81,8 @@ export default function DashboardPage() {
 
   const data = dashboard.data;
 
-  /* Use the effective run date (URL param → API response) for the signals query */
+  /* Use the effective run date (URL param → API response) for links */
   const effectiveDate = selectedDate ?? data?.run_date ?? "";
-
-  const signals = useQuery({
-    queryKey: ["signals", "byDate", effectiveDate],
-    queryFn: () =>
-      signalsApi.query({
-        run_date: effectiveDate || undefined,
-        limit: 500,
-      }),
-  });
 
   // Only active (buy / sell) positions are shown
   const activePositions =
@@ -175,11 +166,11 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {signals.isLoading ? (
+            {dashboard.isLoading ? (
               <Skeleton className="h-7 w-12" />
             ) : (
               <p className="text-2xl font-bold">
-                {signals.data?.total ?? "—"}
+                {data?.signal_count ?? "—"}
               </p>
             )}
           </CardContent>

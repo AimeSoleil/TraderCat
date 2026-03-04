@@ -5,16 +5,18 @@ current user, filtered by date, with links to the original briefing report
 and macro regime context.
 """
 from datetime import date
-from uuid import UUID
 from fastapi import APIRouter, Query
-from sqlalchemy import select, func, distinct, case, literal
+from sqlalchemy import select, func, distinct, case, literal, or_
 
 from tradercat.api.deps import CurrentUser, DatabaseSession
 from tradercat.models import (
     SymbolExecutionPlan,
+    SymbolVerdict,
     UserBriefing,
     MacroRegimeContext,
     WatchlistItem,
+    SignalRecord,
+    SignalScope,
 )
 from tradercat.schemas.dashboard import DashboardResponse, DashboardPositionItem
 
@@ -39,11 +41,11 @@ async def get_dashboard_positions(
     )
     user_symbols = [row[0] for row in wl_result.all()]
 
-    # --- Get available dates (from execution plans matching user's watchlist, last 60 days) ---
+    # --- Get available dates (from verdicts matching user's watchlist, last 60 days) ---
     dates_query = (
-        select(distinct(SymbolExecutionPlan.run_date))
-        .where(SymbolExecutionPlan.symbol.in_(user_symbols) if user_symbols else False)
-        .order_by(SymbolExecutionPlan.run_date.desc())
+        select(distinct(SymbolVerdict.run_date))
+        .where(SymbolVerdict.symbol.in_(user_symbols) if user_symbols else False)
+        .order_by(SymbolVerdict.run_date.desc())
         .limit(60)
     )
     dates_result = await db.execute(dates_query)
@@ -63,63 +65,87 @@ async def get_dashboard_positions(
             regime_label=None,
             regime_score=None,
             total_positions=0,
+            signal_count=0,
             available_dates=[],
         )
 
-    # --- Get execution plans for user's watchlist on this date ---
+    # --- Get verdicts for user's watchlist on this date ---
+    verdicts_query = (
+        select(SymbolVerdict)
+        .where(
+            SymbolVerdict.run_date == effective_date,
+            SymbolVerdict.symbol.in_(user_symbols) if user_symbols else False,
+        )
+        .order_by(
+            # Approved first (LONG/SHORT), then NEUTRAL
+            case(
+                (SymbolVerdict.direction == "LONG", literal(1)),
+                (SymbolVerdict.direction == "SHORT", literal(2)),
+                (SymbolVerdict.direction == "NEUTRAL", literal(3)),
+                else_=literal(4),
+            ).asc(),
+            case(
+                (SymbolVerdict.quality == "A+", literal(1)),
+                (SymbolVerdict.quality == "A", literal(2)),
+                (SymbolVerdict.quality == "B+", literal(3)),
+                (SymbolVerdict.quality == "B", literal(4)),
+                (SymbolVerdict.quality == "C", literal(5)),
+                (SymbolVerdict.quality == "REJECT", literal(6)),
+                else_=literal(7),
+            ).asc(),
+            SymbolVerdict.symbol.asc(),
+        )
+    )
+    verdicts_result = await db.execute(verdicts_query)
+    verdicts = verdicts_result.scalars().all()
+
+    # --- Get matching execution plans ---
     plans_query = (
         select(SymbolExecutionPlan)
         .where(
             SymbolExecutionPlan.run_date == effective_date,
             SymbolExecutionPlan.symbol.in_(user_symbols) if user_symbols else False,
         )
-        .order_by(
-            # Approved first (buy/sell), then watchlist, then hold, then reject
-            case(
-                (SymbolExecutionPlan.verdict == "buy", literal(1)),
-                (SymbolExecutionPlan.verdict == "sell", literal(2)),
-                (SymbolExecutionPlan.verdict == "watchlist", literal(3)),
-                (SymbolExecutionPlan.verdict == "hold", literal(4)),
-                (SymbolExecutionPlan.verdict == "reject", literal(5)),
-                else_=literal(6),
-            ).asc(),
-            SymbolExecutionPlan.setup_quality.asc(),
-            SymbolExecutionPlan.symbol.asc(),
-        )
     )
     plans_result = await db.execute(plans_query)
-    plans = plans_result.scalars().all()
+    plans_by_symbol = {p.symbol: p for p in plans_result.scalars().all()}
 
     # --- Build position items ---
     positions = []
-    for idx, plan in enumerate(plans, start=1):
-        sj = plan.structured_json or {}
-        ex = sj.get("execution") or {}
+    for idx, v in enumerate(verdicts, start=1):
+        plan = plans_by_symbol.get(v.symbol)
+        legs_data = plan.legs if plan else None
+
+        # Map direction to verdict string for backward compat
+        direction_str = (v.direction or "NEUTRAL").upper()
+        verdict_label = {"LONG": "buy", "SHORT": "sell"}.get(direction_str, "hold")
+        if (v.quality or "").upper() == "REJECT":
+            verdict_label = "reject"
 
         positions.append(DashboardPositionItem(
-            id=plan.id,
-            symbol=plan.symbol,
-            run_date=plan.run_date,
-            verdict=plan.verdict,
-            setup_quality=plan.setup_quality,
-            direction=sj.get("direction"),
-            setup_type=sj.get("setup_type"),
-            confluence=sj.get("confluence"),
-            rr_estimate=sj.get("rr_estimate") or ex.get("rr"),
-            rejection_reason=sj.get("rejection_reason"),
-            structure=ex.get("structure"),
-            legs=ex.get("legs"),
-            entry_price=ex.get("entry_trigger"),
-            stop_loss=ex.get("stop_loss"),
-            profit_target=ex.get("profit_target"),
-            time_stop=ex.get("time_stop"),
-            max_loss=ex.get("max_loss"),
-            max_profit=ex.get("max_profit"),
-            allocation=ex.get("allocation"),
-            breakeven=ex.get("breakeven"),
-            thesis=ex.get("thesis") or ex.get("rationale"),
+            id=v.id,
+            symbol=v.symbol,
+            run_date=v.run_date,
+            verdict=verdict_label,
+            setup_quality=v.quality,
+            direction=v.direction,
+            setup_type=v.setup_type,
+            confluence=v.confluence,
+            rr_estimate=v.rr_estimate or (plan.rr_ratio if plan else None),
+            rejection_reason=v.rejection_reason,
+            structure=plan.structure if plan else None,
+            legs=legs_data,
+            entry_price=plan.entry_trigger if plan else None,
+            stop_loss=plan.stop_loss if plan else None,
+            profit_target=plan.profit_target if plan else None,
+            time_stop=plan.time_stop if plan else None,
+            max_loss=plan.max_loss if plan else None,
+            max_profit=plan.max_profit if plan else None,
+            allocation=plan.allocation if plan else None,
+            breakeven=plan.breakeven if plan else None,
+            thesis=plan.thesis if plan else None,
             rank=idx,
-            has_structured_data=bool(sj and ex),
+            has_structured_data=plan is not None,
         ))
 
     # --- Get matching briefing ---
@@ -143,6 +169,21 @@ async def get_dashboard_positions(
     regime_label = regime_row[0] if regime_row else None
     regime_score = regime_row[1] if regime_row else None
 
+    # --- Signal count (lightweight COUNT query — no row fetch) ---
+    signal_count_query = (
+        select(func.count())
+        .select_from(SignalRecord)
+        .where(
+            SignalRecord.run_date == effective_date,
+            or_(
+                SignalRecord.scope == SignalScope.GLOBAL,
+                (SignalRecord.scope == SignalScope.USER)
+                & (SignalRecord.symbol.in_(user_symbols) if user_symbols else False),
+            ),
+        )
+    )
+    signal_count = (await db.execute(signal_count_query)).scalar() or 0
+
     return DashboardResponse(
         positions=positions,
         run_date=str(effective_date),
@@ -150,5 +191,6 @@ async def get_dashboard_positions(
         regime_label=regime_label,
         regime_score=regime_score,
         total_positions=len(positions),
+        signal_count=signal_count,
         available_dates=available_dates,
     )

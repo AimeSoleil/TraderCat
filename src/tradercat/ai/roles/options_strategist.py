@@ -20,6 +20,8 @@ import json
 import re
 from typing import List, Dict, Any, Optional
 
+from pydantic import BaseModel, ConfigDict, ValidationError
+
 from tradercat.ai.roles.base import AIRole, RoleType, RoleOutput
 from tradercat.ai.roles.identity import IdentityRole
 from tradercat.ai.providers.llm_interface import LLMProvider
@@ -263,6 +265,173 @@ def parse_json_output(raw: str) -> List[Dict[str, Any]]:
     return []
 
 
+# ─── Pydantic validation schemas ────────────────────────────────
+
+
+class VerdictTechnicals(BaseModel):
+    """Technical indicator snapshot embedded in a P3a verdict."""
+
+    model_config = ConfigDict(extra="allow", coerce_numbers_to_str=False)
+
+    trend_adx: Optional[float] = None
+    trend_ema_fast: Optional[float] = None
+    trend_ema_slow: Optional[float] = None
+    trend_ema_spread_pct: Optional[float] = None
+    trend_pct_b: Optional[float] = None
+    momentum_rsi: Optional[float] = None
+    momentum_macd_hist: Optional[float] = None
+    momentum_mom_score: Optional[float] = None
+    volume_rel: Optional[float] = None
+    volume_zscore: Optional[float] = None
+    volume_classification: Optional[str] = None
+    volatility_atr_pct: Optional[float] = None
+    volatility_bandwidth: Optional[float] = None
+    volatility_squeeze: Optional[bool] = None
+    key_level_support: Optional[float] = None
+    key_level_resistance: Optional[float] = None
+
+
+class VerdictSchema(BaseModel):
+    """P3a verdict output for a single symbol."""
+
+    model_config = ConfigDict(extra="allow")
+
+    symbol: str
+    direction: str  # LONG / SHORT / NEUTRAL
+    quality: str  # A+ / A / B+ / B / C / REJECT
+    rr_estimate: Optional[str] = None
+    confluence: Optional[str] = None
+    confluence_count: Optional[int] = 0
+    setup_type: Optional[str] = None
+    historical_trend: Optional[str] = None
+    gates: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    recommended_strategy_type: Optional[str] = None
+    technicals: Optional[VerdictTechnicals] = None
+
+
+class LegSchema(BaseModel):
+    """Single option leg within an execution plan."""
+
+    model_config = ConfigDict(extra="allow")
+
+    type: str  # Call / Put
+    strike: str
+    exp: str
+    action: str  # BUY / SELL
+    delta: Optional[str] = None
+    premium: Optional[str] = None
+
+
+class ExecutionPlanSchema(BaseModel):
+    """P3b execution plan output for a single symbol."""
+
+    model_config = ConfigDict(extra="allow")
+
+    symbol: str
+    structure: str
+    direction: Optional[str] = None  # credit / debit
+    thesis: Optional[str] = None
+    rationale: Optional[str] = None
+    legs: List[LegSchema] = []
+    entry_trigger: Optional[str] = None
+    stop_loss: Optional[str] = None
+    profit_target: Optional[str] = None
+    time_stop: Optional[str] = None
+    max_loss: Optional[str] = None
+    max_profit: Optional[str] = None
+    breakeven: Optional[str] = None
+    rr_ratio: Optional[str] = None
+    allocation: Optional[str] = None
+    dte: Optional[int] = None
+    pricing_note: Optional[str] = None
+
+
+# ─── Validation helpers ─────────────────────────────────────────
+
+
+def _coerce_numeric_fields(data: Dict[str, Any], float_keys: set) -> Dict[str, Any]:
+    """Best-effort: convert string values to float for known numeric fields."""
+    coerced: List[str] = []
+    for key in float_keys:
+        if key in data and data[key] is not None:
+            val = data[key]
+            if not isinstance(val, (int, float)):
+                try:
+                    data[key] = float(val)
+                    coerced.append(key)
+                except (ValueError, TypeError):
+                    data[key] = None
+                    coerced.append(key)
+    if coerced:
+        sym = data.get("symbol", "?")
+        logger.warning("Coerced fields for %s: %s", sym, ", ".join(coerced))
+    return data
+
+
+_VERDICT_TECHNICALS_FLOAT_KEYS = {
+    "trend_adx", "trend_ema_fast", "trend_ema_slow", "trend_ema_spread_pct",
+    "trend_pct_b", "momentum_rsi", "momentum_macd_hist", "momentum_mom_score",
+    "volume_rel", "volume_zscore", "volatility_atr_pct", "volatility_bandwidth",
+    "key_level_support", "key_level_resistance",
+}
+
+
+def validate_verdicts(raw_verdicts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Validate and sanitize P3a verdict objects.
+
+    Applies best-effort coercion (strings → numbers) and drops items that
+    still fail validation.  Returns list of valid dicts.
+    """
+    valid: List[Dict[str, Any]] = []
+    for idx, item in enumerate(raw_verdicts):
+        sym = item.get("symbol", f"<index {idx}>")
+        try:
+            # Coerce technicals sub-dict before validation
+            if "technicals" in item and isinstance(item["technicals"], dict):
+                item["technicals"] = _coerce_numeric_fields(
+                    item["technicals"], _VERDICT_TECHNICALS_FLOAT_KEYS,
+                )
+            # Coerce confluence_count
+            if "confluence_count" in item and item["confluence_count"] is not None:
+                try:
+                    item["confluence_count"] = int(item["confluence_count"])
+                except (ValueError, TypeError):
+                    item["confluence_count"] = 0
+
+            model = VerdictSchema(**item)
+            valid.append(model.model_dump())
+        except ValidationError as exc:
+            logger.warning("P3a verdict validation failed for %s: %s", sym, exc)
+    logger.info("P3a verdicts validated: %d/%d passed", len(valid), len(raw_verdicts))
+    return valid
+
+
+def validate_execution_plans(raw_plans: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Validate and sanitize P3b execution plan objects.
+
+    Applies best-effort coercion and drops items that still fail validation.
+    Returns list of valid dicts.
+    """
+    valid: List[Dict[str, Any]] = []
+    for idx, item in enumerate(raw_plans):
+        sym = item.get("symbol", f"<index {idx}>")
+        try:
+            # Coerce dte to int
+            if "dte" in item and item["dte"] is not None:
+                try:
+                    item["dte"] = int(item["dte"])
+                except (ValueError, TypeError):
+                    item["dte"] = None
+
+            model = ExecutionPlanSchema(**item)
+            valid.append(model.model_dump())
+        except ValidationError as exc:
+            logger.warning("P3b exec-plan validation failed for %s: %s", sym, exc)
+    logger.info("P3b exec-plans validated: %d/%d passed", len(valid), len(raw_plans))
+    return valid
+
+
 # ─── P3b input builder ──────────────────────────────────────────
 
 def build_p3b_payload(
@@ -376,13 +545,58 @@ def render_plan_markdown(
     tech = verdict.get("technicals") or {}
     if tech:
         lines.append("### Technical Summary")
-        for dim in ("trend", "momentum", "volume", "volatility", "key_levels"):
-            val = tech.get(dim)
-            if val:
-                label = dim.replace("_", " ").title()
-                if dim == "key_levels":
-                    label = "Key Levels"
-                lines.append(f"- **{label}**: {val}")
+        # Trend
+        trend_parts = []
+        if tech.get("trend_adx") is not None:
+            trend_parts.append(f"ADX={tech['trend_adx']}")
+        if tech.get("trend_ema_fast") is not None:
+            trend_parts.append(f"EMA fast={tech['trend_ema_fast']}")
+        if tech.get("trend_ema_slow") is not None:
+            trend_parts.append(f"EMA slow={tech['trend_ema_slow']}")
+        if tech.get("trend_ema_spread_pct") is not None:
+            trend_parts.append(f"Spread={tech['trend_ema_spread_pct']}%")
+        if tech.get("trend_pct_b") is not None:
+            trend_parts.append(f"%B={tech['trend_pct_b']}")
+        if trend_parts:
+            lines.append(f"- **Trend**: {', '.join(trend_parts)}")
+        # Momentum
+        mom_parts = []
+        if tech.get("momentum_rsi") is not None:
+            mom_parts.append(f"RSI={tech['momentum_rsi']}")
+        if tech.get("momentum_macd_hist") is not None:
+            mom_parts.append(f"MACD hist={tech['momentum_macd_hist']}")
+        if tech.get("momentum_mom_score") is not None:
+            mom_parts.append(f"Score={tech['momentum_mom_score']}")
+        if mom_parts:
+            lines.append(f"- **Momentum**: {', '.join(mom_parts)}")
+        # Volume
+        vol_parts = []
+        if tech.get("volume_rel") is not None:
+            vol_parts.append(f"Rel={tech['volume_rel']}")
+        if tech.get("volume_zscore") is not None:
+            vol_parts.append(f"Z={tech['volume_zscore']}")
+        if tech.get("volume_classification"):
+            vol_parts.append(tech["volume_classification"])
+        if vol_parts:
+            lines.append(f"- **Volume**: {', '.join(vol_parts)}")
+        # Volatility
+        vola_parts = []
+        if tech.get("volatility_atr_pct") is not None:
+            vola_parts.append(f"ATR%={tech['volatility_atr_pct']}")
+        if tech.get("volatility_bandwidth") is not None:
+            vola_parts.append(f"BW={tech['volatility_bandwidth']}")
+        if tech.get("volatility_squeeze") is not None:
+            vola_parts.append(f"Squeeze={'Yes' if tech['volatility_squeeze'] else 'No'}")
+        if vola_parts:
+            lines.append(f"- **Volatility**: {', '.join(vola_parts)}")
+        # Key Levels
+        level_parts = []
+        if tech.get("key_level_support") is not None:
+            level_parts.append(f"Support=${tech['key_level_support']}")
+        if tech.get("key_level_resistance") is not None:
+            level_parts.append(f"Resistance=${tech['key_level_resistance']}")
+        if level_parts:
+            lines.append(f"- **Key Levels**: {', '.join(level_parts)}")
         lines.append("")
 
     # ── Execution Plan (only for approved non-REJECT symbols) ──
@@ -426,7 +640,7 @@ def render_plan_markdown(
         _md_field(lines, "Max profit", execution.get("max_profit"))
         _md_field(lines, "Breakeven", execution.get("breakeven"))
         _md_field(lines, "Allocation", execution.get("allocation"))
-        _md_field(lines, "R:R", execution.get("rr"))
+        _md_field(lines, "R:R", execution.get("rr_ratio") or execution.get("rr"))
         lines.append("")
 
     return "\n".join(lines)
@@ -455,13 +669,15 @@ def format_p4_card(structured_data: Dict[str, Any]) -> str:
         parts.append(f"Direction: {v['direction']}")
     if v.get("quality"):
         parts.append(f"Quality: {v['quality']}")
-    rr = v.get("rr_estimate") or ex.get("rr", "")
+    rr = v.get("rr_estimate") or ex.get("rr", "") or ex.get("rr_ratio", "")
     if rr:
         parts.append(f"R:R: {rr}")
     if v.get("confluence"):
         parts.append(f"Confluence: {v['confluence']}")
     if v.get("setup_type"):
         parts.append(f"Type: {v['setup_type']}")
+    if v.get("recommended_strategy_type"):
+        parts.append(f"Strategy: {v['recommended_strategy_type']}")
 
     card_lines = [" | ".join(parts)] if parts else []
 

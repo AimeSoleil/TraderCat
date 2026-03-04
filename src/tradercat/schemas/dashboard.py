@@ -1,6 +1,6 @@
 """Dashboard schemas for API response.
 
-Structured position data extracted from symbol_execution_plans.structured_json,
+Position data from symbol_verdicts + symbol_execution_plans,
 combined with briefing and regime context for the dashboard view.
 """
 from datetime import date
@@ -49,4 +49,5 @@ class DashboardResponse(BaseModel):
     regime_label: str | None
     regime_score: float | None
     total_positions: int
+    signal_count: int = 0
     available_dates: list[str]

@@ -99,9 +99,20 @@ Entry: ${close} | Stop: ${stop} | Target: ${target} | R:R: {ratio}:1
 *(Reference P3 specs directly — do NOT re-derive)*
 
 ## Hedges
-- **Hedge**: [e.g., "SPY bear put spread" or "No hedge — GREEN regime"]
+Select hedge structure based on regime color:
+
+| Regime | Hedge Structure | Strike Selection | DTE | Typical Cost |
+|--------|----------------|-----------------|-----|-------------|
+| DARK_GREEN | None or tail-risk far OTM put (SPY) | 5-7% OTM | 30-45 | 1-2% of portfolio |
+| GREEN | SPY put spread (moderate protection) | Short: 3-5% OTM, Long: 7-10% OTM | 30-45 | 3-5% of portfolio |
+| YELLOW | Collar (sell upside call, buy downside put) on largest position | ATM call / 3-5% OTM put | 30-45 | 5-8% of portfolio (net) |
+| ORANGE | SPY bear put spread + reduce position sizes | Short: 1-3% OTM, Long: 5-7% OTM | 21-30 | 8-12% of portfolio |
+| RED | Close most positions, hold only protective puts | ATM or 1% OTM puts | 21-30 | 10-15% of portfolio |
+
+- **Hedge**: [Selected structure from table above]
 - **Cost**: $XX (X% of portfolio)
-- **Purpose**: [Protection scenario]
+- **Purpose**: [Protection scenario — what risk event does this hedge cover?]
+- **Trigger to Add/Remove**: [e.g., "Add if SPY closes below 20-day EMA", "Remove if regime upgrades to GREEN"]
 
 ## Watchlist
 | Symbol | Near Strategy | Missing Gate | Re-entry Trigger |
@@ -117,18 +128,25 @@ Entry: ${close} | Stop: ${stop} | Target: ${target} | R:R: {ratio}:1
 | Cash Reserve | X% | ≥X% | ✅/⚠️ |
 
 ## Kill Switches
-- [ ] SPY drops > 3% intraday
-- [ ] Portfolio drawdown exceeds $200 (10%)
-- [ ] [regime-specific condition]
+- [ ] SPY drops > 3% intraday → close all directional longs, activate hedges
+- [ ] Portfolio drawdown exceeds $200 (10%) → close all positions, move to 100% cash
+- [ ] VIX spikes > 30 or VIX daily change > +20% → close all credit spreads immediately (gamma risk)
+- [ ] [regime-specific condition from P2 downstream filters]
 
 ## ROI Estimation
-| Scenario | Probability | P&L | Return |
-|----------|------------|-----|--------|
-| Best Case | X% | +$XX | +X.X% |
-| Base Case | X% | +$XX | +X.X% |
-| Worst Case | X% | -$XX | -X.X% |
+**Theta Decay Adjustment:** For long option positions, subtract estimated theta decay from P&L projections.
+- Single-leg long options: assume ~2-3% of premium lost per day for ATM, ~1-2% for OTM.
+- Debit spreads: net theta is partially offset — assume ~1% of net debit per day.
+- Credit spreads: theta works in your favor — no deduction needed.
+- Apply decay for the expected holding period (entry to target or time_stop, whichever is shorter).
 
-**Expected Value**: +$XX (+X.X%)
+| Scenario | Probability | Gross P&L | Theta Cost | Net P&L | Return |
+|----------|------------|-----------|------------|---------|--------|
+| Best Case | X% | +$XX | -$XX | +$XX | +X.X% |
+| Base Case | X% | +$XX | -$XX | +$XX | +X.X% |
+| Worst Case | X% | -$XX | -$XX | -$XX | -X.X% |
+
+**Expected Value (theta-adjusted)**: +$XX (+X.X%)
 
 ## Rejected Signals
 | Symbol | Direction | Reason | Fatal Gate |

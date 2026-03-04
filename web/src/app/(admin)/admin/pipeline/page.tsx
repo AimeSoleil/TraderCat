@@ -6,7 +6,7 @@ import { adminPipelineApi, ApiError } from "@/lib/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -187,7 +187,11 @@ export default function AdminPipelinePage() {
         status: statusFilter === "all" ? undefined : statusFilter,
         run_date: runDateFilter || undefined,
       }),
-    refetchInterval: 10_000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const hasRunning = data?.runs?.some((r) => r.status === "running");
+      return hasRunning ? 3_000 : 30_000;
+    },
   });
 
   const triggerMut = useMutation({
@@ -231,12 +235,11 @@ export default function AdminPipelinePage() {
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-3">
-            <Input
-              type="date"
-              value={triggerDate}
-              onChange={(e) => setTriggerDate(e.target.value)}
-              className="w-40"
+            <DatePicker
+              value={triggerDate || null}
+              onChange={setTriggerDate}
               placeholder="Today"
+              className="w-40"
             />
             <Button
               onClick={() => triggerMut.mutate()}
@@ -277,11 +280,11 @@ export default function AdminPipelinePage() {
                 ))}
               </SelectContent>
             </Select>
-            <Input
-              type="date"
-              value={runDateFilter}
-              onChange={(e) => setRunDateFilter(e.target.value)}
-              className="w-40 h-8 text-xs"
+            <DatePicker
+              value={runDateFilter || null}
+              onChange={setRunDateFilter}
+              placeholder="Filter date"
+              className="w-40"
             />
             <Button
               variant="outline"

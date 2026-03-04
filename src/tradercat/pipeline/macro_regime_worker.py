@@ -38,13 +38,53 @@ def _get_llm_provider(model_id: str = None):
     return provider, resolved_model
 
 
-def _extract_regime_label(content_md: str) -> Optional[str]:
-    """Extract regime label from the markdown report (best-effort).
+# ─── JSON block extraction cache ────────────────────────────────
 
-    Captures the full label including color code, e.g. 'YELLOW — Choppy/Transitional'.
-    Falls back to name-only if parsing the color fails.
+_p2_json_cache: Dict[int, Optional[Dict[str, Any]]] = {}
+
+
+def _extract_p2_json_block(content: str) -> Optional[Dict[str, Any]]:
+    """Extract the structured JSON block from P2 output (new hybrid format).
+
+    The new P2 prompt outputs a JSON object in ```json fences followed by markdown.
+    This function extracts and caches the JSON block.
+    Cache key is content hash to avoid re-parsing for multiple field extractions.
     """
-    # Try full format: **Regime**: COLOR — Name
+    cache_key = hash(content)
+    if cache_key in _p2_json_cache:
+        return _p2_json_cache[cache_key]
+
+    result = None
+    # Try code-fenced JSON object
+    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
+    if m:
+        try:
+            data = json.loads(m.group(1))
+            if isinstance(data, dict):
+                result = data
+        except json.JSONDecodeError:
+            pass
+
+    _p2_json_cache[cache_key] = result
+    return result
+
+
+def _extract_regime_label(content_md: str) -> Optional[str]:
+    """Extract regime label from the report output.
+
+    Tries structured JSON block first (new format), falls back to markdown regex.
+    """
+    # Try JSON block first (new P2 output format)
+    json_data = _extract_p2_json_block(content_md)
+    if json_data:
+        label = json_data.get("regime_label", "")
+        name = json_data.get("regime_name", "")
+        if label and name:
+            return f"{label} — {name}"[:80]
+        if label:
+            return label[:80]
+
+    # Fallback: regex from markdown
     m = re.search(r"\*\*Regime\*\*:\s*(.+?)$", content_md, re.MULTILINE)
     if m:
         return m.group(1).strip()[:80]
@@ -52,7 +92,19 @@ def _extract_regime_label(content_md: str) -> Optional[str]:
 
 
 def _extract_regime_score(content_md: str) -> Optional[float]:
-    """Extract regime score from the markdown report (best-effort)."""
+    """Extract regime score from the report output.
+
+    Tries structured JSON block first (new format), falls back to markdown regex.
+    """
+    # Try JSON block first
+    json_data = _extract_p2_json_block(content_md)
+    if json_data and "regime_score" in json_data:
+        try:
+            return float(json_data["regime_score"])
+        except (ValueError, TypeError):
+            pass
+
+    # Fallback: regex from markdown
     m = re.search(r"\*\*Regime Score\*\*:\s*([+-]?\d+(?:\.\d+)?)", content_md)
     if m:
         try:
@@ -63,7 +115,18 @@ def _extract_regime_score(content_md: str) -> Optional[float]:
 
 
 def _extract_downstream_filters_json(content_md: str) -> Optional[Dict[str, Any]]:
-    """Best-effort extraction of Section 4 downstream filters as structured data."""
+    """Best-effort extraction of downstream filters as structured data.
+
+    Tries structured JSON block first (new format), falls back to Section 4 regex.
+    """
+    # Try JSON block first
+    json_data = _extract_p2_json_block(content_md)
+    if json_data and "downstream_filters" in json_data:
+        filters = json_data["downstream_filters"]
+        if isinstance(filters, dict) and filters:
+            return filters
+
+    # Fallback: regex from markdown Section 4
     m = re.search(
         r"##\s*4\.?\s*Downstream Filters.*?\n(.*?)(?=\n##\s|\Z)",
         content_md,

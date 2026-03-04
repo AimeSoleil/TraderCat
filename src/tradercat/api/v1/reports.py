@@ -119,7 +119,6 @@ async def list_execution_plans(
     current_user: CurrentUser,
     run_date: date | None = Query(None, description="Filter by run date"),
     symbol: str | None = Query(None, max_length=20, description="Filter by symbol"),
-    verdict: str | None = Query(None, max_length=20, description="Filter by verdict"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0)
 ):
@@ -133,8 +132,6 @@ async def list_execution_plans(
         query = query.where(SymbolExecutionPlan.run_date == run_date)
     if symbol:
         query = query.where(SymbolExecutionPlan.symbol == symbol.upper())
-    if verdict:
-        query = query.where(SymbolExecutionPlan.verdict == verdict.lower())
 
     count_query = select(func.count()).select_from(query.subquery())
     total_result = await db.execute(count_query)

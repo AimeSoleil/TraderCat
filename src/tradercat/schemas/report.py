@@ -48,9 +48,10 @@ class SymbolExecutionPlanResponse(BaseModel):
     id: UUID
     run_date: date
     symbol: str
-    verdict: str | None
-    setup_quality: str | None
-    content_md: str
+    structure: str | None
+    direction: str | None
+    thesis: str | None
+    content_md: str | None
     model_used: str | None
     identity_used: str | None
     created_at: datetime
@@ -59,8 +60,20 @@ class SymbolExecutionPlanResponse(BaseModel):
 
 
 class SymbolExecutionPlanDetail(SymbolExecutionPlanResponse):
-    """Schema with full details including input_context."""
-    input_context: dict[str, Any] | None
+    """Schema with full execution plan details."""
+    rationale: str | None
+    legs: list[dict[str, Any]] | None
+    entry_trigger: str | None
+    stop_loss: str | None
+    profit_target: str | None
+    time_stop: str | None
+    max_loss: str | None
+    max_profit: str | None
+    breakeven: str | None
+    rr_ratio: str | None
+    allocation: str | None
+    dte: int | None
+    raw_json: dict[str, Any] | None
 
     model_config = {"from_attributes": True}
 

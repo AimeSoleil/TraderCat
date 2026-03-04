@@ -207,7 +207,7 @@ function SkeletonGrid({ count = 3 }: { count?: number }) {
 function PlanDetailContent({ plan }: { plan: SymbolExecutionPlanResponse }) {
   // Strip the redundant title heading (e.g. "## AAPL — Analysis Report")
   // since the modal header already displays the symbol + metadata.
-  const strippedContent = plan.content_md
+  const strippedContent = (plan.content_md ?? "")
     .replace(/^##?\s+.*(?:Analysis Report|—).*\n*/i, "")
     .trimStart();
 
@@ -217,17 +217,17 @@ function PlanDetailContent({ plan }: { plan: SymbolExecutionPlanResponse }) {
       <div className="space-y-1">
         <div className="flex flex-wrap items-baseline gap-2">
           <span className="text-base font-bold tracking-tight">{plan.symbol}</span>
-          {plan.verdict && (
+          {plan.direction && (
             <Badge
-              variant={plan.verdict === "buy" ? "default" : plan.verdict === "sell" ? "destructive" : "secondary"}
+              variant={plan.direction === "credit" ? "default" : plan.direction === "debit" ? "destructive" : "secondary"}
               className="text-xs px-1.5 py-px"
             >
-              {plan.verdict.toUpperCase()}
+              {plan.direction.toUpperCase()}
             </Badge>
           )}
-          {plan.setup_quality && (
+          {plan.structure && (
             <span className="text-xs text-muted-foreground">
-              Quality: <span className="font-medium text-foreground">{plan.setup_quality}</span>
+              Structure: <span className="font-medium text-foreground">{plan.structure}</span>
             </span>
           )}
         </div>
@@ -288,12 +288,12 @@ function PlansTab({
           <CardContent className="flex items-center justify-between p-3">
             <span className="font-medium">{p.symbol}</span>
             <div className="flex items-center gap-2">
-              {p.verdict && (
+              {p.direction && (
                 <Badge
-                  variant={p.verdict === "buy" ? "default" : p.verdict === "sell" ? "destructive" : "secondary"}
+                  variant={p.direction === "credit" ? "default" : p.direction === "debit" ? "destructive" : "secondary"}
                   className="text-xs"
                 >
-                  {p.verdict.toUpperCase()}
+                  {p.direction.toUpperCase()}
                 </Badge>
               )}
               <Badge variant="outline" className="text-xs">{p.run_date}</Badge>
@@ -311,8 +311,8 @@ function PlansTab({
         <TableHeader>
           <TableRow>
             <TableHead className="w-28">Symbol</TableHead>
-            <TableHead className="w-24">Verdict</TableHead>
-            <TableHead className="w-28">Quality</TableHead>
+            <TableHead className="w-24">Direction</TableHead>
+            <TableHead className="w-28">Structure</TableHead>
             <TableHead className="w-32">Date</TableHead>
             <TableHead>Model</TableHead>
           </TableRow>
@@ -326,19 +326,19 @@ function PlansTab({
             >
               <TableCell className="font-medium">{p.symbol}</TableCell>
               <TableCell>
-                {p.verdict ? (
+                {p.direction ? (
                   <Badge
-                    variant={p.verdict === "buy" ? "default" : p.verdict === "sell" ? "destructive" : "secondary"}
+                    variant={p.direction === "credit" ? "default" : p.direction === "debit" ? "destructive" : "secondary"}
                     className="text-xs"
                   >
-                    {p.verdict.toUpperCase()}
+                    {p.direction.toUpperCase()}
                   </Badge>
                 ) : (
                   "—"
                 )}
               </TableCell>
               <TableCell className="text-xs text-muted-foreground">
-                {p.setup_quality ?? "—"}
+                {p.structure ?? "—"}
               </TableCell>
               <TableCell>{p.run_date}</TableCell>
               <TableCell className="text-muted-foreground text-xs">

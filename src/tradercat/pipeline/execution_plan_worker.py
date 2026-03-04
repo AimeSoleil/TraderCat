@@ -32,6 +32,8 @@ from tradercat.ai.roles.options_strategist import (
     build_p3b_payload,
     parse_json_output,
     render_plan_markdown,
+    validate_verdicts,
+    validate_execution_plans,
 )
 
 logger = get_logger(__name__)
@@ -48,12 +50,6 @@ def _get_llm_provider(model_id: str = None):
     provider_key = settings.default_llm_provider
     provider, resolved_model = LLMFactory.create_provider(f"{provider_key}_{model_id}")
     return provider, resolved_model
-
-
-def _verdict_to_db_verdict(direction: str) -> Optional[str]:
-    """Convert P3a direction to DB verdict value."""
-    mapping = {"long": "buy", "short": "sell", "neutral": "hold"}
-    return mapping.get((direction or "").lower())
 
 
 class GateAuditWorker:
@@ -121,6 +117,9 @@ class GateAuditWorker:
                     logger.warning(f"P3a: JSON parse failed, falling back to placeholder for {batch_symbols}")
                     return self._placeholder_verdicts(batch_symbols)
 
+                # Validate and sanitize verdict schemas
+                verdicts = validate_verdicts(verdicts)
+
                 # Normalize: ensure every batch symbol has a verdict
                 verdicts_by_sym = {v.get("symbol", "").upper(): v for v in verdicts}
                 result_list = []
@@ -156,6 +155,7 @@ class GateAuditWorker:
             "historical_trend": "MIXED",
             "gates": "0:P|1:F|2:-|3:-|4:-|5:-|6:-",
             "rejection_reason": "No verdict from LLM",
+            "recommended_strategy_type": None,
             "technicals": {},
         }
 
@@ -233,6 +233,9 @@ class ExecutionPlanWorker:
                     logger.warning(f"P3b: JSON parse failed for {batch_symbols}")
                     return {}
 
+                # Validate and sanitize execution plan schemas
+                plans = validate_execution_plans(plans)
+
                 plans_by_sym: Dict[str, Dict[str, Any]] = {}
                 for plan in plans:
                     sym = (plan.get("symbol") or "").upper()
@@ -257,6 +260,128 @@ def is_approved(verdict: Dict[str, Any]) -> bool:
     return quality not in ("REJECT", "C") and direction != "NEUTRAL"
 
 
+def _safe_float(val: Any) -> Optional[float]:
+    """Safely convert a value to float, returning None on failure."""
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def _safe_int(val: Any) -> Optional[int]:
+    """Safely convert a value to int, returning None on failure."""
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def build_verdict_record(
+    verdict: Dict[str, Any],
+    run_date: date,
+    pipeline_run_id: UUID,
+) -> Dict[str, Any]:
+    """Build a DB record dict for the symbol_verdicts table from a P3a verdict."""
+    tech = verdict.get("technicals") or {}
+    squeeze_val = tech.get("volatility_squeeze")
+    squeeze_bool = None
+    if squeeze_val is not None:
+        squeeze_bool = bool(squeeze_val) if not isinstance(squeeze_val, str) else squeeze_val.lower() in ("true", "yes", "y", "1")
+
+    return {
+        "run_date": run_date,
+        "symbol": verdict.get("symbol", ""),
+        # Core verdict
+        "direction": (verdict.get("direction") or "NEUTRAL").upper(),
+        "quality": (verdict.get("quality") or "C").upper(),
+        "confidence": _safe_float(verdict.get("confidence")),
+        "rr_estimate": verdict.get("rr_estimate"),
+        "setup_type": verdict.get("setup_type"),
+        # Confluence
+        "confluence": verdict.get("confluence"),
+        "confluence_count": _safe_int(verdict.get("confluence_count")),
+        # Historical continuity
+        "historical_trend": verdict.get("historical_trend"),
+        # Gate results
+        "gates": verdict.get("gates"),
+        "rejection_reason": verdict.get("rejection_reason"),
+        # Trend (Gate 3)
+        "trend_adx": _safe_float(tech.get("trend_adx")),
+        "trend_ema_fast": _safe_float(tech.get("trend_ema_fast")),
+        "trend_ema_slow": _safe_float(tech.get("trend_ema_slow")),
+        "trend_ema_spread_pct": _safe_float(tech.get("trend_ema_spread_pct")),
+        "trend_pct_b": _safe_float(tech.get("trend_pct_b")),
+        # Momentum (Gate 4)
+        "momentum_rsi": _safe_float(tech.get("momentum_rsi")),
+        "momentum_macd_hist": _safe_float(tech.get("momentum_macd_hist")),
+        "momentum_mom_score": _safe_float(tech.get("momentum_mom_score")),
+        # Volume (Gate 5)
+        "volume_rel": _safe_float(tech.get("volume_rel")),
+        "volume_zscore": _safe_float(tech.get("volume_zscore")),
+        "volume_classification": tech.get("volume_classification"),
+        # Volatility
+        "volatility_atr_pct": _safe_float(tech.get("volatility_atr_pct")),
+        "volatility_bandwidth": _safe_float(tech.get("volatility_bandwidth")),
+        "volatility_squeeze": squeeze_bool,
+        # Key levels
+        "key_level_support": _safe_float(tech.get("key_level_support")),
+        "key_level_resistance": _safe_float(tech.get("key_level_resistance")),
+        # Strategy recommendation
+        "recommended_strategy_type": verdict.get("recommended_strategy_type"),
+        # Raw JSON
+        "raw_json": _json_safe(verdict),
+        # Metadata
+        "model_used": settings.default_llm_model,
+        "identity_used": "options_strategist",
+        "pipeline_run_id": pipeline_run_id,
+    }
+
+
+def build_exec_plan_record(
+    plan: Dict[str, Any],
+    run_date: date,
+    pipeline_run_id: UUID,
+    content_md: str = "",
+) -> Dict[str, Any]:
+    """Build a DB record dict for the symbol_execution_plans table from a P3b plan."""
+    return {
+        "run_date": run_date,
+        "symbol": (plan.get("symbol") or "").upper(),
+        # Trade structure
+        "structure": plan.get("structure"),
+        "direction": plan.get("direction"),
+        "thesis": plan.get("thesis"),
+        "rationale": plan.get("rationale"),
+        # Legs (JSON array)
+        "legs": _json_safe(plan.get("legs", [])),
+        # Entry
+        "entry_trigger": plan.get("entry_trigger"),
+        # Risk parameters
+        "stop_loss": plan.get("stop_loss"),
+        "profit_target": plan.get("profit_target"),
+        "time_stop": plan.get("time_stop"),
+        "max_loss": plan.get("max_loss"),
+        "max_profit": plan.get("max_profit"),
+        "breakeven": plan.get("breakeven"),
+        "rr_ratio": plan.get("rr_ratio") or plan.get("rr"),
+        # Allocation & sizing
+        "allocation": plan.get("allocation"),
+        "dte": _safe_int(plan.get("dte")),
+        # Content
+        "content_md": content_md or None,
+        # Raw JSON
+        "raw_json": _json_safe(plan),
+        # Metadata
+        "model_used": settings.default_llm_model,
+        "identity_used": "options_strategist",
+        "pipeline_run_id": pipeline_run_id,
+    }
+
+
 async def generate_execution_plans_p3(
     run_date: date,
     all_signals: List[Dict[str, Any]],
@@ -265,14 +390,17 @@ async def generate_execution_plans_p3(
     regime_context_md: str,
     max_concurrency: int = 3,
     api_key: str | None = None,
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
     """
     P3 entry point: Two-phase execution plan generation.
 
     Phase 3a: Gate audit all symbols in large batches (20+)
     Phase 3b: Execution plans only for approved symbols in small batches (3)
 
-    Returns list of DB record dicts with structured_data for P4 consumption.
+    Returns dict with keys:
+      - verdict_records: list of DB record dicts for symbol_verdicts table
+      - exec_plan_records: list of DB record dicts for symbol_execution_plans table
+      - symbol_plans_data: dict mapping symbol → {verdict, execution} for P4 consumption
     """
     # --- Fetch historical signals + execution plans (past 1 trading day) ---
     historical_by_symbol: Dict[str, List[Dict[str, Any]]] = {}
@@ -428,37 +556,39 @@ async def generate_execution_plans_p3(
     logger.info(f"P3b DONE: {len(exec_plans_by_symbol)} execution plans generated")
 
     # ═══════════════════════════════════════════════
-    # MERGE: Build DB records with rendered markdown
+    # MERGE: Build DB records for both tables + P4 data
     # ═══════════════════════════════════════════════
-    all_records: List[Dict[str, Any]] = []
+    verdict_records: List[Dict[str, Any]] = []
+    exec_plan_records: List[Dict[str, Any]] = []
+    symbol_plans_data: Dict[str, Dict[str, Any]] = {}
 
     for symbol in plan_symbols:
         verdict = verdicts_by_symbol.get(symbol, GateAuditWorker._neutral_verdict(symbol))
         execution = exec_plans_by_symbol.get(symbol)
 
-        # Merge verdict + execution into structured_data
-        structured_data = dict(verdict)
-        structured_data["execution"] = execution
+        # Build verdict DB record
+        verdict_records.append(
+            build_verdict_record(verdict, run_date, pipeline_run_id)
+        )
 
-        # Render markdown for DB storage and frontend
-        content_md = render_plan_markdown(verdict, execution)
+        # Build execution plan DB record (only for approved symbols with plans)
+        if execution:
+            content_md = render_plan_markdown(verdict, execution)
+            exec_plan_records.append(
+                build_exec_plan_record(execution, run_date, pipeline_run_id, content_md)
+            )
 
-        all_records.append({
-            "run_date": run_date,
-            "symbol": symbol,
-            "verdict": _verdict_to_db_verdict(verdict.get("direction")),
-            "setup_quality": verdict.get("quality"),
-            "content_md": content_md,
-            "model_used": settings.default_llm_model,
-            "identity_used": "options_strategist",
-            "input_context": _json_safe({
-                "batch_symbols": [symbol],
-                "symbol": symbol,
-                "phase": "p3a+p3b" if execution else "p3a_only",
-            }),
-            "pipeline_run_id": pipeline_run_id,
-            "structured_data": structured_data,
-        })
+        # Build P4 structured data for downstream consumption
+        structured = dict(verdict)
+        structured["execution"] = execution
+        symbol_plans_data[symbol] = structured
 
-    logger.info(f"P3 complete: {len(all_records)} records ({len(exec_plans_by_symbol)} with execution plans)")
-    return all_records
+    logger.info(
+        f"P3 complete: {len(verdict_records)} verdicts, "
+        f"{len(exec_plan_records)} execution plans"
+    )
+    return {
+        "verdict_records": verdict_records,
+        "exec_plan_records": exec_plan_records,
+        "symbol_plans_data": symbol_plans_data,
+    }

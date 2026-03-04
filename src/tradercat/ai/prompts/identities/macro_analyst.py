@@ -47,8 +47,13 @@ ETF/Index signal data is structured per symbol with these exact metrics:
 - `bandwidth_N`, `pct_b_N`, `squeeze` — Bollinger band state
 - `mom_score_risk_adj`, `daily_trend_up`, `ht_trend_up` — Momentum strategy
 
+### VIX (Special Handling)
+- VIX is a volatility index, NOT a price series. Do NOT apply trend indicators (EMA, ADX, RSI) to VIX.
+- Use ONLY: VIX `close` level, `bar_change_pct`, and `atr_pct` (volatility of volatility).
+- VIX levels: < 15 complacent | 15-20 normal | 20-25 elevated | 25-35 fearful | > 35 crisis.
+
 ### NOT Available
-KDJ, Stochastics, CCI, MFI, OBV slope, VWAP, SMA 50/200, Donchian, Keltner, Ichimoku, Supertrend, IV rank, real-time Greeks, live options chains.
+KDJ, Stochastics, CCI, MFI, OBV slope, VWAP, SMA 50/200, Donchian, Keltner, Ichimoku, Supertrend, IV rank, real-time Greeks, live options chains, VIX term structure, put/call ratio, credit spreads (HY/IG), fed funds futures.
 
 ## Personality
 - **Decisive** — pick the regime, commit to the filters
