@@ -5,254 +5,379 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/AimeSoleil/TraderCat/graphs/commit-activity)
 
-**TraderCat** is a next-generation hybrid trading terminal. It merges high-performance **Quantitative Algorithmic Trading** with contextual **Generative AI** analysis.
-
-Unlike traditional bots that rely solely on hard-coded indicators, TraderCat can "see" the market through the lens of legendary investors (via AI Personas) and allows you to chat interactively with the data, all while running a highly concurrent algorithmic execution engine in the background.
+**TraderCat** is a **multi-tenant API service** for trading signal generation and AI-powered market analysis. It combines quantitative algorithmic strategies with LLM-driven insights, delivered through a FastAPI-based REST API.
 
 ## 🚀 Key Features
 
-### 🧠 AI Market Intelligence
-*   **Persona-Driven Analysis**: Ask "Wyckoff" about distribution phases or "Buffett" about value zones.
-*   **Interactive Chat**: Don't just read a static report—enter a live chat session to ask follow-up questions about the specific symbol context.
-*   **Multi-Model Core**: Seamlessly switch between **GitHub Models** (GPT-4o, o1, Phi-3) or mock providers for testing.
-*   **Stateless Architecture**: Hot-swap models and personas on the fly.
+### 🏗️ Multi-Tenant Architecture
+- **User Management**: Admin-controlled user provisioning with personal access token (PAT) authentication
+- **Per-User Watchlists**: Track up to 50 symbols per user (configurable)
+- **Custom Strategy Parameters**: Users can override default strategy configurations
+- **Tenant-Isolated Reports**: Each user gets personalized LLM analysis
 
-### ⚡ Quantitative Engine
-*   **AsyncIO Performance**: Process hundreds of symbols concurrently with efficient staggering.
-*   **Multi-Strategy Support**: Technical (Bollinger, RSI), Pattern Recognition (Candlesticks), and Portfolio (Sector Rotation) strategies.
-*   **OpenBB Integration**: Uses institutional-grade data sources.
-*   **Robust Reporting**: Automated CSV logging and Discord notifications.
+### 📊 Signal Generation Engine
+- **8 Trading Strategies**: Bollinger Bands, Momentum, Divergence, Fibonacci, Chart Patterns, Candlestick Patterns, Sector Rotation
+- **Dual-Scope Signals**: 
+  - **Global**: Predefined symbols (SPY, QQQ, etc.) shared across all users
+  - **User**: Deduplicated signals for user watchlist symbols
+- **Async Processing**: Concurrent signal generation with configurable workers
+
+### 🤖 Nightly Pipeline
+- **Market-Day Aware**: Automatically runs at 8 PM ET on trading days only
+- **Three-Phase Execution**:
+  1. Global signal generation
+  2. User-space signal generation (deduplicated)
+  3. Per-user LLM report generation
+- **Idempotent**: Safe to retry failed runs without duplication
+
+### 🧠 AI Analysis (LLM Integration)
+- **Role-Based Pipeline**: Internal functional identities (Options Strategist, Summarizer) drive each pipeline phase
+- **Context-Aware Reports**: Includes today's signals, macro regime context, and execution plans
+- **Model Selection**: Configurable LLM models (Claude Opus default)
 
 ---
 
 ## 📂 Architecture
 
-The system has been refactored into a clean, modular `src` layout:
-
 ```text
 TraderCat/
-├── src/
-│   └── tradercat/
-│       ├── main.py          # Unified CLI Entry Point (Router)
-│       ├── ai/              # AI Subsystem
-│       │   ├── ai_commands.py  # AI CLI Controller (View Logic)
-│       │   ├── llm_providers.py # LLM Backends (GitHub/Azure, Mock)
-│       │   └── prompts/    # Prompt Templates (Wyckoff, etc.)
-│       ├── session_runner.py    # Core Session Engine (SessionRunner)
-│       ├── bot.py           # Trading Bot Logic
-│       ├── strategy/        # Algorithmic Strategies
-│       └── utils/           # SymbolLoader, Logger
-├── tests/                   # Unit Tests
-└── public/                  # Assets and images
+├── src/tradercat/
+│   ├── main.py                 # FastAPI application
+│   ├── config.py               # Pydantic settings
+│   ├── database.py             # SQLAlchemy async setup
+│   │
+│   ├── models/                 # Database models
+│   │   ├── user.py             # User, PersonalAccessToken
+│   │   ├── symbol.py           # WatchlistItem
+│   │   ├── signal.py           # SignalRecord
+│   │   ├── report.py           # Report
+│   │   ├── strategy.py         # StrategyConfig
+│   │   └── pipeline.py         # PipelineRun
+│   │
+│   ├── schemas/                # Pydantic schemas
+│   │   ├── user.py
+│   │   ├── symbol.py
+│   │   ├── signal.py
+│   │   ├── report.py
+│   │   └── strategy.py
+│   │
+│   ├── api/                    # FastAPI routers
+│   │   ├── deps.py             # Auth & DB injection
+│   │   ├── v1/
+│   │   │   ├── users.py        # User CRUD (admin)
+│   │   │   ├── watchlist.py    # Watchlist management
+│   │   │   ├── strategies.py   # Strategy config
+│   │   │   ├── signals.py      # Signal queries
+│   │   │   └── reports.py      # Report queries
+│   │   └── admin/
+│   │       ├── pipeline.py     # Pipeline control
+│   │       └── system.py       # Health check
+│   │
+│   ├── core/                   # Business logic
+│   │   ├── bot.py              # Signal generation
+│   │   ├── strategy/           # Strategy implementations
+│   │   └── data/               # Market data providers
+│   │
+│   ├── pipeline/               # Nightly pipeline
+│   │   ├── scheduler.py        # APScheduler
+│   │   ├── orchestrator.py     # Pipeline coordinator
+│   │   ├── signal_worker.py    # Signal generation
+│   │   ├── report_worker.py    # LLM report generation
+│   │   └── holidays.py         # Market calendar
+│   │
+│   └── ai/                     # LLM integration
+│       ├── llm_providers.py
+│       └── prompts/
+│
+├── alembic/                    # Database migrations
+├── tests/                      # Test suite
+├── docker-compose.yml          # Docker orchestration
+├── Dockerfile                  # Container image
+└── .env.example                # Configuration template
 ```
+
+---
 
 ## 🛠️ Installation
 
 ### Prerequisites
-*   Python 3.10+
-*   [Optional] Virtual Environment (recommended)
+- Python 3.10+ 
+- PostgreSQL 16+ (or use Docker Compose)
+- GitHub Copilot SDK token (for LLM features)
 
-### Setup
+### Local Development
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/AimeSoleil/TraderCat.git
-    cd TraderCat
-    ```
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/AimeSoleil/TraderCat.git
+   cd TraderCat
+   ```
 
-2.  **Install in Editable Mode:**
-    This installs the project and its dependencies while allowing you to edit the code without reinstalling.
-    ```bash
-    pip install -e .
-    ```
+2. **Install dependencies**
+   ```bash
+   pip install -e .
+   ```
 
-3.  **Install Development Dependencies (Optional):**
-    For running tests or contributing.
-    ```bash
-    pip install -e ".[dev]"
-    ```
+3. **Configure environment**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your database URL and API tokens
+   ```
 
-## ⚙️ Configuration
+4. **Run database migrations**
+   ```bash
+   alembic upgrade head
+   ```
 
-Create a `.env` file in the root directory.
+5. **Start the API**
+   ```bash
+   python -m uvicorn tradercat.main:app --reload
+   ```
 
-### 1. AI Authentication (Required for AI Features)
-TraderCat uses **GitHub Models** (via Azure AI Inference). You need a GitHub Personal Access Token.
-*   `TRADERCAT_AI_TOKEN`: Your GitHub PAT (or Azure Key).
-*   `TRADERCAT_AI_MODELS`: (Optional) Comma-separated model list to append/override available Copilot models.
-    * Example: `TRADERCAT_AI_MODELS=gpt-4o,gpt-4o-mini,o1`
+### Docker Deployment
 
-### 2. General Settings
-*   `DISCORD_WEBHOOK_URL`: (Optional) For trade alerts.
-*   `ENV_SYMBOLS`: (Optional) Default fallback symbols (e.g., "AAPL,TSLA").
-
-## 🖥️ Usage
-
-TraderCat operates with two main modes: `ai` (Intelligence) and `run` (Automation).
-
-### Mode 1: 🧠 AI Intelligence (`ai`)
-
-Use this mode for deep-dive analysis and interactive research.
-
-<p align="center">
-  <img src="public/buffett_chat_1.png" width="48%" alt="Warren Buffett Persona Analysis" />
-  <img src="public/buffett_chat_2.png" width="48%" alt="Interactive Chat Session" />
-  <br>
-  <i>Interactive chat session with the "Warren Buffett" persona for clear chart data analysis.</i>
-</p>
-
-**Analyze a Symbol (Deep Dive):**
-Generates a report and starts a chat session.
 ```bash
-tradercat ai analyze TSLA
+docker-compose up -d
 ```
 
-**Advanced Usage:**
-Switch analysts and models.
-```bash
-# Ask "Warren Buffett" about Apple
-tradercat ai analyze AAPL --persona buffett
-
-# Use a specific reasoning model
-tradercat ai analyze NVDA --model copilot_o1 --no-chat
-```
-
-**Discovery Commands:**
-```bash
-# See all supported personas (e.g., wyckoff, livermore)
-tradercat ai list-personas
-
-# See all supported models from your provider
-tradercat ai list-models
-```
-
-### Mode 2: 🚀 Automated Trading (`run`)
-
-Use this mode for batch processing, scanning, and signal generation.
-
-**Execute a Trading Session:**
-```bash
-# Scan specific symbols
-tradercat run -s "AAPL,MSFT,GOOG"
-
-# Scan from a file (YAML or TXT)
-tradercat run -f symbols.yml
-
-# Run only Sector Rotation strategies (Portfolio Scope)
-tradercat run --scope portfolio
-```
-
-**CLI Options Table:**
-| Flag | Description | Default |
-| :--- | :--- | :--- |
-| `-s`, `--symbols` | Comma-separated tickers. | `None` |
-| `-f`, `--symbols-file` | Path to symbols file. | `None` |
-| `-c`, `--concurrency` | Max concurrent bots. | `5` |
-| `--scope` | `single` (stocks), `portfolio` (sectors), or `all`. | `single` |
+The API will be available at `http://localhost:8000`
 
 ---
 
-## 🤖 AI Providers & Personas
+## 🔐 API Authentication
 
-### Supported Providers
-The system uses a factory pattern to load LLMs.
-1.  **Copilot (GitHub Models)**: Access to GPT-4o, Phi-3, Llama-3, etc. free with a GitHub account.
-2.  **Mock**: A dummy provider for testing flow without API calls (`--model mock`).
+All endpoints (except `/api/admin/system/health`) require JWT Bearer authentication. Authenticate by posting your personal access token (PAT) to `/api/v1/auth/login`, then use the returned JWT in the `Authorization` header for all requests.
 
-### Analyst Personas
-*   **Standard**: Balanced technical/fundamental mix.
-*   **Wyckoff**: Focus on accumulation/distribution and market cycles.
-*   **Buffett**: Focus on value, moats, and long-term hold.
-*   **Livermore**: Focus on price action, pivot points, and trend following.
+### Initial Admin Setup
+
+When you run database migrations for the first time, an initial admin user is automatically created:
+
+```bash
+alembic upgrade head
+```
+
+This will:
+1. Create all database tables
+2. Seed an initial admin user with credentials:
+   - Username: `admin` (configurable via `ADMIN_USERNAME`)
+   - Email: `admin@tradercat.com` (configurable via `ADMIN_EMAIL`)
+   - Role: `admin`
+3. Generate and display a personal access token (shown only once)
+
+**Important**: Save the personal access token displayed during migration! It cannot be retrieved later.
+
+**Customizing Admin User**: Set environment variables before running migrations:
+```bash
+export ADMIN_USERNAME=myadmin
+export ADMIN_EMAIL=admin@mycompany.com
+export ADMIN_MAX_SYMBOLS=200
+alembic upgrade head
+```
+
+### Creating Additional Users
+
+Only admins can create users via the API:
+
+```bash
+# First, obtain a JWT by logging in with your admin PAT:
+# curl -X POST http://localhost:8000/api/v1/auth/login \
+#   -H "Content-Type: application/json" \
+#   -d '{"token": "tc_your_admin_pat"}'
+
+curl -X POST http://localhost:8000/api/v1/users \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "trader1",
+    "email": "trader1@example.com",
+    "role": "user",
+    "max_symbols": 50
+  }'
+```
+
+The response will include a generated personal access token for the new user.
 
 ---
 
-## ⏰ Automation (Cron)
+## 📖 API Endpoints
 
-Since the internal scheduler is decoupled, use **Cron** (Linux/Mac) for daily automation.
+### User Management (Admin Only)
+- `POST /api/v1/users` - Create user + generate personal access token
+- `GET /api/v1/users` - List users
+- `GET /api/v1/users/{id}` - Get user details
+- `PATCH /api/v1/users/{id}` - Update user
 
-**Example Crontab:**
+### Watchlist
+- `GET /api/v1/watchlist` - List symbols (with filtering)
+- `POST /api/v1/watchlist` - Add symbol
+- `DELETE /api/v1/watchlist/{symbol}` - Remove symbol
 
-```cron
-# Set Timezone to ensure 5:00 PM is always New York time
-CRON_TZ=America/New_York
+### Strategies
+- `GET /api/v1/strategies` - List strategies with defaults & user overrides
+- `PUT /api/v1/strategies/{name}` - Update user-level parameters
 
-# 1. Daily Swing Trading Signals (Mon-Fri at 5:00 PM)
-# Logs are saved with date suffix (NOTE: % must be escaped with \ in crontab)
-0 17 * * 1-5 cd /path/to/TraderCat && /path/to/python -m tradercat run -f symbols.yml --scope single >> logs/daily_swing_$(date +\%Y-\%m-\%d).log 2>&1
+### Signals
+- `GET /api/v1/signals` - Query signals (filters: date, symbol, strategy)
+  - Users see GLOBAL signals + USER signals for their watchlist
 
-# 2. Weekly Portfolio Rebalancing (Fridays at 5:00 PM)
-# Runs sector rotation strategies (No symbols file needed)
-0 17 * * 5 cd /path/to/TraderCat && /path/to/python -m tradercat run --scope portfolio >> logs/weekly_portfolio_$(date +\%Y-\%m-\%d).log 2>&1
+### Reports
+- `GET /api/v1/reports` - List reports (filters: date, symbol, type)
+- `GET /api/v1/reports/{id}` - Get full report with context
+
+### Admin: LLM Tokens
+- `GET /api/admin/llm-tokens` - List LLM tokens
+- `POST /api/admin/llm-tokens` - Add LLM token
+- `PATCH /api/admin/llm-tokens/{id}` - Update LLM token
+- `DELETE /api/admin/llm-tokens/{id}` - Remove LLM token
+
+### Admin: Pipeline
+- `POST /api/admin/pipeline/trigger` - Manually trigger pipeline
+- `GET /api/admin/pipeline/status` - Get pipeline status
+
+### Admin: System
+- `GET /api/admin/system/health` - Health check (public)
+
+**API Documentation**: Visit `/docs` for interactive Swagger UI
+
+---
+
+## 🔄 Pipeline Execution
+
+### Automatic (Scheduled)
+The pipeline runs automatically at **8:00 PM Eastern Time** on market days (Monday-Friday, excluding NYSE holidays).
+
+### Manual Trigger
+```bash
+curl -X POST http://localhost:8000/api/admin/pipeline/trigger \
+  -H "Authorization: Bearer <jwt>"
 ```
+Note: The pipeline requires at least one active LLM token. Add one via `/api/admin/llm-tokens`.
 
-### CLI Options (for `run` command)
+### Pipeline Flow
+1. **Global Signals**: Generate signals for SPY, QQQ, DIA, IWM, TLT, XLK, XLF, XLY, XLV, XLE, XLI, XLP
+2. **User Signals**: Generate signals for unique symbols across all user watchlists (deduplicated)
+3. **Reports**: For each user × each watchlist symbol, generate an LLM analysis report
 
-| Option | Long Option | Description | Default |
-| :--- | :--- | :--- | :--- |
-| `-s` | `--symbols` | Comma-separated list of symbols (e.g., `AAPL,TSLA`). | `None` |
-| `-f` | `--symbols-file` | Path to a `.txt` or `.yaml` file containing symbols. | `None` |
-| `-c` | `--concurrency` | Max number of bots running at the same time. | `5` |
-| `-S` | `--stagger` | Seconds to wait between starting bots (prevents API rate limits). | `2` |
-|| `--scope` | Execution scope: `all` (default), `single`, or `portfolio`. | `all` |
-
-## 🧠 Strategies
-
-TraderCat comes with several built-in strategies located in `src/tradercat/strategy/`:
-
-*   **Candlestick Patterns**: Detects patterns like Hammer, Engulfing, Morning Star, etc.
-*   **Bollinger Bands**: Breakout and Reversal strategies.
-*   **Momentum**: RSI and other momentum-based indicators.
-*   **Sector Rotation**: Analyzes sector performance to find rotation opportunities.
-*   **Fibonacci Retracement**: Identifies potential support/resistance levels.
-*   **Divergence**: Detects divergence between price and indicators.
-
-## 📈 Backtesting
-
-TraderCat includes a built-in backtesting engine to evaluate your strategies against historical data.
-
-### Running a Backtest
-
-1.  **Configure**: Open `src/tradercat/backtest/main.py` and modify the `BacktestConfig` class to set your desired parameters:
-    *   `start_date` / `end_date`
-    *   `initial_cash`
-    *   `target_symbols` (e.g., `["AAPL", "TSLA"]`)
-    *   `active_strategies` (Select which strategies and presets to test)
-
-2.  **Run**: Execute the backtest module:
-    ```bash
-    python -m tradercat.backtest.main
-    ```
-
-3.  **Analyze**: The engine will simulate trading and output a performance report, including:
-    *   Final Portfolio Value
-    *   Net Profit
-    *   Win Rate
-    *   Max Drawdown
-    *   Trade Logs
+---
 
 ## 🧪 Testing
-
-Run the unit test suite to ensure everything is working correctly.
 
 ```bash
 # Run all tests
 pytest
 
-# Run specific tests (e.g., candle patterns)
-pytest tests/strategy/candle_pattern/detectors
+# Run specific test modules
+pytest tests/models/
+pytest tests/pipeline/
+pytest tests/core/strategy/
+
+# With coverage
+pytest --cov=tradercat
 ```
+
+---
+
+## 🐳 Docker
+
+### Standalone Pipeline Deployment
+
+TraderCat now supports **separate API and pipeline services** for production deployments. See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed guide.
+
+**Quick Start** (separate services):
+```bash
+docker-compose up -d  # Starts API, Pipeline Worker, and PostgreSQL
+```
+
+**Architecture**:
+- **API Service** (port 8000): REST API only, no scheduler
+- **Pipeline Worker**: Dedicated scheduler, runs at 8 PM ET
+- **PostgreSQL**: Shared database
+
+**Deployment Modes** (via `RUN_MODE` env var):
+- `api-only`: API without scheduler (default for API service)
+- `scheduler`: Pipeline worker only (default for pipeline worker)
+- `combined`: Legacy mode, both in one container
+
+### Basic Docker Commands
+
+```bash
+# View logs
+docker-compose logs -f api
+docker-compose logs -f pipeline-worker
+
+# Check status
+docker-compose ps
+
+# Stop services
+docker-compose down
+```
+
+For advanced deployment options (Kubernetes, scaling, monitoring), see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+---
+
+## 🔧 Configuration
+
+Key environment variables (see `.env.example`):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | postgresql+asyncpg://... | PostgreSQL connection string |
+| `RUN_MODE` | combined | Deployment mode: `api-only`, `scheduler`, or `combined` |
+| `PIPELINE_SCHEDULE_HOUR` | 20 | Hour to run pipeline (24h format) |
+| `PIPELINE_TIMEZONE` | America/New_York | Timezone for scheduling |
+| `PIPELINE_MAX_CONCURRENCY` | 5 | Max concurrent workers |
+| `DEFAULT_MAX_SYMBOLS_PER_USER` | 50 | Max watchlist size |
+| `DEFAULT_LLM_MODEL` | gpt-4o | Default LLM model for pipeline |
+| `LOG_FORMAT` | json | Log format (json or text) |
+
+---
+
+## 📊 Database Schema
+
+### Core Tables
+- **users**: User accounts with role-based access
+- **personal_access_tokens**: SHA-256 hashed personal access tokens
+- **watchlist_items**: Per-user symbol tracking
+- **signal_records**: Generated trading signals (GLOBAL/USER scope)
+- **reports**: LLM-generated analysis reports
+- **llm_tokens**: Stored LLM provider tokens (admin-managed)
+- **strategy_configs**: User-level strategy parameter overrides
+- **pipeline_runs**: Pipeline execution tracking
+
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We welcome contributions! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with tests
+4. Submit a pull request
 
-1.  Fork the project.
-2.  Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4.  Push to the branch (`git push origin feature/AmazingFeature`).
-5.  Open a Pull Request.
+---
 
-## 📄 License
+## 📜 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- **OpenBB**: Market data integration
+- **FastAPI**: Modern Python web framework
+- **SQLAlchemy**: Database ORM
+- **APScheduler**: Task scheduling
+- **exchange_calendars**: Market holiday detection
+
+---
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/AimeSoleil/TraderCat/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/AimeSoleil/TraderCat/discussions)
+
+---
+
+**Built with ❤️ by the TraderCat Team**

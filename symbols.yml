@@ -149,3 +149,20 @@ symbols: [
   "NEE",    # NextEra Energy [Renewables Utility]
   "LIN",    # Linde [Industrial Gases]
 ]
+
+
+# SPY, S&P 500 ETF — Broad US equity market
+# QQQ, Nasdaq 100 ETF — Growth and tech leadership
+# IWM, Russell 2000 ETF — Small-cap breadth and rate sensitivity
+# SHY, 1-3 Year Treasury ETF — Short-term rate and Fed policy proxy
+# IEF, 7-10 Year Treasury ETF — Mid-duration yield expectations
+# TLT, 20+ Year Treasury ETF — Long duration and flight-to-safety
+# UUP, US Dollar Bullish Fund — Dollar strength and global liquidity
+# ^VIX, CBOE Volatility Index — Equity fear gauge
+# ^MOVE, ICE BofA MOVE Index — Bond market stress
+# HYG, High Yield Corporate Bond ETF — Credit risk appetite
+# GLD, SPDR Gold Trust ETF — Inflation hedge and safe haven
+# USO, US Oil Fund ETF — Energy and inflation pressure
+# COPX, Global X Copper Miners ETF — Industrial growth signal
+# XLU, Utilities Select Sector ETF — Defensive rotation
+# XLE, Energy Select Sector ETF — Cyclical rotation
