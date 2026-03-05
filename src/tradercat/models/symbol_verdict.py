@@ -56,7 +56,7 @@ class SymbolVerdict(Base):
 
     # ── Gate Results ──
     gates = Column(String(60), nullable=True)              # e.g. "0:P|1:P|2:P|3:P|4:P|5:P|6:P"
-    rejection_reason = Column(String(500), nullable=True)  # null if approved
+    rejection_reason = Column(String(2000), nullable=True)  # null if approved
 
     # ── Trend (Gate 3) ──
     trend_adx = Column(Float, nullable=True)

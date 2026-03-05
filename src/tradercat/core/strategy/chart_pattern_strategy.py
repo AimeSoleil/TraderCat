@@ -161,7 +161,7 @@ class ChartPatternStrategy(TradingStrategy):
         
         # 3. Create Context Object
         chart_data = ChartData(
-            current_close=close,
+            current_close=closes[-1],
             pivots_high=p_highs,
             pivots_low=p_lows,
             highs_history=highs,
@@ -201,8 +201,8 @@ class ChartPatternStrategy(TradingStrategy):
             vol_breakout = True # If configured to ignore volume
         
         # Trend Alignment (EMA 200)
-        is_aligned = (best_p.bias == "long" and close > curr_ema_trend) or \
-                    (best_p.bias == "short" and close < curr_ema_trend)
+        is_aligned = (best_p.bias == "long" and closes[-1] > curr_ema_trend) or \
+                    (best_p.bias == "short" and closes[-1] < curr_ema_trend)
 
         # 6. Scoring Engine
         factors = [
@@ -253,20 +253,20 @@ class ChartPatternStrategy(TradingStrategy):
         current_adx = getattr(adx_series[-1], self.adx_field, 0.0) if adx_series else 0.0
         avg_vol = sum(vols[-self.vol_zscore_window:]) / self.vol_zscore_window if len(vols) >= self.vol_zscore_window else 0.0 
         rel_vol = (vols[-1] / avg_vol) if avg_vol > 0 else 0.0
-        atr_pct = (curr_atr / close * 100.0) if close > 0 else 0.0
-        ema_dist_pct = ((close - curr_ema_trend) / curr_ema_trend * 100.0) if curr_ema_trend > 0 else 0.0
+        atr_pct = (curr_atr / closes[-1] * 100.0) if closes[-1] > 0 else 0.0
+        ema_dist_pct = ((closes[-1] - curr_ema_trend) / curr_ema_trend * 100.0) if curr_ema_trend > 0 else 0.0
         vol_z_val = vol_breakout_z if vol_breakout_z is not None else 0.0
         
         # Calculate Reward/Risk Ratio based on Pattern Targets
-        risk = abs(close - best_p.stop)
-        reward = abs(best_p.target - close)
+        risk = abs(closes[-1] - best_p.stop)
+        reward = abs(best_p.target - closes[-1])
         rr_ratio = (reward / risk) if risk > 0 else 0.0
 
         ohlcv: Dict[str, Any] = {
             "open": round(float(candles[-1].open), 2),
             "high": round(highs[-1], 2),
             "low": round(lows[-1], 2),
-            "close": round(close, 2),
+            "close": round(closes[-1], 2),
             "volume": round(vols[-1], 0),
             f"avg_volume_{self.vol_zscore_window}": round(avg_vol, 0),
             f"rel_volume_{self.vol_zscore_window}": round(rel_vol, 2),
@@ -300,7 +300,7 @@ class ChartPatternStrategy(TradingStrategy):
                 highs=highs,
                 lows=lows,
                 atr=curr_atr,
-                close_price=close
+                close_price=closes[-1]
             ).make_exit_plan(best_p.bias)
 
             plan["stop_loss"] = best_p.stop
