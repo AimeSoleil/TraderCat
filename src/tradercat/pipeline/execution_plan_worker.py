@@ -256,10 +256,14 @@ class ExecutionPlanWorker:
 
 
 def is_approved(verdict: Dict[str, Any]) -> bool:
-    """Check if a P3a verdict is approved for P3b execution planning."""
+    """Check if a P3a verdict is approved for P3b execution planning.
+    
+    Approved = quality in (A+, A, B+, B) AND direction not NEUTRAL.
+    REJECT, C, WATCHLIST are not approved (C/WATCHLIST need human review, REJECT hard fails).
+    """
     quality = (verdict.get("quality") or "").upper()
     direction = (verdict.get("direction") or "").upper()
-    return quality not in ("REJECT", "C") and direction != "NEUTRAL"
+    return quality not in ("REJECT", "C", "WATCHLIST") and direction != "NEUTRAL"
 
 
 def _safe_float(val: Any) -> Optional[float]:
